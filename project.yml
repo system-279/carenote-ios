@@ -1,0 +1,58 @@
+name: CareNote
+options:
+  bundleIdPrefix: jp.carenote
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "26.3"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  developmentLanguage: ja
+
+packages:
+  firebase-ios-sdk:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.0.0"
+
+targets:
+  CareNote:
+    type: application
+    platform: iOS
+    sources:
+      - CareNote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.carenote.app
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: CareNote/Info.plist
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: false
+        CODE_SIGN_STYLE: Automatic
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+    dependencies:
+      - package: firebase-ios-sdk
+        product: FirebaseAuth
+      - package: firebase-ios-sdk
+        product: FirebaseFirestore
+      - package: firebase-ios-sdk
+        product: FirebaseStorage
+    entitlements:
+      path: CareNote/CareNote.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
+
+  CareNoteTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - CareNoteTests
+    dependencies:
+      - target: CareNote
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
