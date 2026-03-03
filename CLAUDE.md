@@ -50,8 +50,8 @@ CareNote/
 - **録音フォーマット**: M4A/AAC (44.1kHz, mono, high quality)
 
 ## GCP Projects
-- Dev: `carenote-dev`
-- Prod: `carenote-prod`
+- Dev: `carenote-dev-279`
+- Prod: `carenote-prod-279`
 
 ## Prohibited
 - `tenantId` ハードコーディング

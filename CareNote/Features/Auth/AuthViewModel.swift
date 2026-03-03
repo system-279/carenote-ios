@@ -1,6 +1,7 @@
-import Foundation
+import FirebaseAuth
+import GoogleSignIn
 import Observation
-import AuthenticationServices
+import UIKit
 
 // MARK: - AuthState
 
@@ -27,27 +28,51 @@ enum AuthState: Sendable, Equatable {
 // MARK: - AuthViewModel
 
 @Observable
+@MainActor
 final class AuthViewModel {
     var authState: AuthState = .signedOut
     var isLoading: Bool = false
     var errorMessage: String?
 
-    /// Apple Sign-In を実行し、Firebase Auth と連携する
-    @MainActor
-    func signInWithApple() async {
+    private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
+
+    deinit {
+        if let handle = authStateHandle {
+            Auth.auth().removeStateDidChangeListener(handle)
+        }
+    }
+
+    /// Google Sign-In を実行し、Firebase Auth と連携する
+    func signInWithGoogle() async {
         isLoading = true
         errorMessage = nil
 
         do {
-            // TODO: Firebase Auth + Apple Sign-In 実装
-            // 1. ASAuthorizationAppleIDProvider でリクエスト生成
-            // 2. credential 取得
-            // 3. Firebase Auth にサインイン
-            // 4. custom claim から tenantId 取得（MVP では仮値）
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootViewController = windowScene.windows.first?.rootViewController else {
+                errorMessage = "画面の取得に失敗しました"
+                isLoading = false
+                return
+            }
 
-            // MVP: 仮の認証成功を返す
-            try await Task.sleep(for: .milliseconds(500))
-            authState = .signedIn(userId: "mock-user-id", tenantId: "mock-tenant-id")
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+
+            guard let idToken = result.user.idToken?.tokenString else {
+                errorMessage = "Google ID Token の取得に失敗しました"
+                isLoading = false
+                return
+            }
+
+            let credential = GoogleAuthProvider.credential(
+                withIDToken: idToken,
+                accessToken: result.user.accessToken.tokenString
+            )
+
+            let authResult = try await Auth.auth().signIn(with: credential)
+            let tokenResult = try await authResult.user.getIDTokenResult()
+            let tenantId = tokenResult.claims["tenantId"] as? String ?? ""
+
+            authState = .signedIn(userId: authResult.user.uid, tenantId: tenantId)
         } catch {
             errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
         }
@@ -56,21 +81,26 @@ final class AuthViewModel {
     }
 
     /// サインアウトする
-    @MainActor
     func signOut() {
-        // TODO: Firebase Auth signOut 実装
+        GIDSignIn.sharedInstance.signOut()
+        try? Auth.auth().signOut()
         authState = .signedOut
         errorMessage = nil
     }
 
     /// Firebase Auth の認証状態を監視して authState を更新する
-    @MainActor
     func checkAuthState() {
-        // TODO: Firebase Auth.auth().addStateDidChangeListener 実装
-        // listener 内で authState を更新
-        // custom claim から tenantId を取得
-
-        // MVP: サインアウト状態を維持
-        authState = .signedOut
+        authStateHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            Task { @MainActor in
+                guard let self else { return }
+                if let user {
+                    let tokenResult = try? await user.getIDTokenResult()
+                    let tenantId = tokenResult?.claims["tenantId"] as? String ?? ""
+                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId)
+                } else {
+                    self.authState = .signedOut
+                }
+            }
+        }
     }
 }

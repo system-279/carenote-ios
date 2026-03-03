@@ -28,6 +28,17 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>GIDClientID</key>
+	<string>YOUR_IOS_CLIENT_ID</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>YOUR_REVERSED_CLIENT_ID</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

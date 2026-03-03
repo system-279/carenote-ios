@@ -12,6 +12,9 @@ packages:
   firebase-ios-sdk:
     url: https://github.com/firebase/firebase-ios-sdk
     from: "11.0.0"
+  GoogleSignIn-iOS:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "9.0.0"
 
 targets:
   CareNote:
@@ -40,11 +43,12 @@ targets:
         product: FirebaseFirestore
       - package: firebase-ios-sdk
         product: FirebaseStorage
+      - package: GoogleSignIn-iOS
+        product: GoogleSignIn
+      - package: GoogleSignIn-iOS
+        product: GoogleSignInSwift
     entitlements:
       path: CareNote/CareNote.entitlements
-      properties:
-        com.apple.developer.applesignin:
-          - Default
 
   CareNoteTests:
     type: bundle.unit-test

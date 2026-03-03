@@ -1,4 +1,4 @@
-import AuthenticationServices
+import GoogleSignInSwift
 import SwiftUI
 
 // MARK: - SignInView
@@ -38,14 +38,11 @@ struct SignInView: View {
                 ProgressView()
                     .controlSize(.large)
             } else {
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { _ in
+                GoogleSignInButton(scheme: .dark, style: .wide) {
                     Task {
-                        await viewModel.signInWithApple()
+                        await viewModel.signInWithGoogle()
                     }
                 }
-                .signInWithAppleButtonStyle(.black)
                 .frame(height: 50)
                 .padding(.horizontal, 40)
             }
