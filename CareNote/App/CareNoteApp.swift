@@ -79,15 +79,21 @@ struct MainTabView: View {
 
     @State private var selectedTab = 0
     @State private var recordingNavigationId = UUID()
+    @State private var recordingListViewModel: RecordingListViewModel?
 
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                RecordingListView(
-                    viewModel: RecordingListViewModel(
+                if let viewModel = recordingListViewModel {
+                    RecordingListView(viewModel: viewModel)
+                }
+            }
+            .task {
+                if recordingListViewModel == nil {
+                    recordingListViewModel = RecordingListViewModel(
                         recordingRepository: RecordingRepository(modelContext: modelContext)
                     )
-                )
+                }
             }
             .tabItem {
                 Label("ホーム", systemImage: "list.bullet")

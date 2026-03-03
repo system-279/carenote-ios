@@ -7,14 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		067B9DD725C1C464134BF7AE /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DF12D570CF9D4E80C289E17D /* FirebaseStorage */; };
+		067B9DD725C1C464134BF7AE /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1DFFB0082E42BA992D89756B /* GoogleSignIn */; };
 		0859FC46515B27F9B97FC1F6 /* SceneSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A269AFC38F3097F4CDCF8DF /* SceneSelectView.swift */; };
 		1068201B5BAD69F7242167F5 /* RecordingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A98BBDBB5774B595F092430F /* RecordingListView.swift */; };
 		167F33E85C77C228D0FFFD44 /* RecordingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1773834D66185AC4FF05004 /* RecordingViewModel.swift */; };
 		2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */; };
 		26069C369BF6F266262D0692 /* ClientCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */; };
-		32FB2DE8BCDAB9EA5285250B /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */; };
-		33992576E1D90FE68CFBFFA2 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1DFFB0082E42BA992D89756B /* GoogleSignIn */; };
+		33992576E1D90FE68CFBFFA2 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */; };
 		49EDC4D0E2DCC6A88931AC17 /* ClientSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFDE09543BDF9E6601F1F2A /* ClientSelectView.swift */; };
 		4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */; };
 		577059F7C878462433B3DC11 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED7A610D0269818D75C76641 /* SignInView.swift */; };
@@ -100,9 +99,8 @@
 			files = (
 				DEA5BEF6533AC992CA56ACE1 /* FirebaseAuth in Frameworks */,
 				A6DB682594050D92691ACB99 /* FirebaseFirestore in Frameworks */,
-				067B9DD725C1C464134BF7AE /* FirebaseStorage in Frameworks */,
-				33992576E1D90FE68CFBFFA2 /* GoogleSignIn in Frameworks */,
-				32FB2DE8BCDAB9EA5285250B /* GoogleSignInSwift in Frameworks */,
+				067B9DD725C1C464134BF7AE /* GoogleSignIn in Frameworks */,
+				33992576E1D90FE68CFBFFA2 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -307,7 +305,6 @@
 			packageProductDependencies = (
 				780EB4E4898BE568D7C4B343 /* FirebaseAuth */,
 				6C74E9D0C7331C6352278BE6 /* FirebaseFirestore */,
-				DF12D570CF9D4E80C289E17D /* FirebaseStorage */,
 				1DFFB0082E42BA992D89756B /* GoogleSignIn */,
 				C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */,
 			);
@@ -325,6 +322,7 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					A016D254A1D66E8BB915EFBE = {
+						DevelopmentTeam = C96A7EHVW8;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -487,6 +485,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -508,6 +507,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -527,6 +527,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -604,6 +605,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -690,11 +692,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8BC989EC9182662D49B46DAF /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
-		};
-		DF12D570CF9D4E80C289E17D /* FirebaseStorage */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 37549340DB9B25215B889561 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

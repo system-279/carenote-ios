@@ -58,7 +58,6 @@ private struct SceneRow: View {
         switch scene {
         case .visit: return "figure.walk"
         case .meeting: return "person.3"
-        case .phone: return "phone"
         case .conference: return "rectangle.3.group.bubble"
         case .intake: return "doc.text"
         case .assessment: return "checklist"
