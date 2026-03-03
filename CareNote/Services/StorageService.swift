@@ -1,4 +1,3 @@
-import FirebaseStorage
 import Foundation
 
 // MARK: - StorageError
@@ -6,27 +5,34 @@ import Foundation
 enum StorageError: Error, Sendable {
     case fileNotFound
     case uploadFailed(Error)
-    case bucketNotConfigured
 }
 
 // MARK: - StorageService
 
-/// Cloud Storage for Firebase upload service.
+/// Cloud Storage upload service using GCS JSON API with WIF authentication.
 actor StorageService {
 
     // MARK: - Properties
 
-    private let storage: Storage
+    private let bucketName: String
+    private let accessTokenProvider: any AccessTokenProviding
+    private let urlSession: URLSession
 
     // MARK: - Initialization
 
-    init(storage: Storage = Storage.storage()) {
-        self.storage = storage
+    init(
+        bucketName: String = AppConfig.storageBucket,
+        accessTokenProvider: any AccessTokenProviding,
+        urlSession: URLSession = .shared
+    ) {
+        self.bucketName = bucketName
+        self.accessTokenProvider = accessTokenProvider
+        self.urlSession = urlSession
     }
 
     // MARK: - Public Methods
 
-    /// Upload an audio file to Cloud Storage.
+    /// Upload an audio file to Cloud Storage via GCS JSON API.
     /// - Parameters:
     ///   - localURL: The local file URL of the audio recording.
     ///   - tenantId: The tenant identifier for multi-tenant path separation.
@@ -41,99 +47,44 @@ actor StorageService {
             throw StorageError.fileNotFound
         }
 
-        let storagePath = "\(tenantId)/\(recordingId).m4a"
-        let storageRef = storage.reference().child(storagePath)
-
-        let metadata = StorageMetadata()
-        metadata.contentType = "audio/mp4"
-
+        let accessToken: String
         do {
-            nonisolated(unsafe) let ref = storageRef
-            _ = try await ref.putFileAsync(from: localURL, metadata: metadata)
+            accessToken = try await accessTokenProvider.getAccessToken()
         } catch {
             throw StorageError.uploadFailed(error)
         }
 
-        // Construct gs:// URI
-        let bucket = storage.reference().bucket
-        let gcsUri = "gs://\(bucket)/\(storagePath)"
+        let objectName = "\(tenantId)/\(recordingId).m4a"
+        let encodedName = objectName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? objectName
 
-        return gcsUri
-    }
-
-    /// Upload an audio file with progress reporting via AsyncStream.
-    /// - Parameters:
-    ///   - localURL: The local file URL of the audio recording.
-    ///   - tenantId: The tenant identifier for multi-tenant path separation.
-    ///   - recordingId: The unique recording identifier.
-    /// - Returns: A tuple of the progress stream and the upload task result.
-    func uploadAudioWithProgress(
-        localURL: URL,
-        tenantId: String,
-        recordingId: String
-    ) async throws -> (progress: AsyncStream<Double>, gcsUri: String) {
-        guard FileManager.default.fileExists(atPath: localURL.path) else {
-            throw StorageError.fileNotFound
+        guard let url = URL(
+            string: "https://storage.googleapis.com/upload/storage/v1/b/\(bucketName)/o?uploadType=media&name=\(encodedName)"
+        ) else {
+            throw StorageError.uploadFailed(
+                NSError(domain: "StorageService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid upload URL"])
+            )
         }
 
-        let storagePath = "\(tenantId)/\(recordingId).m4a"
-        let storageRef = storage.reference().child(storagePath)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
 
-        let metadata = StorageMetadata()
-        metadata.contentType = "audio/mp4"
+        let audioData = try Data(contentsOf: localURL)
+        request.httpBody = audioData
 
-        // Create AsyncStream for progress
-        var progressContinuation: AsyncStream<Double>.Continuation?
-        let progressStream = AsyncStream<Double> { continuation in
-            progressContinuation = continuation
+        let (data, response) = try await urlSession.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode)
+        else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let body = String(data: data, encoding: .utf8) ?? "Unknown"
+            throw StorageError.uploadFailed(
+                NSError(domain: "StorageService", code: statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(statusCode): \(body)"])
+            )
         }
 
-        // Start upload task
-        nonisolated(unsafe) let uploadTask = storageRef.putFile(from: localURL, metadata: metadata)
-
-        // Observe progress
-        uploadTask.observe(.progress) { snapshot in
-            if let progress = snapshot.progress {
-                let fractionCompleted = progress.fractionCompleted
-                progressContinuation?.yield(fractionCompleted)
-            }
-        }
-
-        // Observe completion
-        let gcsUri: String = try await withCheckedThrowingContinuation { continuation in
-            uploadTask.observe(.success) { [weak self] _ in
-                progressContinuation?.yield(1.0)
-                progressContinuation?.finish()
-
-                guard let self else {
-                    continuation.resume(throwing: StorageError.bucketNotConfigured)
-                    return
-                }
-
-                Task {
-                    let bucket = await self.getBucket()
-                    let uri = "gs://\(bucket)/\(storagePath)"
-                    continuation.resume(returning: uri)
-                }
-            }
-
-            uploadTask.observe(.failure) { snapshot in
-                progressContinuation?.finish()
-                let error = snapshot.error ?? NSError(
-                    domain: "StorageService",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "Upload failed"]
-                )
-                continuation.resume(throwing: StorageError.uploadFailed(error))
-            }
-        }
-
-        return (progress: progressStream, gcsUri: gcsUri)
-    }
-
-    // MARK: - Private Methods
-
-    private func getBucket() -> String {
-        storage.reference().bucket
+        return "gs://\(bucketName)/\(objectName)"
     }
 }

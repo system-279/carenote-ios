@@ -29,7 +29,7 @@ actor AudioRecorderService: AudioRecording {
     private var audioRecorder: AVAudioRecorder?
     private var recordingURL: URL?
     private var recordingStartTime: Date?
-    private var timer: Timer?
+    private var timerTask: Task<Void, Never>?
 
     private(set) var isRecording: Bool = false
     private(set) var elapsedTime: TimeInterval = 0
@@ -131,10 +131,11 @@ actor AudioRecorderService: AudioRecording {
         stopElapsedTimeTimer()
 
         let startTime = Date()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task {
-                await self.updateElapsedTime(since: startTime)
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled else { break }
+                await self?.updateElapsedTime(since: startTime)
             }
         }
     }
@@ -144,7 +145,7 @@ actor AudioRecorderService: AudioRecording {
     }
 
     private func stopElapsedTimeTimer() {
-        timer?.invalidate()
-        timer = nil
+        timerTask?.cancel()
+        timerTask = nil
     }
 }

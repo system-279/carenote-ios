@@ -36,8 +36,10 @@ struct RecordingListView: View {
         .refreshable {
             await viewModel.loadRecordings()
         }
-        .task {
-            await viewModel.loadRecordings()
+        .onAppear {
+            Task {
+                await viewModel.loadRecordings()
+            }
         }
         .navigationDestination(for: UUID.self) { recordingId in
             if let recording = viewModel.recordings.first(where: { $0.id == recordingId }) {

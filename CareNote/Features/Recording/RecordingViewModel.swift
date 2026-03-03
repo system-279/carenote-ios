@@ -81,12 +81,13 @@ final class RecordingViewModel {
     @MainActor
     private func startTimer() {
         stopTimer()
+        let startTime = Date()
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .milliseconds(250))
                 guard !Task.isCancelled else { break }
                 if let self {
-                    self.elapsedTime = await self.audioRecorder.elapsedTime
+                    self.elapsedTime = Date().timeIntervalSince(startTime)
                 }
             }
         }

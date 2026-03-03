@@ -2,13 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isTenantMember(tenantId) {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid));
-    }
-
     match /tenants/{tenantId}/{document=**} {
-      allow read, write: if isTenantMember(tenantId);
+      allow read, write: if request.auth != null
+        && request.auth.token.tenantId == tenantId;
     }
   }
 }

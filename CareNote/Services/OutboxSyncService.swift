@@ -87,20 +87,38 @@ actor OutboxSyncService {
     /// Process all pending items immediately, bypassing the isConnected check.
     /// Use this when triggering processing right after enqueuing an item,
     /// since NWPathMonitor callback may not have fired yet.
-    func processQueueImmediately() async {
+    /// Throws the last error encountered so the caller can surface it to the user.
+    func processQueueImmediately() async throws {
         guard !isProcessing else { return }
         isProcessing = true
         defer { isProcessing = false }
 
         let items = await fetchPendingItems()
+        var lastError: Error?
 
         for item in items {
+            // Skip stale items whose audio file no longer exists (e.g., app reinstalled)
+            if let recording = await fetchRecording(id: item.recordingId) {
+                if !FileManager.default.fileExists(atPath: recording.localAudioPath) {
+                    await removeItem(item.id)
+                    continue
+                }
+            } else {
+                await removeItem(item.id)
+                continue
+            }
+
             do {
                 try await processItem(item)
                 await removeItem(item.id)
             } catch {
                 await incrementRetryCount(item.id)
+                lastError = error
             }
+        }
+
+        if let error = lastError {
+            throw error
         }
     }
 

@@ -38,8 +38,10 @@ final class RecordingListViewModel {
             try? FileManager.default.removeItem(atPath: audioPath)
         }
 
-        // TODO: SwiftData から削除する RecordingRepository.delete() メソッド追加
-        // MVP: リストから除外して再読み込み
+        // SwiftData から削除（関連 OutboxItem も含む）
+        try recordingRepository.delete(recording)
+
+        // リストからも除外
         recordings.removeAll { $0.id == recording.id }
     }
 }

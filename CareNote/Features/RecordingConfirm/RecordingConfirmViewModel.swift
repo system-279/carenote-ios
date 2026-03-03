@@ -100,7 +100,7 @@ final class RecordingConfirmViewModel {
             let wifService = WIFAuthService()
             let syncService = OutboxSyncService(
                 modelContainer: modelContext.container,
-                storageService: StorageService(),
+                storageService: StorageService(accessTokenProvider: wifService),
                 firestoreService: FirestoreService(),
                 transcriptionService: TranscriptionService(
                     projectId: AppConfig.gcpProject,
@@ -110,9 +110,27 @@ final class RecordingConfirmViewModel {
             )
 
             await syncService.startMonitoring()
-            await syncService.processQueueImmediately()
+            try await syncService.processQueueImmediately()
         } catch {
-            errorMessage = "保存に失敗しました: \(error.localizedDescription)"
+            // エラーチェーンを展開して詳細表示
+            let detail: String
+            if let syncError = error as? OutboxSyncError {
+                switch syncError {
+                case .uploadFailed(let inner):
+                    detail = "Upload: \(inner)"
+                case .transcriptionFailed(let inner):
+                    detail = "Transcription: \(inner)"
+                case .recordingNotFound(let id):
+                    detail = "Recording not found: \(id)"
+                case .maxRetriesExceeded(let id):
+                    detail = "Max retries: \(id)"
+                case .modelContainerNotAvailable:
+                    detail = "ModelContainer unavailable"
+                }
+            } else {
+                detail = "\(error)"
+            }
+            errorMessage = "保存に失敗しました: \(detail)"
             throw error
         }
     }

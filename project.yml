@@ -31,6 +31,7 @@ targets:
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: false
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: C96A7EHVW8
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
@@ -41,8 +42,6 @@ targets:
         product: FirebaseAuth
       - package: firebase-ios-sdk
         product: FirebaseFirestore
-      - package: firebase-ios-sdk
-        product: FirebaseStorage
       - package: GoogleSignIn-iOS
         product: GoogleSignIn
       - package: GoogleSignIn-iOS
@@ -60,3 +59,4 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: true
