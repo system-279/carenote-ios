@@ -1,3 +1,4 @@
+import FirebaseCore
 import SwiftData
 import SwiftUI
 
@@ -10,8 +11,7 @@ struct CareNoteApp: App {
     let modelContainer: ModelContainer
 
     init() {
-        // Firebase configure
-        // TODO: FirebaseApp.configure()
+        FirebaseApp.configure()
 
         let schema = Schema([
             RecordingRecord.self,
