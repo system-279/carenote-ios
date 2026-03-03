@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 // MARK: - RecordingView
@@ -5,6 +6,8 @@ import SwiftUI
 struct RecordingView: View {
     @Bindable var viewModel: RecordingViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(AuthViewModel.self) private var authViewModel
 
     @State private var pulseAnimation = false
     @State private var navigateToConfirm = false
@@ -106,7 +109,9 @@ struct RecordingView: View {
                         clientId: viewModel.clientId,
                         clientName: viewModel.clientName,
                         scene: viewModel.scene,
-                        duration: viewModel.elapsedTime
+                        duration: viewModel.elapsedTime,
+                        modelContext: modelContext,
+                        tenantId: authViewModel.authState.tenantId ?? ""
                     )
                 )
             }
@@ -151,6 +156,10 @@ struct RecordingView: View {
 // MARK: - Preview
 
 #Preview {
+    let schema = Schema([RecordingRecord.self, ClientCache.self, OutboxItem.self])
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: schema, configurations: [config])
+
     NavigationStack {
         RecordingView(
             viewModel: RecordingViewModel(
@@ -160,4 +169,6 @@ struct RecordingView: View {
             )
         )
     }
+    .modelContainer(container)
+    .environment(AuthViewModel())
 }

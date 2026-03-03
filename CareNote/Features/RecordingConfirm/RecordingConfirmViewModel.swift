@@ -1,10 +1,12 @@
 import AVFoundation
 import Foundation
 import Observation
+import SwiftData
 
 // MARK: - RecordingConfirmViewModel
 
 @Observable
+@MainActor
 final class RecordingConfirmViewModel {
     let audioURL: URL
     let clientId: String
@@ -17,6 +19,9 @@ final class RecordingConfirmViewModel {
     var playbackProgress: Double = 0
     var errorMessage: String?
 
+    private let modelContext: ModelContext
+    private let tenantId: String
+
     private var audioPlayer: AVAudioPlayer?
     private var playbackTask: Task<Void, Never>?
 
@@ -25,17 +30,20 @@ final class RecordingConfirmViewModel {
         clientId: String,
         clientName: String,
         scene: RecordingScene,
-        duration: TimeInterval
+        duration: TimeInterval,
+        modelContext: ModelContext,
+        tenantId: String
     ) {
         self.audioURL = audioURL
         self.clientId = clientId
         self.clientName = clientName
         self.scene = scene
         self.duration = duration
+        self.modelContext = modelContext
+        self.tenantId = tenantId
     }
 
     /// 録音された音声を再生する
-    @MainActor
     func playAudio() async {
         guard !isPlaying else { return }
 
@@ -56,7 +64,6 @@ final class RecordingConfirmViewModel {
     }
 
     /// 再生を停止する
-    @MainActor
     func stopPlayback() {
         audioPlayer?.stop()
         audioPlayer = nil
@@ -67,22 +74,44 @@ final class RecordingConfirmViewModel {
     }
 
     /// 録音を保存し文字起こしを開始する
-    @MainActor
     func saveAndTranscribe() async throws {
         isSaving = true
         errorMessage = nil
+        defer { isSaving = false }
 
         do {
-            // TODO: RecordingRepository に保存
-            // TODO: OutboxItem を作成してアップロードキューに追加
-            // TODO: Cloud Functions 経由で文字起こし開始
+            // 1. RecordingRecord を SwiftData に保存
+            let recording = RecordingRecord(
+                clientId: clientId,
+                clientName: clientName,
+                scene: scene.rawValue,
+                durationSeconds: duration,
+                localAudioPath: audioURL.path
+            )
+            modelContext.insert(recording)
+            try modelContext.save()
 
-            // MVP: 保存シミュレーション
-            try await Task.sleep(for: .seconds(1))
+            // 2. OutboxItem を作成してアップロードキューに追加
+            let outboxItem = OutboxItem(recordingId: recording.id)
+            modelContext.insert(outboxItem)
+            try modelContext.save()
 
-            isSaving = false
+            // 3. OutboxSyncService を生成して即時処理
+            let wifService = WIFAuthService()
+            let syncService = OutboxSyncService(
+                modelContainer: modelContext.container,
+                storageService: StorageService(),
+                firestoreService: FirestoreService(),
+                transcriptionService: TranscriptionService(
+                    projectId: AppConfig.gcpProject,
+                    accessTokenProvider: wifService
+                ),
+                tenantId: tenantId
+            )
+
+            await syncService.startMonitoring()
+            await syncService.processQueueImmediately()
         } catch {
-            isSaving = false
             errorMessage = "保存に失敗しました: \(error.localizedDescription)"
             throw error
         }
@@ -98,7 +127,6 @@ final class RecordingConfirmViewModel {
 
     // MARK: - Private
 
-    @MainActor
     private func startPlaybackTracking() {
         playbackTask?.cancel()
         playbackTask = Task { [weak self] in

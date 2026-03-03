@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 // MARK: - RecordingConfirmView
@@ -99,7 +100,7 @@ struct RecordingConfirmView: View {
         .navigationBarBackButtonHidden(viewModel.isSaving)
         .alert("保存完了", isPresented: $showSaveSuccess) {
             Button("OK") {
-                // TODO: ルートまで戻る
+                NotificationCenter.default.post(name: .navigateToRecordingList, object: nil)
             }
         } message: {
             Text("文字起こしが完了するまでしばらくお待ちください。")
@@ -131,6 +132,10 @@ private struct InfoRow: View {
 // MARK: - Preview
 
 #Preview {
+    let schema = Schema([RecordingRecord.self, ClientCache.self, OutboxItem.self])
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: schema, configurations: [config])
+
     NavigationStack {
         RecordingConfirmView(
             viewModel: RecordingConfirmViewModel(
@@ -138,7 +143,9 @@ private struct InfoRow: View {
                 clientId: "preview-1",
                 clientName: "山田 太郎",
                 scene: .visit,
-                duration: 125
+                duration: 125,
+                modelContext: container.mainContext,
+                tenantId: "preview-tenant"
             )
         )
     }
