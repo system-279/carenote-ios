@@ -11,7 +11,9 @@ struct CareNoteApp: App {
     let modelContainer: ModelContainer
 
     init() {
-        FirebaseApp.configure()
+        if !CareNoteApp.isRunningTests {
+            FirebaseApp.configure()
+        }
 
         let schema = Schema([
             RecordingRecord.self,
@@ -31,6 +33,11 @@ struct CareNoteApp: App {
         } catch {
             fatalError("ModelContainer の初期化に失敗しました: \(error)")
         }
+    }
+
+    private static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
     }
 
     var body: some Scene {

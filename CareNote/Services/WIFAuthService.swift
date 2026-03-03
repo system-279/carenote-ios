@@ -48,12 +48,18 @@ struct WIFAuthConfig: Sendable {
     }
 }
 
+// MARK: - AccessTokenProviding Protocol
+
+protocol AccessTokenProviding: Actor {
+    func getAccessToken() async throws -> String
+}
+
 // MARK: - WIFAuthService
 
 /// Workload Identity Federation authentication service (Spec S10).
 ///
 /// Flow: Firebase ID Token -> STS Token Exchange -> SA Impersonation
-actor WIFAuthService {
+actor WIFAuthService: AccessTokenProviding {
 
     // MARK: - Properties
 

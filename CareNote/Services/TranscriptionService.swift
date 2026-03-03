@@ -91,7 +91,7 @@ actor TranscriptionService {
     // MARK: - Properties
 
     private let projectId: String
-    private let wifAuthService: WIFAuthService
+    private let accessTokenProvider: any AccessTokenProviding
     private let urlSession: URLSession
 
     // MARK: - Computed Properties
@@ -106,11 +106,11 @@ actor TranscriptionService {
 
     init(
         projectId: String,
-        wifAuthService: WIFAuthService,
+        accessTokenProvider: any AccessTokenProviding,
         urlSession: URLSession = .shared
     ) {
         self.projectId = projectId
-        self.wifAuthService = wifAuthService
+        self.accessTokenProvider = accessTokenProvider
         self.urlSession = urlSession
     }
 
@@ -123,7 +123,7 @@ actor TranscriptionService {
         // Get access token via WIF
         let accessToken: String
         do {
-            accessToken = try await wifAuthService.getAccessToken()
+            accessToken = try await accessTokenProvider.getAccessToken()
         } catch {
             throw TranscriptionError.authenticationFailed(error)
         }
