@@ -39,6 +39,7 @@
 		C6CF4C9D8589E6E86057F63E /* RecordingConfirmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF9442D22A121622206F23 /* RecordingConfirmView.swift */; };
 		C74386AC37344205E71E5B2B /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1751BC835BB28519295961 /* AppConfig.swift */; };
 		CCA4CF007249D2BA99FD5315 /* TranscriptionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */; };
+		D500243B9B526706E3BCE5AF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */; };
 		D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */; };
 		DEA5BEF6533AC992CA56ACE1 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 780EB4E4898BE568D7C4B343 /* FirebaseAuth */; };
 		F503CBD6C43A313174F070AA /* OutboxSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31A63277501286D0902113FA /* OutboxSyncService.swift */; };
@@ -85,6 +86,7 @@
 		C1773834D66185AC4FF05004 /* RecordingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingViewModel.swift; sourceTree = "<group>"; };
 		C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientRepository.swift; sourceTree = "<group>"; };
 		CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		E882F166342B21411BFDB30A /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
 		EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIFAuthService.swift; sourceTree = "<group>"; };
 		ED7A610D0269818D75C76641 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
@@ -198,6 +200,7 @@
 			isa = PBXGroup;
 			children = (
 				B251749F5EC88F2BC6B138E4 /* CareNote.entitlements */,
+				DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */,
 				31A176AE8830BEDDEBD57A2F /* Info.plist */,
 				3B6570B3B3F19396EF7BC0DB /* App */,
 				9212CBF96B3FD21D8A96FFDD /* Features */,
@@ -293,6 +296,7 @@
 			buildConfigurationList = 6A0BF1848C426D083BCA7CB8 /* Build configuration list for PBXNativeTarget "CareNote" */;
 			buildPhases = (
 				8DEECE0DE08803F38D4D75A6 /* Sources */,
+				BF7A0D09170A8E36144516F6 /* Resources */,
 				DCEE0F94AFE77DE8AADE1FB4 /* Frameworks */,
 			);
 			buildRules = (
@@ -348,6 +352,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		BF7A0D09170A8E36144516F6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D500243B9B526706E3BCE5AF /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		300A3A7AE89015BA63AF359F /* Sources */ = {
