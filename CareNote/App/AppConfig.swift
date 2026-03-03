@@ -7,15 +7,15 @@ struct AppConfig: Sendable {
 
     static var gcpProject: String {
         switch current {
-        case .dev: return "carenote-dev"
-        case .prod: return "carenote-prod"
+        case .dev: return "carenote-dev-279"
+        case .prod: return "carenote-prod-279"
         }
     }
 
     static var gcpProjectNumber: String {
         switch current {
-        case .dev: return "YOUR_DEV_PROJECT_NUMBER"
-        case .prod: return "YOUR_PROD_PROJECT_NUMBER"
+        case .dev: return "444137368705"
+        case .prod: return "781674225072"
         }
     }
 
