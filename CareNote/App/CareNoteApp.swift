@@ -46,16 +46,30 @@ struct CareNoteApp: App {
                 switch authViewModel.authState {
                 case .signedOut:
                     SignInView(viewModel: authViewModel)
-                case .signedIn:
+                case .signedIn(_, let tenantId):
                     MainTabView()
+                        .task {
+                            let cacheService = ClientCacheService(
+                                firestoreService: FirestoreService(),
+                                modelContainer: modelContainer
+                            )
+                            try? await cacheService.refreshIfNeeded(tenantId: tenantId)
+                        }
                 }
             }
             .onAppear {
                 authViewModel.checkAuthState()
             }
+            .environment(authViewModel)
         }
         .modelContainer(modelContainer)
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let navigateToRecordingList = Notification.Name("navigateToRecordingList")
 }
 
 // MARK: - MainTabView
@@ -63,8 +77,11 @@ struct CareNoteApp: App {
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
 
+    @State private var selectedTab = 0
+    @State private var recordingNavigationId = UUID()
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationStack {
                 RecordingListView(
                     viewModel: RecordingListViewModel(
@@ -75,13 +92,20 @@ struct MainTabView: View {
             .tabItem {
                 Label("ホーム", systemImage: "list.bullet")
             }
+            .tag(0)
 
             NavigationStack {
                 NewRecordingNavigationView()
             }
+            .id(recordingNavigationId)
             .tabItem {
                 Label("新規録音", systemImage: "mic.circle.fill")
             }
+            .tag(1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToRecordingList)) { _ in
+            selectedTab = 0
+            recordingNavigationId = UUID()
         }
     }
 }
