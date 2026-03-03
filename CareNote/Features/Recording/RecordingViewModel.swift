@@ -23,13 +23,14 @@ final class RecordingViewModel {
     var audioURL: URL?
     var errorMessage: String?
 
-    private let audioRecorder = AudioRecorderService()
+    private let audioRecorder: any AudioRecording
     private var timerTask: Task<Void, Never>?
 
-    init(clientId: String, clientName: String, scene: RecordingScene) {
+    init(clientId: String, clientName: String, scene: RecordingScene, audioRecorder: any AudioRecording = AudioRecorderService()) {
         self.clientId = clientId
         self.clientName = clientName
         self.scene = scene
+        self.audioRecorder = audioRecorder
     }
 
     /// 録音を開始する
@@ -84,8 +85,8 @@ final class RecordingViewModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { break }
-                if let self, let recorder = self.audioRecorder as AudioRecorderService? {
-                    self.elapsedTime = await recorder.elapsedTime
+                if let self {
+                    self.elapsedTime = await self.audioRecorder.elapsedTime
                 }
             }
         }

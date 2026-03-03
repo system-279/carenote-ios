@@ -11,9 +11,18 @@ enum AudioRecorderError: Error, Sendable {
     case fileNotFound
 }
 
+// MARK: - AudioRecording Protocol
+
+protocol AudioRecording: Actor {
+    var isRecording: Bool { get }
+    var elapsedTime: TimeInterval { get }
+    func startRecording() async throws -> URL
+    func stopRecording() async throws -> (url: URL, duration: TimeInterval)
+}
+
 // MARK: - AudioRecorderService
 
-actor AudioRecorderService {
+actor AudioRecorderService: AudioRecording {
 
     // MARK: - Properties
 

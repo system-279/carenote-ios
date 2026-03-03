@@ -1,4 +1,5 @@
 import FirebaseAuth
+import FirebaseCore
 import GoogleSignIn
 import Observation
 import UIKit
@@ -25,6 +26,54 @@ enum AuthState: Sendable, Equatable {
     }
 }
 
+// MARK: - AuthProviding Protocol
+
+protocol AuthProviding: Sendable {
+    @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?)
+    func signOut() throws
+}
+
+// MARK: - AuthError
+
+enum AuthError: Error, Sendable {
+    case viewControllerNotFound
+    case googleIdTokenMissing
+}
+
+// MARK: - FirebaseGoogleAuthProvider
+
+final class FirebaseGoogleAuthProvider: AuthProviding {
+    @MainActor
+    func signInWithGoogle() async throws -> (userId: String, tenantId: String?) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            throw AuthError.viewControllerNotFound
+        }
+
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+
+        guard let idToken = result.user.idToken?.tokenString else {
+            throw AuthError.googleIdTokenMissing
+        }
+
+        let credential = GoogleAuthProvider.credential(
+            withIDToken: idToken,
+            accessToken: result.user.accessToken.tokenString
+        )
+
+        let authResult = try await Auth.auth().signIn(with: credential)
+        let tokenResult = try await authResult.user.getIDTokenResult()
+        let tenantId = tokenResult.claims["tenantId"] as? String
+
+        return (userId: authResult.user.uid, tenantId: tenantId)
+    }
+
+    func signOut() throws {
+        GIDSignIn.sharedInstance.signOut()
+        try Auth.auth().signOut()
+    }
+}
+
 // MARK: - AuthViewModel
 
 @Observable
@@ -34,10 +83,15 @@ final class AuthViewModel {
     var isLoading: Bool = false
     var errorMessage: String?
 
+    private let authProvider: AuthProviding
     private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
 
+    init(authProvider: AuthProviding = FirebaseGoogleAuthProvider()) {
+        self.authProvider = authProvider
+    }
+
     deinit {
-        if let handle = authStateHandle {
+        if let handle = authStateHandle, FirebaseApp.app() != nil {
             Auth.auth().removeStateDidChangeListener(handle)
         }
     }
@@ -49,34 +103,14 @@ final class AuthViewModel {
         defer { isLoading = false }
 
         do {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let rootViewController = windowScene.windows.first?.rootViewController else {
-                errorMessage = "画面の取得に失敗しました"
-                return
-            }
+            let result = try await authProvider.signInWithGoogle()
 
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
-
-            guard let idToken = result.user.idToken?.tokenString else {
-                errorMessage = "Google ID Token の取得に失敗しました"
-                return
-            }
-
-            let credential = GoogleAuthProvider.credential(
-                withIDToken: idToken,
-                accessToken: result.user.accessToken.tokenString
-            )
-
-            let authResult = try await Auth.auth().signIn(with: credential)
-            let tokenResult = try await authResult.user.getIDTokenResult()
-
-            guard let tenantId = tokenResult.claims["tenantId"] as? String,
-                  !tenantId.isEmpty else {
+            guard let tenantId = result.tenantId, !tenantId.isEmpty else {
                 errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"
                 return
             }
 
-            authState = .signedIn(userId: authResult.user.uid, tenantId: tenantId)
+            authState = .signedIn(userId: result.userId, tenantId: tenantId)
         } catch {
             errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
         }
@@ -84,9 +118,8 @@ final class AuthViewModel {
 
     /// サインアウトする
     func signOut() {
-        GIDSignIn.sharedInstance.signOut()
         do {
-            try Auth.auth().signOut()
+            try authProvider.signOut()
         } catch {
             print("[AuthViewModel] signOut failed: \(error.localizedDescription)")
         }
@@ -96,6 +129,7 @@ final class AuthViewModel {
 
     /// Firebase Auth の認証状態を監視して authState を更新する
     func checkAuthState() {
+        guard FirebaseApp.app() != nil else { return }
         if let handle = authStateHandle {
             Auth.auth().removeStateDidChangeListener(handle)
         }
