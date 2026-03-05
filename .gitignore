@@ -39,5 +39,11 @@ GoogleService-Info.plist
 *.swp
 *~
 
+# Generated
+generated-images/
+
+# Secrets
+*.p8
+
 # Claude Code
 .claude/settings.local.json
