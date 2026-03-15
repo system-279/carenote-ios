@@ -337,7 +337,7 @@ actor OutboxSyncService {
     }
 
     @MainActor
-    private func incrementRetryCount(_ id: UUID) {
+    func incrementRetryCount(_ id: UUID) {
         let context = modelContainer.mainContext
 
         let descriptor = FetchDescriptor<OutboxItem>(
