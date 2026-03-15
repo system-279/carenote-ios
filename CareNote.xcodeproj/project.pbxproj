@@ -14,6 +14,7 @@
 		2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */; };
 		26069C369BF6F266262D0692 /* ClientCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */; };
 		33992576E1D90FE68CFBFFA2 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */; };
+		47FE4B218F49277FBB05F518 /* RecordingListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */; };
 		49EDC4D0E2DCC6A88931AC17 /* ClientSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFDE09543BDF9E6601F1F2A /* ClientSelectView.swift */; };
 		4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */; };
 		577059F7C878462433B3DC11 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED7A610D0269818D75C76641 /* SignInView.swift */; };
@@ -35,6 +36,8 @@
 		ACF047650FB8467229A5C694 /* RecordingScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19118D3C407ABA870A521B2 /* RecordingScene.swift */; };
 		AFC68317B2584D1DD4BD0DEC /* CareNoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F9FC31CCE425A0E9107ACB3 /* CareNoteApp.swift */; };
 		B64BA4F7909AFDD553C357F5 /* RecordingListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933487C9E5291192E20D3FD6 /* RecordingListViewModel.swift */; };
+		B699C2BBB845DE4A8ACC0619 /* RecordingRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */; };
+		C6072255D88F74D009713EF5 /* OutboxSyncServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */; };
 		C60B40FD6A5D17715EAE0AD4 /* AuthViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD36BBA888E8960D96DC910 /* AuthViewModelTests.swift */; };
 		C6CF4C9D8589E6E86057F63E /* RecordingConfirmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF9442D22A121622206F23 /* RecordingConfirmView.swift */; };
 		C74386AC37344205E71E5B2B /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1751BC835BB28519295961 /* AppConfig.swift */; };
@@ -59,6 +62,8 @@
 		0201FF49E15F02E9E9054426 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		036156B4FFB1416DCC51D265 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		037EF32E53608FE7657893D8 /* RecordingConfirmViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingConfirmViewModel.swift; sourceTree = "<group>"; };
+		042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxSyncServiceTests.swift; sourceTree = "<group>"; };
+		13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingRepositoryTests.swift; sourceTree = "<group>"; };
 		1CEEA689FBC6B94B6C315907 /* CareNote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CareNote.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D1751BC835BB28519295961 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		2D764EF3D3EA6CDB7FD4A7B9 /* CareNoteTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CareNoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -75,6 +80,7 @@
 		7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSelectViewModel.swift; sourceTree = "<group>"; };
 		7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataModels.swift; sourceTree = "<group>"; };
 		7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingViewModelTests.swift; sourceTree = "<group>"; };
+		88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingListViewModelTests.swift; sourceTree = "<group>"; };
 		933487C9E5291192E20D3FD6 /* RecordingListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingListViewModel.swift; sourceTree = "<group>"; };
 		96BF9442D22A121622206F23 /* RecordingConfirmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingConfirmView.swift; sourceTree = "<group>"; };
 		97B373FAB82B749E309A7CA8 /* RecordingRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingRepository.swift; sourceTree = "<group>"; };
@@ -226,6 +232,9 @@
 			isa = PBXGroup;
 			children = (
 				9BD36BBA888E8960D96DC910 /* AuthViewModelTests.swift */,
+				042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */,
+				88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */,
+				13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */,
 				7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */,
 				46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */,
 			);
@@ -372,6 +381,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				C60B40FD6A5D17715EAE0AD4 /* AuthViewModelTests.swift in Sources */,
+				C6072255D88F74D009713EF5 /* OutboxSyncServiceTests.swift in Sources */,
+				47FE4B218F49277FBB05F518 /* RecordingListViewModelTests.swift in Sources */,
+				B699C2BBB845DE4A8ACC0619 /* RecordingRepositoryTests.swift in Sources */,
 				4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */,
 				CCA4CF007249D2BA99FD5315 /* TranscriptionServiceTests.swift in Sources */,
 			);
