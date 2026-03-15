@@ -64,6 +64,27 @@ final class RecordingRepository: @unchecked Sendable {
         try modelContext.save()
     }
 
+    /// 現在のコンテキスト変更を保存する
+    func save() throws {
+        try modelContext.save()
+    }
+
+    /// 指定録音の OutboxItem を削除し、新しいものを作成する（リトライリセット）
+    func resetOutboxItem(for recordingId: UUID) throws {
+        let outboxDescriptor = FetchDescriptor<OutboxItem>(
+            predicate: #Predicate { $0.recordingId == recordingId }
+        )
+        if let items = try? modelContext.fetch(outboxDescriptor) {
+            for item in items {
+                modelContext.delete(item)
+            }
+        }
+
+        let newItem = OutboxItem(recordingId: recordingId)
+        modelContext.insert(newItem)
+        try modelContext.save()
+    }
+
     /// アップロード待ちの録音レコードを取得する
     func pendingUploads() throws -> [RecordingRecord] {
         let pending = UploadStatus.pending.rawValue

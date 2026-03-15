@@ -347,6 +347,23 @@ actor OutboxSyncService {
         guard let item = try? context.fetch(descriptor).first else { return }
 
         item.retryCount += 1
+
+        // 最大リトライ超過時、RecordingRecord のステータスを error に更新
+        if item.retryCount >= Self.maxRetryCount {
+            let recordingId = item.recordingId
+            let recDescriptor = FetchDescriptor<RecordingRecord>(
+                predicate: #Predicate<RecordingRecord> { $0.id == recordingId }
+            )
+            if let record = try? context.fetch(recDescriptor).first {
+                if record.uploadStatus == UploadStatus.pending.rawValue {
+                    record.uploadStatus = UploadStatus.error.rawValue
+                }
+                if record.transcriptionStatus != TranscriptionStatus.done.rawValue {
+                    record.transcriptionStatus = TranscriptionStatus.error.rawValue
+                }
+            }
+        }
+
         try? context.save()
     }
 }
