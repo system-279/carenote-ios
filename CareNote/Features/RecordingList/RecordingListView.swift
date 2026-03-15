@@ -39,7 +39,11 @@ struct RecordingListView: View {
         .onAppear {
             Task {
                 await viewModel.loadRecordings()
+                viewModel.startPolling()
             }
+        }
+        .onDisappear {
+            viewModel.stopPolling()
         }
         .navigationDestination(for: UUID.self) { recordingId in
             if let recording = viewModel.recordings.first(where: { $0.id == recordingId }) {

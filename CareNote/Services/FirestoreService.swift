@@ -116,6 +116,44 @@ actor FirestoreService {
         }
     }
 
+    /// Fetch a single recording by Firestore document ID.
+    /// - Parameters:
+    ///   - tenantId: The tenant identifier.
+    ///   - recordingId: The Firestore document ID.
+    /// - Returns: The recording data, or nil if not found.
+    func fetchRecording(tenantId: String, recordingId: String) async throws -> FirestoreRecording? {
+        do {
+            let document = try await recordingsCollection(tenantId: tenantId)
+                .document(recordingId)
+                .getDocument()
+
+            guard document.exists, let data = document.data() else {
+                return nil
+            }
+
+            let recordedAt = (data["recordedAt"] as? Timestamp)?.dateValue() ?? Date()
+            let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+            let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+            return FirestoreRecording(
+                id: document.documentID,
+                clientId: data["clientId"] as? String ?? "",
+                clientName: data["clientName"] as? String ?? "",
+                scene: data["scene"] as? String ?? "",
+                recordedAt: recordedAt,
+                durationSeconds: data["durationSeconds"] as? Double ?? 0,
+                audioStoragePath: data["audioStoragePath"] as? String,
+                transcription: data["transcription"] as? String,
+                transcriptionStatus: data["transcriptionStatus"] as? String ?? TranscriptionStatus.pending.rawValue,
+                createdBy: data["createdBy"] as? String ?? "",
+                createdAt: createdAt,
+                updatedAt: updatedAt
+            )
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
     /// Fetch all recordings for a given tenant.
     /// - Parameter tenantId: The tenant identifier.
     /// - Returns: An array of `FirestoreRecording` including document IDs.

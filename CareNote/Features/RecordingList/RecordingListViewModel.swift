@@ -4,20 +4,30 @@ import SwiftData
 
 // MARK: - RecordingListViewModel
 
-@Observable
+@Observable @MainActor
 final class RecordingListViewModel {
     var recordings: [RecordingRecord] = []
     var isLoading: Bool = false
     var errorMessage: String?
 
     private let recordingRepository: RecordingRepository
+    private let firestoreService: FirestoreService?
+    private let tenantId: String?
 
-    init(recordingRepository: RecordingRepository) {
+    private static let pollingInterval: TimeInterval = 5.0
+    private var pollingTask: Task<Void, Never>?
+
+    init(
+        recordingRepository: RecordingRepository,
+        firestoreService: FirestoreService? = nil,
+        tenantId: String? = nil
+    ) {
         self.recordingRepository = recordingRepository
+        self.firestoreService = firestoreService
+        self.tenantId = tenantId
     }
 
     /// 録音一覧を読み込む
-    @MainActor
     func loadRecordings() async {
         isLoading = true
         do {
@@ -30,12 +40,9 @@ final class RecordingListViewModel {
     }
 
     /// 録音の文字起こしを再試行する
-    @MainActor
     func retryRecording(_ recording: RecordingRecord) async throws {
-        // 既存の OutboxItem を削除して新規作成（retryCount リセット）
         try recordingRepository.resetOutboxItem(for: recording.id)
 
-        // ステータスをリセット
         recording.uploadStatus = UploadStatus.pending.rawValue
         recording.transcriptionStatus = TranscriptionStatus.pending.rawValue
         recording.transcription = nil
@@ -43,18 +50,76 @@ final class RecordingListViewModel {
     }
 
     /// 録音を削除する
-    @MainActor
     func deleteRecording(_ recording: RecordingRecord) async throws {
-        // ローカル音声ファイルを削除
         let audioPath = recording.localAudioPath
         if FileManager.default.fileExists(atPath: audioPath) {
             try? FileManager.default.removeItem(atPath: audioPath)
         }
 
-        // SwiftData から削除（関連 OutboxItem も含む）
         try recordingRepository.delete(recording)
-
-        // リストからも除外
         recordings.removeAll { $0.id == recording.id }
+    }
+
+    // MARK: - Polling
+
+    /// processing 状態のアイテムがある間、Firestore をポーリングして更新する
+    func startPolling() {
+        stopPolling()
+        pollingTask = Task {
+            while !Task.isCancelled {
+                await pollProcessingRecordings()
+
+                if !hasProcessingRecordings() {
+                    return
+                }
+
+                try? await Task.sleep(nanoseconds: UInt64(Self.pollingInterval * 1_000_000_000))
+            }
+        }
+    }
+
+    /// ポーリングを停止する
+    func stopPolling() {
+        pollingTask?.cancel()
+        pollingTask = nil
+    }
+
+    private func hasProcessingRecordings() -> Bool {
+        let processingStatuses = [
+            TranscriptionStatus.pending.rawValue,
+            TranscriptionStatus.processing.rawValue,
+        ]
+        return recordings.contains { processingStatuses.contains($0.transcriptionStatus) && $0.firestoreId != nil }
+    }
+
+    private func pollProcessingRecordings() async {
+        guard let firestoreService, let tenantId else { return }
+
+        let processingStatuses = [
+            TranscriptionStatus.pending.rawValue,
+            TranscriptionStatus.processing.rawValue,
+        ]
+        let processingRecordings = recordings.filter {
+            processingStatuses.contains($0.transcriptionStatus) && $0.firestoreId != nil
+        }
+
+        for recording in processingRecordings {
+            guard let firestoreId = recording.firestoreId else { continue }
+
+            do {
+                guard let remote = try await firestoreService.fetchRecording(
+                    tenantId: tenantId,
+                    recordingId: firestoreId
+                ) else { continue }
+
+                if remote.transcriptionStatus != recording.transcriptionStatus {
+                    recording.transcriptionStatus = remote.transcriptionStatus
+                    recording.transcription = remote.transcription
+                    try? recordingRepository.save()
+                }
+            } catch {
+                // ポーリングエラーは静かに無視（次回リトライ）
+            }
+        }
     }
 }
