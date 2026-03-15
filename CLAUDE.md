@@ -49,6 +49,12 @@ CareNote/
 - **ストレージ**: Cloud Storage for Firebase (`{project}-audio` バケット)
 - **録音フォーマット**: M4A/AAC (44.1kHz, mono, high quality)
 
+## TestFlight Deploy
+- スクリプト: `./scripts/upload-testflight.sh`
+- ビルド番号自動インクリメント → XcodeGen → Archive → App Store Connect Upload
+- App Store Connect アプリ名: **CareNote AI** (Bundle ID: `jp.carenote.app`)
+- Team ID: `C96A7EHVW8`
+
 ## GCP Projects
 - Dev: `carenote-dev-279`
 - Prod: `carenote-prod-279`
