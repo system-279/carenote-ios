@@ -33,6 +33,7 @@ GoogleService-Info.plist
 # Environment
 .env
 .env.*
+.envrc
 
 # macOS
 .DS_Store
@@ -47,3 +48,6 @@ generated-images/
 
 # Claude Code
 .claude/settings.local.json
+
+# Serena
+.serena/
