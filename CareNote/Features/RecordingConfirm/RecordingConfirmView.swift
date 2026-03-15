@@ -23,28 +23,8 @@ struct RecordingConfirmView: View {
             .padding(.top, 16)
 
             // Playback Section
-            VStack(spacing: 12) {
-                ProgressView(value: viewModel.playbackProgress)
-                    .tint(.accentColor)
-
-                HStack {
-                    Button {
-                        Task {
-                            if viewModel.isPlaying {
-                                viewModel.stopPlayback()
-                            } else {
-                                await viewModel.playAudio()
-                            }
-                        }
-                    } label: {
-                        Image(systemName: viewModel.isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.tint)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
+            AudioPlayerView(audioURL: viewModel.audioURL)
+                .padding(.horizontal)
 
             Spacer()
 

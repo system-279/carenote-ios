@@ -21,6 +21,7 @@
 		65E5E0CD5DBC914A92B91130 /* ClientSelectViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */; };
 		6B0117657090C55B8D4A4A43 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0201FF49E15F02E9E9054426 /* Assets.xcassets */; };
 		6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2848993801DEF66A676C25D /* AppEnvironment.swift */; };
+		792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */; };
 		854789E2D53FE67EB38E7E4D /* ClientRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */; };
 		867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */; };
 		8A4E94E3CD9A0B866817E387 /* FirestoreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D2B24492527E7C7CE59620 /* FirestoreModels.swift */; };
@@ -72,6 +73,7 @@
 		314ECA9225E94AACAFBC6557 /* SceneSelectViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneSelectViewModel.swift; sourceTree = "<group>"; };
 		31A176AE8830BEDDEBD57A2F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		31A63277501286D0902113FA /* OutboxSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxSyncService.swift; sourceTree = "<group>"; };
+		43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServiceTests.swift; sourceTree = "<group>"; };
 		47604C61474A5EA44EABDF67 /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
 		4A269AFC38F3097F4CDCF8DF /* SceneSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneSelectView.swift; sourceTree = "<group>"; };
@@ -210,6 +212,7 @@
 				DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */,
 				31A176AE8830BEDDEBD57A2F /* Info.plist */,
 				3B6570B3B3F19396EF7BC0DB /* App */,
+				D165B4A9A01BA36EB9B96905 /* Components */,
 				9212CBF96B3FD21D8A96FFDD /* Features */,
 				7BAC40690331C711B6ADEED8 /* Infrastructure */,
 				3774B894D705EE6CB01F078A /* Models */,
@@ -278,6 +281,14 @@
 				C1773834D66185AC4FF05004 /* RecordingViewModel.swift */,
 			);
 			path = Recording;
+			sourceTree = "<group>";
+		};
+		D165B4A9A01BA36EB9B96905 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -395,6 +406,7 @@
 			files = (
 				C74386AC37344205E71E5B2B /* AppConfig.swift in Sources */,
 				6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */,
+				792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */,
 				A66F72A55AF844FA523B9941 /* AudioRecorderService.swift in Sources */,
 				94DF9E5A0CCD3408F6EC31B7 /* AuthViewModel.swift in Sources */,
 				AFC68317B2584D1DD4BD0DEC /* CareNoteApp.swift in Sources */,

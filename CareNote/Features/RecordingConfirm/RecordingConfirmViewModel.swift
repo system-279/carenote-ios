@@ -18,6 +18,7 @@ final class RecordingConfirmViewModel {
     var isSaving: Bool = false
     var playbackProgress: Double = 0
     var errorMessage: String?
+    var currentTime: TimeInterval = 0
 
     private let modelContext: ModelContext
     private let tenantId: String
@@ -69,8 +70,18 @@ final class RecordingConfirmViewModel {
         audioPlayer = nil
         isPlaying = false
         playbackProgress = 0
+        currentTime = 0
         playbackTask?.cancel()
         playbackTask = nil
+    }
+
+    /// 指定した進捗位置にシークする（0.0〜1.0）
+    func seekTo(progress: Double) {
+        guard let player = audioPlayer else { return }
+        let newTime = player.duration * progress
+        player.currentTime = newTime
+        playbackProgress = progress
+        currentTime = newTime
     }
 
     /// 録音を保存し文字起こしを開始する
@@ -156,12 +167,14 @@ final class RecordingConfirmViewModel {
                     break
                 }
                 if player.isPlaying {
+                    self.currentTime = player.currentTime
                     self.playbackProgress = player.duration > 0
                         ? player.currentTime / player.duration
                         : 0
                 } else {
                     self.isPlaying = false
                     self.playbackProgress = 0
+                    self.currentTime = 0
                     break
                 }
             }
