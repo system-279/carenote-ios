@@ -29,6 +29,19 @@ final class RecordingListViewModel {
         isLoading = false
     }
 
+    /// 録音の文字起こしを再試行する
+    @MainActor
+    func retryRecording(_ recording: RecordingRecord) async throws {
+        // 既存の OutboxItem を削除して新規作成（retryCount リセット）
+        try recordingRepository.resetOutboxItem(for: recording.id)
+
+        // ステータスをリセット
+        recording.uploadStatus = UploadStatus.pending.rawValue
+        recording.transcriptionStatus = TranscriptionStatus.pending.rawValue
+        recording.transcription = nil
+        try recordingRepository.save()
+    }
+
     /// 録音を削除する
     @MainActor
     func deleteRecording(_ recording: RecordingRecord) async throws {

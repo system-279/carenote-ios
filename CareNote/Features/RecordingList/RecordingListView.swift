@@ -43,7 +43,9 @@ struct RecordingListView: View {
         }
         .navigationDestination(for: UUID.self) { recordingId in
             if let recording = viewModel.recordings.first(where: { $0.id == recordingId }) {
-                RecordingDetailView(recording: recording)
+                RecordingDetailView(recording: recording) {
+                    try await viewModel.retryRecording(recording)
+                }
             }
         }
     }
@@ -142,6 +144,8 @@ private struct TranscriptionStatusBadge: View {
 
 struct RecordingDetailView: View {
     let recording: RecordingRecord
+    var onRetry: (() async throws -> Void)?
+    @State private var isRetrying = false
 
     var body: some View {
         ScrollView {
@@ -184,8 +188,34 @@ struct RecordingDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                     } else if recording.transcriptionStatus == TranscriptionStatus.error.rawValue {
-                        Text("文字起こしに失敗しました")
-                            .foregroundStyle(.red)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("文字起こしに失敗しました")
+                                .foregroundStyle(.red)
+
+                            if let onRetry {
+                                Button {
+                                    Task {
+                                        isRetrying = true
+                                        try? await onRetry()
+                                        isRetrying = false
+                                    }
+                                } label: {
+                                    HStack {
+                                        if isRetrying {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                        } else {
+                                            Image(systemName: "arrow.clockwise")
+                                        }
+                                        Text("再試行")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.blue)
+                                .disabled(isRetrying)
+                            }
+                        }
                     } else {
                         Text("文字起こし待機中")
                             .foregroundStyle(.secondary)
