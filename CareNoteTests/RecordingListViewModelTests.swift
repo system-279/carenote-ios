@@ -67,6 +67,34 @@ struct RecordingListViewModelTests {
     }
 
     @Test @MainActor
+    func saveTranscriptionでテキストがSwiftDataに保存される() async throws {
+        let container = try Self.makeContainer()
+        let context = container.mainContext
+        let repo = RecordingRepository(modelContext: context)
+        let vm = RecordingListViewModel(recordingRepository: repo)
+
+        let recording = RecordingRecord(
+            id: UUID(),
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: "/tmp/test.m4a",
+            transcription: "元のテキスト",
+            transcriptionStatus: TranscriptionStatus.done.rawValue
+        )
+        context.insert(recording)
+        try context.save()
+
+        try await vm.saveTranscription(recording, text: "修正後のテキスト")
+
+        #expect(recording.transcription == "修正後のテキスト")
+
+        // SwiftData に永続化されていることを確認
+        let fetched = try repo.findById(recording.id)
+        #expect(fetched?.transcription == "修正後のテキスト")
+    }
+
+    @Test @MainActor
     func deleteRecordingでリストから除外される() async throws {
         let container = try Self.makeContainer()
         let context = container.mainContext

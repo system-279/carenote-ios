@@ -47,9 +47,15 @@ struct RecordingListView: View {
         }
         .navigationDestination(for: UUID.self) { recordingId in
             if let recording = viewModel.recordings.first(where: { $0.id == recordingId }) {
-                RecordingDetailView(recording: recording) {
-                    try await viewModel.retryRecording(recording)
-                }
+                RecordingDetailView(
+                    recording: recording,
+                    onRetry: {
+                        try await viewModel.retryRecording(recording)
+                    },
+                    onSave: { text in
+                        try await viewModel.saveTranscription(recording, text: text)
+                    }
+                )
             }
         }
     }
@@ -149,7 +155,11 @@ private struct TranscriptionStatusBadge: View {
 struct RecordingDetailView: View {
     let recording: RecordingRecord
     var onRetry: (() async throws -> Void)?
+    var onSave: ((String) async throws -> Void)?
     @State private var isRetrying = false
+    @State private var isEditing = false
+    @State private var editedText = ""
+    @State private var isSaving = false
 
     var body: some View {
         ScrollView {
@@ -174,11 +184,62 @@ struct RecordingDetailView: View {
 
                 // Transcription Section
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("文字起こし")
-                        .font(.headline)
+                    HStack {
+                        Text("文字起こし")
+                            .font(.headline)
 
-                    if recording.transcriptionStatus == TranscriptionStatus.done.rawValue,
-                       let transcription = recording.transcription
+                        Spacer()
+
+                        if recording.transcriptionStatus == TranscriptionStatus.done.rawValue,
+                           recording.transcription != nil, !isEditing
+                        {
+                            Button {
+                                editedText = recording.transcription ?? ""
+                                isEditing = true
+                            } label: {
+                                Label("編集", systemImage: "pencil")
+                                    .font(.subheadline)
+                            }
+                        }
+                    }
+
+                    if isEditing {
+                        TextEditor(text: $editedText)
+                            .font(.body)
+                            .frame(minHeight: 200)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(.secondary.opacity(0.3))
+                            )
+
+                        HStack {
+                            Button("キャンセル") {
+                                isEditing = false
+                            }
+                            .buttonStyle(.bordered)
+
+                            Spacer()
+
+                            Button {
+                                Task {
+                                    isSaving = true
+                                    try? await onSave?(editedText)
+                                    isEditing = false
+                                    isSaving = false
+                                }
+                            } label: {
+                                if isSaving {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Text("保存")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isSaving)
+                        }
+                    } else if recording.transcriptionStatus == TranscriptionStatus.done.rawValue,
+                              let transcription = recording.transcription
                     {
                         Text(transcription)
                             .font(.body)

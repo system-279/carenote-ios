@@ -60,6 +60,22 @@ final class RecordingListViewModel {
         recordings.removeAll { $0.id == recording.id }
     }
 
+    /// 文字起こしテキストを編集・保存する（SwiftData + Firestore）
+    func saveTranscription(_ recording: RecordingRecord, text: String) async throws {
+        recording.transcription = text
+        try recordingRepository.save()
+
+        // Firestore にも同期
+        if let firestoreService, let tenantId, let firestoreId = recording.firestoreId {
+            try await firestoreService.updateTranscription(
+                tenantId: tenantId,
+                recordingId: firestoreId,
+                transcription: text,
+                status: .done
+            )
+        }
+    }
+
     // MARK: - Polling
 
     /// processing 状態のアイテムがある間、Firestore をポーリングして更新する
