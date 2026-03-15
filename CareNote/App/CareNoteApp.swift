@@ -47,7 +47,7 @@ struct CareNoteApp: App {
                 case .signedOut:
                     SignInView(viewModel: authViewModel)
                 case .signedIn(_, let tenantId):
-                    MainTabView()
+                    MainTabView(tenantId: tenantId)
                         .task {
                             let cacheService = ClientCacheService(
                                 firestoreService: FirestoreService(),
@@ -77,6 +77,8 @@ extension Notification.Name {
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
 
+    let tenantId: String
+
     @State private var selectedTab = 0
     @State private var recordingNavigationId = UUID()
     @State private var recordingListViewModel: RecordingListViewModel?
@@ -91,7 +93,9 @@ struct MainTabView: View {
             .task {
                 if recordingListViewModel == nil {
                     recordingListViewModel = RecordingListViewModel(
-                        recordingRepository: RecordingRepository(modelContext: modelContext)
+                        recordingRepository: RecordingRepository(modelContext: modelContext),
+                        firestoreService: FirestoreService(),
+                        tenantId: tenantId
                     )
                 }
             }
