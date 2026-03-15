@@ -31,9 +31,9 @@ struct RecordingView: View {
             // Timer Display
             Text(viewModel.formatElapsedTime())
                 .font(.system(size: 72, weight: .light, design: .monospaced))
-                .foregroundStyle(viewModel.recordingState == .recording ? .red : .primary)
+                .foregroundStyle(timerColor)
 
-            // Pulse Animation
+            // Pulse Animation & Buttons
             ZStack {
                 if viewModel.recordingState == .recording {
                     Circle()
@@ -57,31 +57,46 @@ struct RecordingView: View {
                         )
                 }
 
-                // Record Button
-                Button {
-                    Task {
-                        await handleRecordButtonTap()
-                    }
-                } label: {
-                    Circle()
-                        .fill(viewModel.recordingState == .recording ? .red : .red.opacity(0.85))
-                        .frame(width: 80, height: 80)
-                        .overlay {
-                            if viewModel.recordingState == .recording {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(.white)
-                                    .frame(width: 28, height: 28)
-                            } else {
-                                Circle()
-                                    .fill(.white)
-                                    .frame(width: 28, height: 28)
-                            }
+                HStack(spacing: 40) {
+                    // Main Button: Start / Pause / Resume
+                    Button {
+                        Task {
+                            await handleMainButtonTap()
                         }
-                        .shadow(color: .red.opacity(0.3), radius: 8, y: 4)
+                    } label: {
+                        Circle()
+                            .fill(mainButtonColor)
+                            .frame(width: 80, height: 80)
+                            .overlay {
+                                mainButtonIcon
+                            }
+                            .shadow(color: .red.opacity(0.3), radius: 8, y: 4)
+                    }
+                    .buttonStyle(.plain)
+
+                    // Stop Button (visible during recording or paused)
+                    if viewModel.recordingState == .recording || viewModel.recordingState == .paused {
+                        Button {
+                            Task {
+                                try? await viewModel.stopRecording()
+                            }
+                        } label: {
+                            Circle()
+                                .fill(.gray.opacity(0.2))
+                                .frame(width: 56, height: 56)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(.red)
+                                        .frame(width: 20, height: 20)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.scale.combined(with: .opacity))
+                    }
                 }
-                .buttonStyle(.plain)
             }
             .frame(height: 180)
+            .animation(.easeInOut(duration: 0.2), value: viewModel.recordingState)
 
             // State Label
             Text(stateLabel)
@@ -100,7 +115,7 @@ struct RecordingView: View {
             }
         }
         .padding()
-        .navigationBarBackButtonHidden(viewModel.recordingState == .recording)
+        .navigationBarBackButtonHidden(viewModel.recordingState == .recording || viewModel.recordingState == .paused)
         .navigationDestination(isPresented: $navigateToConfirm) {
             if let url = viewModel.audioURL {
                 RecordingConfirmView(
@@ -131,6 +146,14 @@ struct RecordingView: View {
 
     // MARK: - Private
 
+    private var timerColor: Color {
+        switch viewModel.recordingState {
+        case .recording: return .red
+        case .paused: return .orange
+        default: return .primary
+        }
+    }
+
     private var stateLabel: String {
         switch viewModel.recordingState {
         case .idle: return "タップして録音開始"
@@ -140,15 +163,42 @@ struct RecordingView: View {
         }
     }
 
+    private var mainButtonColor: Color {
+        switch viewModel.recordingState {
+        case .idle, .stopped: return .red.opacity(0.85)
+        case .recording: return .red
+        case .paused: return .green
+        }
+    }
+
+    @ViewBuilder
+    private var mainButtonIcon: some View {
+        switch viewModel.recordingState {
+        case .idle, .stopped:
+            Circle()
+                .fill(.white)
+                .frame(width: 28, height: 28)
+        case .recording:
+            Image(systemName: "pause.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+        case .paused:
+            Image(systemName: "play.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .offset(x: 2)
+        }
+    }
+
     @MainActor
-    private func handleRecordButtonTap() async {
+    private func handleMainButtonTap() async {
         switch viewModel.recordingState {
         case .idle, .stopped:
             try? await viewModel.startRecording()
         case .recording:
-            try? await viewModel.stopRecording()
+            try? await viewModel.pauseRecording()
         case .paused:
-            break
+            try? await viewModel.resumeRecording()
         }
     }
 }

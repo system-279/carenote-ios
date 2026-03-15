@@ -6,17 +6,35 @@ import Testing
 
 actor MockAudioRecorder: AudioRecording {
     var isRecording: Bool = false
+    var isPaused: Bool = false
     var elapsedTime: TimeInterval = 0
     var urlToReturn: URL = URL(fileURLWithPath: "/tmp/test.m4a")
     var startError: Error?
     var stopError: Error?
+    var pauseError: Error?
+    var resumeError: Error?
 
     func startRecording() async throws -> URL {
         if let error = startError {
             throw error
         }
         isRecording = true
+        isPaused = false
         return urlToReturn
+    }
+
+    func pauseRecording() async throws {
+        if let error = pauseError {
+            throw error
+        }
+        isPaused = true
+    }
+
+    func resumeRecording() async throws {
+        if let error = resumeError {
+            throw error
+        }
+        isPaused = false
     }
 
     func stopRecording() async throws -> (url: URL, duration: TimeInterval) {
@@ -24,6 +42,7 @@ actor MockAudioRecorder: AudioRecording {
             throw error
         }
         isRecording = false
+        isPaused = false
         return (url: urlToReturn, duration: elapsedTime)
     }
 
@@ -117,6 +136,90 @@ struct RecordingViewModelTests {
 
         // idle状態でstopRecordingを呼んでも何も起きない
         try await vm.stopRecording()
+        #expect(vm.recordingState == .idle)
+    }
+
+    @Test @MainActor
+    func 録音一時停止でpausedになる() async throws {
+        let mock = MockAudioRecorder()
+        let vm = RecordingViewModel(
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: .visit,
+            audioRecorder: mock
+        )
+
+        try await vm.startRecording()
+        #expect(vm.recordingState == .recording)
+
+        try await vm.pauseRecording()
+        #expect(vm.recordingState == .paused)
+    }
+
+    @Test @MainActor
+    func 一時停止から再開でrecordingになる() async throws {
+        let mock = MockAudioRecorder()
+        let vm = RecordingViewModel(
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: .visit,
+            audioRecorder: mock
+        )
+
+        try await vm.startRecording()
+        try await vm.pauseRecording()
+        #expect(vm.recordingState == .paused)
+
+        try await vm.resumeRecording()
+        #expect(vm.recordingState == .recording)
+    }
+
+    @Test @MainActor
+    func 一時停止中に停止でstoppedになる() async throws {
+        let mock = MockAudioRecorder()
+        await mock.setElapsedTime(15.0)
+        let vm = RecordingViewModel(
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: .visit,
+            audioRecorder: mock
+        )
+
+        try await vm.startRecording()
+        try await vm.pauseRecording()
+        #expect(vm.recordingState == .paused)
+
+        try await vm.stopRecording()
+        #expect(vm.recordingState == .stopped)
+    }
+
+    @Test @MainActor
+    func idle状態から一時停止はガード() async throws {
+        let mock = MockAudioRecorder()
+        let vm = RecordingViewModel(
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: .visit,
+            audioRecorder: mock
+        )
+
+        #expect(vm.recordingState == .idle)
+        try await vm.pauseRecording()
+        #expect(vm.recordingState == .idle)
+    }
+
+    @Test @MainActor
+    func idle状態から再開はガード() async throws {
+        let mock = MockAudioRecorder()
+        let vm = RecordingViewModel(
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: .visit,
+            audioRecorder: mock
+        )
+
+        #expect(vm.recordingState == .idle)
+        try await vm.resumeRecording()
         #expect(vm.recordingState == .idle)
     }
 

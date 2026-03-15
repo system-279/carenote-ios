@@ -15,8 +15,11 @@ enum AudioRecorderError: Error, Sendable {
 
 protocol AudioRecording: Actor {
     var isRecording: Bool { get }
+    var isPaused: Bool { get }
     var elapsedTime: TimeInterval { get }
     func startRecording() async throws -> URL
+    func pauseRecording() async throws
+    func resumeRecording() async throws
     func stopRecording() async throws -> (url: URL, duration: TimeInterval)
 }
 
@@ -32,7 +35,9 @@ actor AudioRecorderService: AudioRecording {
     private var timerTask: Task<Void, Never>?
 
     private(set) var isRecording: Bool = false
+    private(set) var isPaused: Bool = false
     private(set) var elapsedTime: TimeInterval = 0
+    private var accumulatedTime: TimeInterval = 0
 
     // MARK: - Recording Settings
 
@@ -83,7 +88,9 @@ actor AudioRecorderService: AudioRecording {
             recordingURL = fileURL
             recordingStartTime = Date()
             isRecording = true
+            isPaused = false
             elapsedTime = 0
+            accumulatedTime = 0
 
             startElapsedTimeTimer()
 
@@ -91,6 +98,34 @@ actor AudioRecorderService: AudioRecording {
         } catch {
             throw AudioRecorderError.recordingFailed(error)
         }
+    }
+
+    /// Pause the current recording.
+    func pauseRecording() async throws {
+        guard isRecording, !isPaused, let recorder = audioRecorder else {
+            throw AudioRecorderError.notRecording
+        }
+
+        recorder.pause()
+        isPaused = true
+
+        // Accumulate elapsed time and stop timer
+        if let startTime = recordingStartTime {
+            accumulatedTime += Date().timeIntervalSince(startTime)
+        }
+        stopElapsedTimeTimer()
+    }
+
+    /// Resume the current recording after pause.
+    func resumeRecording() async throws {
+        guard isRecording, isPaused, let recorder = audioRecorder else {
+            throw AudioRecorderError.notRecording
+        }
+
+        recorder.record()
+        isPaused = false
+        recordingStartTime = Date()
+        startElapsedTimeTimer()
     }
 
     /// Stop the current recording.
@@ -102,9 +137,16 @@ actor AudioRecorderService: AudioRecording {
 
         recorder.stop()
 
-        let duration = recorder.currentTime > 0
-            ? recorder.currentTime
-            : Date().timeIntervalSince(recordingStartTime ?? Date())
+        // Calculate total duration including accumulated paused segments
+        let currentSegment: TimeInterval
+        if isPaused {
+            currentSegment = 0
+        } else if let startTime = recordingStartTime {
+            currentSegment = Date().timeIntervalSince(startTime)
+        } else {
+            currentSegment = 0
+        }
+        let duration = accumulatedTime + currentSegment
 
         stopElapsedTimeTimer()
 
@@ -121,6 +163,8 @@ actor AudioRecorderService: AudioRecording {
         recordingURL = nil
         recordingStartTime = nil
         isRecording = false
+        isPaused = false
+        accumulatedTime = 0
 
         return (url: url, duration: duration)
     }
@@ -131,17 +175,18 @@ actor AudioRecorderService: AudioRecording {
         stopElapsedTimeTimer()
 
         let startTime = Date()
+        let baseTime = accumulatedTime
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard !Task.isCancelled else { break }
-                await self?.updateElapsedTime(since: startTime)
+                await self?.updateElapsedTime(since: startTime, baseTime: baseTime)
             }
         }
     }
 
-    private func updateElapsedTime(since startTime: Date) {
-        elapsedTime = Date().timeIntervalSince(startTime)
+    private func updateElapsedTime(since startTime: Date, baseTime: TimeInterval) {
+        elapsedTime = baseTime + Date().timeIntervalSince(startTime)
     }
 
     private func stopElapsedTimeTimer() {
