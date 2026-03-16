@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import os.log
 import SwiftData
 
 // MARK: - OutboxSyncError
@@ -33,6 +34,8 @@ actor OutboxSyncService {
 
     private var pathMonitor: NWPathMonitor?
     private var monitorQueue: DispatchQueue?
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "OutboxSync")
+
     private var isProcessing = false
     private var isConnected = false
 
@@ -75,6 +78,12 @@ actor OutboxSyncService {
         for item in items {
             guard isConnected else { break }
 
+            // リトライ時は exponential backoff で待機
+            if item.retryCount > 0 {
+                let delay = Self.baseRetryDelay * pow(2.0, Double(item.retryCount - 1))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+
             do {
                 try await processItem(item)
                 await removeItem(item.id)
@@ -106,6 +115,12 @@ actor OutboxSyncService {
             } else {
                 await removeItem(item.id)
                 continue
+            }
+
+            // リトライ時は exponential backoff で待機
+            if item.retryCount > 0 {
+                let delay = Self.baseRetryDelay * pow(2.0, Double(item.retryCount - 1))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
 
             do {
@@ -246,12 +261,6 @@ actor OutboxSyncService {
             transcription: transcription,
             transcriptionStatus: .done
         )
-
-        // Apply exponential backoff delay if this was a retry
-        if item.retryCount > 0 {
-            let delay = Self.baseRetryDelay * pow(2.0, Double(item.retryCount - 1))
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-        }
     }
 
     @MainActor
@@ -288,7 +297,11 @@ actor OutboxSyncService {
         record.transcription = transcription
         record.transcriptionStatus = transcriptionStatus.rawValue
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            Self.logger.error("Failed to save recording status: \(error.localizedDescription)")
+        }
     }
 
     @MainActor
@@ -302,7 +315,11 @@ actor OutboxSyncService {
         guard let item = try? context.fetch(descriptor).first else { return }
 
         context.delete(item)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            Self.logger.error("Failed to remove outbox item: \(error.localizedDescription)")
+        }
     }
 
     @MainActor
@@ -336,7 +353,11 @@ actor OutboxSyncService {
         )
         guard let record = try? context.fetch(descriptor).first else { return }
         record.firestoreId = firestoreId
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            Self.logger.error("Failed to save firestoreId: \(error.localizedDescription)")
+        }
     }
 
     @MainActor
@@ -367,6 +388,10 @@ actor OutboxSyncService {
             }
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            Self.logger.error("Failed to save retry count: \(error.localizedDescription)")
+        }
     }
 }
