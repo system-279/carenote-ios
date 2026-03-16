@@ -39,12 +39,19 @@ final class RecordingConfirmViewModel {
         self.tenantId = tenantId
     }
 
-    /// テンプレート一覧を読み込む
+    /// テンプレート一覧を読み込む（0件ならseedしてリトライ）
     func loadTemplates() {
         let descriptor = FetchDescriptor<OutputTemplate>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        var fetched = (try? modelContext.fetch(descriptor)) ?? []
+
+        // テンプレートが0件の場合、seedしてリトライ
+        if fetched.isEmpty {
+            PresetTemplates.seedIfNeeded(modelContext: modelContext)
+            fetched = (try? modelContext.fetch(descriptor)) ?? []
+        }
+
         // プリセットを先に表示
         templates = fetched.sorted { a, b in
             if a.isPreset != b.isPreset { return a.isPreset }
