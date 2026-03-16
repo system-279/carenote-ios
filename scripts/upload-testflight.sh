@@ -31,11 +31,18 @@ xcodebuild archive \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
 echo "== Export + Upload =="
+ASC_KEY_ID="PDP26W2YV4"
+ASC_ISSUER_ID="60f20785-26ce-40bf-b274-1ad7560e3769"
+ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
 xcodebuild -exportArchive \
   -archivePath build/CareNote.xcarchive \
   -exportOptionsPlist scripts/ExportOptions.plist \
   -exportPath build/export \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  -authenticationKeyPath "$ASC_KEY_PATH" \
+  -authenticationKeyID "$ASC_KEY_ID" \
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
 echo "== Done! Build $BUILD_NUMBER uploaded to App Store Connect =="
 echo "== project.yml updated: CURRENT_PROJECT_VERSION=$BUILD_NUMBER =="

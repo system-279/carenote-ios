@@ -206,7 +206,7 @@ struct RecordingView: View {
 // MARK: - Preview
 
 #Preview {
-    let schema = Schema([RecordingRecord.self, ClientCache.self, OutboxItem.self])
+    let schema = Schema([RecordingRecord.self, ClientCache.self, OutboxItem.self, OutputTemplate.self])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
 

@@ -18,6 +18,10 @@ final class RecordingRecord {
     var uploadStatus: String
     var transcription: String?
     var transcriptionStatus: String
+    var outputType: String
+    var templateId: UUID?
+    var templateNameSnapshot: String?
+    var templatePromptSnapshot: String?
 
     init(
         id: UUID = UUID(),
@@ -30,7 +34,11 @@ final class RecordingRecord {
         firestoreId: String? = nil,
         uploadStatus: String = UploadStatus.pending.rawValue,
         transcription: String? = nil,
-        transcriptionStatus: String = TranscriptionStatus.pending.rawValue
+        transcriptionStatus: String = TranscriptionStatus.pending.rawValue,
+        outputType: String = OutputType.transcription.rawValue,
+        templateId: UUID? = nil,
+        templateNameSnapshot: String? = nil,
+        templatePromptSnapshot: String? = nil
     ) {
         self.id = id
         self.clientId = clientId
@@ -43,6 +51,10 @@ final class RecordingRecord {
         self.uploadStatus = uploadStatus
         self.transcription = transcription
         self.transcriptionStatus = transcriptionStatus
+        self.outputType = outputType
+        self.templateId = templateId
+        self.templateNameSnapshot = templateNameSnapshot
+        self.templatePromptSnapshot = templatePromptSnapshot
     }
 }
 
@@ -77,6 +89,39 @@ extension ClientCache: Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+// MARK: - OutputTemplate
+
+@Model
+final class OutputTemplate {
+    @Attribute(.unique)
+    var id: UUID
+
+    var name: String
+    var prompt: String
+    var outputType: String
+    var isPreset: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        prompt: String,
+        outputType: String = OutputType.transcription.rawValue,
+        isPreset: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.prompt = prompt
+        self.outputType = outputType
+        self.isPreset = isPreset
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 

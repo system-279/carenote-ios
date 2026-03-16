@@ -15,6 +15,7 @@
 		2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */; };
 		26069C369BF6F266262D0692 /* ClientCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */; };
 		33992576E1D90FE68CFBFFA2 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */; };
+		3F752F8424C4122A17EF1FEE /* PresetTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */; };
 		47FE4B218F49277FBB05F518 /* RecordingListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */; };
 		49EDC4D0E2DCC6A88931AC17 /* ClientSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFDE09543BDF9E6601F1F2A /* ClientSelectView.swift */; };
 		4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */; };
@@ -100,6 +101,7 @@
 		E7B1618532B76B0B38896644 /* TimeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatting.swift; sourceTree = "<group>"; };
 		E882F166342B21411BFDB30A /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
 		EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIFAuthService.swift; sourceTree = "<group>"; };
+		ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetTemplates.swift; sourceTree = "<group>"; };
 		ED7A610D0269818D75C76641 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		F2848993801DEF66A676C25D /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -173,6 +175,7 @@
 			isa = PBXGroup;
 			children = (
 				58D2B24492527E7C7CE59620 /* FirestoreModels.swift */,
+				ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */,
 				B19118D3C407ABA870A521B2 /* RecordingScene.swift */,
 				7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */,
 			);
@@ -420,6 +423,7 @@
 				8A4E94E3CD9A0B866817E387 /* FirestoreModels.swift in Sources */,
 				95566BC3B100A1D36D47B752 /* FirestoreService.swift in Sources */,
 				F503CBD6C43A313174F070AA /* OutboxSyncService.swift in Sources */,
+				3F752F8424C4122A17EF1FEE /* PresetTemplates.swift in Sources */,
 				C6CF4C9D8589E6E86057F63E /* RecordingConfirmView.swift in Sources */,
 				A26180A6D0052F77736DE8C0 /* RecordingConfirmViewModel.swift in Sources */,
 				1068201B5BAD69F7242167F5 /* RecordingListView.swift in Sources */,
@@ -538,7 +542,7 @@
 				CODE_SIGN_ENTITLEMENTS = CareNote/CareNote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;
@@ -636,7 +640,7 @@
 				CODE_SIGN_ENTITLEMENTS = CareNote/CareNote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;

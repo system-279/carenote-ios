@@ -15,6 +15,8 @@ final class RecordingConfirmViewModel {
 
     var isSaving: Bool = false
     var errorMessage: String?
+    var templates: [OutputTemplate] = []
+    var selectedTemplate: OutputTemplate?
 
     private let modelContext: ModelContext
     private let tenantId: String
@@ -37,6 +39,24 @@ final class RecordingConfirmViewModel {
         self.tenantId = tenantId
     }
 
+    /// テンプレート一覧を読み込む
+    func loadTemplates() {
+        let descriptor = FetchDescriptor<OutputTemplate>(
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        // プリセットを先に表示
+        templates = fetched.sorted { a, b in
+            if a.isPreset != b.isPreset { return a.isPreset }
+            return a.createdAt < b.createdAt
+        }
+
+        // デフォルトで最初のプリセット（文字起こし）を選択
+        if selectedTemplate == nil {
+            selectedTemplate = templates.first
+        }
+    }
+
     /// 録音を保存し文字起こしを開始する
     func saveAndTranscribe() async throws {
         isSaving = true
@@ -44,13 +64,17 @@ final class RecordingConfirmViewModel {
         defer { isSaving = false }
 
         do {
-            // 1. RecordingRecord を SwiftData に保存
+            // 1. RecordingRecord を SwiftData に保存（テンプレート snapshot 付き）
             let recording = RecordingRecord(
                 clientId: clientId,
                 clientName: clientName,
                 scene: scene.rawValue,
                 durationSeconds: duration,
-                localAudioPath: audioURL.path
+                localAudioPath: audioURL.path,
+                outputType: selectedTemplate?.outputType ?? OutputType.transcription.rawValue,
+                templateId: selectedTemplate?.id,
+                templateNameSnapshot: selectedTemplate?.name,
+                templatePromptSnapshot: selectedTemplate?.prompt
             )
             modelContext.insert(recording)
             try modelContext.save()
@@ -74,6 +98,7 @@ final class RecordingConfirmViewModel {
             )
 
             await syncService.startMonitoring()
+            defer { Task { await syncService.stopMonitoring() } }
             try await syncService.processQueueImmediately()
         } catch {
             // エラーチェーンを展開して詳細表示

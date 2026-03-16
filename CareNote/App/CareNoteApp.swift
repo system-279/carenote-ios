@@ -19,6 +19,7 @@ struct CareNoteApp: App {
             RecordingRecord.self,
             ClientCache.self,
             OutboxItem.self,
+            OutputTemplate.self,
         ])
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -59,6 +60,7 @@ struct CareNoteApp: App {
             }
             .onAppear {
                 authViewModel.checkAuthState()
+                PresetTemplates.seedIfNeeded(modelContext: modelContainer.mainContext)
             }
             .environment(authViewModel)
         }
