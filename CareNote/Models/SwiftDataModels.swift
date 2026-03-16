@@ -18,7 +18,7 @@ final class RecordingRecord {
     var uploadStatus: String
     var transcription: String?
     var transcriptionStatus: String
-    var outputType: String
+    var outputType: String?
     var templateId: UUID?
     var templateNameSnapshot: String?
     var templatePromptSnapshot: String?
@@ -35,7 +35,7 @@ final class RecordingRecord {
         uploadStatus: String = UploadStatus.pending.rawValue,
         transcription: String? = nil,
         transcriptionStatus: String = TranscriptionStatus.pending.rawValue,
-        outputType: String = OutputType.transcription.rawValue,
+        outputType: String? = OutputType.transcription.rawValue,
         templateId: UUID? = nil,
         templateNameSnapshot: String? = nil,
         templatePromptSnapshot: String? = nil
