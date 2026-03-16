@@ -17,12 +17,16 @@ actor FirestoreService {
 
     // MARK: - Properties
 
-    private let db: Firestore
+    private let _firestore: Firestore?
+
+    private var db: Firestore {
+        _firestore ?? Firestore.firestore()
+    }
 
     // MARK: - Initialization
 
-    init(firestore: Firestore = Firestore.firestore()) {
-        self.db = firestore
+    init(firestore: Firestore? = nil) {
+        self._firestore = firestore
     }
 
     // MARK: - Collection References
