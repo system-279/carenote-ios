@@ -17,7 +17,7 @@ struct OutboxSyncServiceTests {
     private static func makeContainer() throws -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self,
+            for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
             configurations: config
         )
     }
