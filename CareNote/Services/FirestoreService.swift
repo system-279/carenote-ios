@@ -10,10 +10,17 @@ enum FirestoreError: Error, Sendable {
     case operationFailed(Error)
 }
 
+// MARK: - RecordingStoring
+
+protocol RecordingStoring: Sendable {
+    func createRecording(tenantId: String, recording: FirestoreRecording) async throws -> String
+    func updateTranscription(tenantId: String, recordingId: String, transcription: String, status: TranscriptionStatus) async throws
+}
+
 // MARK: - FirestoreService
 
 /// Firestore CRUD service with multi-tenant structure: `tenants/{tenantId}/...`
-actor FirestoreService {
+actor FirestoreService: RecordingStoring {
 
     // MARK: - Properties
 

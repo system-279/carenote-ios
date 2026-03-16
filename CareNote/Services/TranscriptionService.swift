@@ -67,10 +67,16 @@ struct VertexAIResponse: Codable, Sendable {
     }
 }
 
+// MARK: - Transcribing
+
+protocol Transcribing: Sendable {
+    func transcribe(audioGCSUri: String, templatePrompt: String?) async throws -> String
+}
+
 // MARK: - TranscriptionService
 
 /// Vertex AI Gemini 2.5 Flash transcription service (Spec S11).
-actor TranscriptionService {
+actor TranscriptionService: Transcribing {
 
     // MARK: - Constants
 

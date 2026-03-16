@@ -7,10 +7,16 @@ enum StorageError: Error, Sendable {
     case uploadFailed(Error)
 }
 
+// MARK: - AudioUploading
+
+protocol AudioUploading: Sendable {
+    func uploadAudio(localURL: URL, tenantId: String, recordingId: String) async throws -> String
+}
+
 // MARK: - StorageService
 
 /// Cloud Storage upload service using GCS JSON API with WIF authentication.
-actor StorageService {
+actor StorageService: AudioUploading {
 
     // MARK: - Properties
 
