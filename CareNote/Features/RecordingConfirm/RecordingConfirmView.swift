@@ -96,7 +96,7 @@ struct RecordingConfirmView: View {
         .navigationTitle("録音確認")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(viewModel.isSaving)
-        .onAppear {
+        .task {
             viewModel.loadTemplates()
         }
         .alert("保存完了", isPresented: $showSaveSuccess) {

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os.log
 import SwiftData
 
 // MARK: - RecordingConfirmViewModel
@@ -39,17 +40,25 @@ final class RecordingConfirmViewModel {
         self.tenantId = tenantId
     }
 
-    /// テンプレート一覧を読み込む（0件ならseedしてリトライ）
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "RecordingConfirmVM")
+
+    /// テンプレート一覧を読み込む（プリセット0件ならseedしてリトライ）
     func loadTemplates() {
+        Self.logger.info("loadTemplates called")
+
         let descriptor = FetchDescriptor<OutputTemplate>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
         var fetched = (try? modelContext.fetch(descriptor)) ?? []
+        Self.logger.info("Initial fetch: \(fetched.count) templates")
 
-        // テンプレートが0件の場合、seedしてリトライ
-        if fetched.isEmpty {
+        // プリセットが0件の場合、seedしてリトライ
+        let hasPresets = fetched.contains { $0.isPreset }
+        if !hasPresets {
+            Self.logger.warning("No preset templates found, attempting seed fallback")
             PresetTemplates.seedIfNeeded(modelContext: modelContext)
             fetched = (try? modelContext.fetch(descriptor)) ?? []
+            Self.logger.info("After seed fallback: \(fetched.count) templates")
         }
 
         // プリセットを先に表示
@@ -62,6 +71,8 @@ final class RecordingConfirmViewModel {
         if selectedTemplate == nil {
             selectedTemplate = templates.first
         }
+
+        Self.logger.info("loadTemplates done: \(self.templates.count) templates, selected=\(self.selectedTemplate?.name ?? "nil")")
     }
 
     /// 録音を保存し文字起こしを開始する

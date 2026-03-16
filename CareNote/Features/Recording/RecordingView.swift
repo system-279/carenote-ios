@@ -11,6 +11,7 @@ struct RecordingView: View {
 
     @State private var pulseAnimation = false
     @State private var navigateToConfirm = false
+    @State private var confirmViewModel: RecordingConfirmViewModel?
 
     var body: some View {
         VStack(spacing: 32) {
@@ -117,18 +118,8 @@ struct RecordingView: View {
         .padding()
         .navigationBarBackButtonHidden(viewModel.recordingState == .recording || viewModel.recordingState == .paused)
         .navigationDestination(isPresented: $navigateToConfirm) {
-            if let url = viewModel.audioURL {
-                RecordingConfirmView(
-                    viewModel: RecordingConfirmViewModel(
-                        audioURL: url,
-                        clientId: viewModel.clientId,
-                        clientName: viewModel.clientName,
-                        scene: viewModel.scene,
-                        duration: viewModel.elapsedTime,
-                        modelContext: modelContext,
-                        tenantId: authViewModel.authState.tenantId ?? ""
-                    )
-                )
+            if let vm = confirmViewModel {
+                RecordingConfirmView(viewModel: vm)
             }
         }
         .onChange(of: viewModel.recordingState) { _, newState in
@@ -138,7 +129,16 @@ struct RecordingView: View {
                 pulseAnimation = false
             }
 
-            if newState == .stopped {
+            if newState == .stopped, let url = viewModel.audioURL {
+                confirmViewModel = RecordingConfirmViewModel(
+                    audioURL: url,
+                    clientId: viewModel.clientId,
+                    clientName: viewModel.clientName,
+                    scene: viewModel.scene,
+                    duration: viewModel.elapsedTime,
+                    modelContext: modelContext,
+                    tenantId: authViewModel.authState.tenantId ?? ""
+                )
                 navigateToConfirm = true
             }
         }

@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 import SwiftData
 
 // MARK: - PresetTemplates
@@ -89,15 +90,27 @@ enum PresetTemplates {
         ),
     ]
 
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "PresetTemplates")
+
     /// プリセットテンプレートを ModelContext に挿入する（既に存在する場合はスキップ）
     @MainActor
     static func seedIfNeeded(modelContext: ModelContext) {
+        logger.info("seedIfNeeded called")
+
         let descriptor = FetchDescriptor<OutputTemplate>(
             predicate: #Predicate<OutputTemplate> { $0.isPreset }
         )
 
-        let existingCount = (try? modelContext.fetchCount(descriptor)) ?? 0
-        guard existingCount == 0 else { return }
+        var existingCount = 0
+        do {
+            existingCount = try modelContext.fetchCount(descriptor)
+        } catch {
+            logger.error("fetchCount failed: \(error.localizedDescription)")
+            existingCount = -1
+        }
+
+        logger.info("Existing preset count: \(existingCount)")
+        guard existingCount == 0 || existingCount == -1 else { return }
 
         for preset in all {
             let template = OutputTemplate(
@@ -109,6 +122,11 @@ enum PresetTemplates {
             modelContext.insert(template)
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+            logger.info("Seeded \(self.all.count) preset templates successfully")
+        } catch {
+            logger.error("Failed to save seeded templates: \(error.localizedDescription)")
+        }
     }
 }
