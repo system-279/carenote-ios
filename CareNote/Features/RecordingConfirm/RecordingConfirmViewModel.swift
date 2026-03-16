@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import Observation
 import SwiftData
@@ -14,17 +13,11 @@ final class RecordingConfirmViewModel {
     let scene: RecordingScene
     let duration: TimeInterval
 
-    var isPlaying: Bool = false
     var isSaving: Bool = false
-    var playbackProgress: Double = 0
     var errorMessage: String?
-    var currentTime: TimeInterval = 0
 
     private let modelContext: ModelContext
     private let tenantId: String
-
-    private var audioPlayer: AVAudioPlayer?
-    private var playbackTask: Task<Void, Never>?
 
     init(
         audioURL: URL,
@@ -42,46 +35,6 @@ final class RecordingConfirmViewModel {
         self.duration = duration
         self.modelContext = modelContext
         self.tenantId = tenantId
-    }
-
-    /// 録音された音声を再生する
-    func playAudio() async {
-        guard !isPlaying else { return }
-
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback)
-            try session.setActive(true)
-
-            audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
-            audioPlayer?.play()
-            isPlaying = true
-            playbackProgress = 0
-
-            startPlaybackTracking()
-        } catch {
-            errorMessage = "再生に失敗しました: \(error.localizedDescription)"
-        }
-    }
-
-    /// 再生を停止する
-    func stopPlayback() {
-        audioPlayer?.stop()
-        audioPlayer = nil
-        isPlaying = false
-        playbackProgress = 0
-        currentTime = 0
-        playbackTask?.cancel()
-        playbackTask = nil
-    }
-
-    /// 指定した進捗位置にシークする（0.0〜1.0）
-    func seekTo(progress: Double) {
-        guard let player = audioPlayer else { return }
-        let newTime = player.duration * progress
-        player.currentTime = newTime
-        playbackProgress = progress
-        currentTime = newTime
     }
 
     /// 録音を保存し文字起こしを開始する
@@ -154,30 +107,4 @@ final class RecordingConfirmViewModel {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    // MARK: - Private
-
-    private func startPlaybackTracking() {
-        playbackTask?.cancel()
-        playbackTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
-                guard !Task.isCancelled, let self else { break }
-                guard let player = self.audioPlayer else {
-                    self.isPlaying = false
-                    break
-                }
-                if player.isPlaying {
-                    self.currentTime = player.currentTime
-                    self.playbackProgress = player.duration > 0
-                        ? player.currentTime / player.duration
-                        : 0
-                } else {
-                    self.isPlaying = false
-                    self.playbackProgress = 0
-                    self.currentTime = 0
-                    break
-                }
-            }
-        }
-    }
 }
