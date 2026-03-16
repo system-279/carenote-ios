@@ -24,6 +24,7 @@
 		6B0117657090C55B8D4A4A43 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0201FF49E15F02E9E9054426 /* Assets.xcassets */; };
 		6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2848993801DEF66A676C25D /* AppEnvironment.swift */; };
 		792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */; };
+		7CA851BF8A07B0D97F3903A3 /* RecordingConfirmViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */; };
 		854789E2D53FE67EB38E7E4D /* ClientRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */; };
 		867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */; };
 		8A4E94E3CD9A0B866817E387 /* FirestoreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D2B24492527E7C7CE59620 /* FirestoreModels.swift */; };
@@ -98,6 +99,7 @@
 		C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientRepository.swift; sourceTree = "<group>"; };
 		CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingConfirmViewModelTests.swift; sourceTree = "<group>"; };
 		E7B1618532B76B0B38896644 /* TimeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatting.swift; sourceTree = "<group>"; };
 		E882F166342B21411BFDB30A /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
 		EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIFAuthService.swift; sourceTree = "<group>"; };
@@ -241,6 +243,7 @@
 			children = (
 				9BD36BBA888E8960D96DC910 /* AuthViewModelTests.swift */,
 				042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */,
+				E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */,
 				88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */,
 				13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */,
 				7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */,
@@ -399,6 +402,7 @@
 			files = (
 				C60B40FD6A5D17715EAE0AD4 /* AuthViewModelTests.swift in Sources */,
 				C6072255D88F74D009713EF5 /* OutboxSyncServiceTests.swift in Sources */,
+				7CA851BF8A07B0D97F3903A3 /* RecordingConfirmViewModelTests.swift in Sources */,
 				47FE4B218F49277FBB05F518 /* RecordingListViewModelTests.swift in Sources */,
 				B699C2BBB845DE4A8ACC0619 /* RecordingRepositoryTests.swift in Sources */,
 				4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */,
