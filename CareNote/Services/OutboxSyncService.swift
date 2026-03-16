@@ -27,9 +27,9 @@ actor OutboxSyncService {
     // MARK: - Properties
 
     private let modelContainer: ModelContainer
-    private let storageService: StorageService
-    private let firestoreService: FirestoreService
-    private let transcriptionService: TranscriptionService
+    private let storageService: any AudioUploading
+    private let firestoreService: any RecordingStoring
+    private let transcriptionService: any Transcribing
     private let tenantId: String
 
     private var pathMonitor: NWPathMonitor?
@@ -43,9 +43,9 @@ actor OutboxSyncService {
 
     init(
         modelContainer: ModelContainer,
-        storageService: StorageService,
-        firestoreService: FirestoreService,
-        transcriptionService: TranscriptionService,
+        storageService: any AudioUploading,
+        firestoreService: any RecordingStoring,
+        transcriptionService: any Transcribing,
         tenantId: String
     ) {
         self.modelContainer = modelContainer
@@ -224,14 +224,17 @@ actor OutboxSyncService {
             }
         }
 
-        if let fid = firestoreId {
-            try? await firestoreService.updateTranscription(
-                tenantId: tenantId,
-                recordingId: fid,
-                transcription: "",
-                status: .processing
-            )
+        guard let fid = firestoreId else {
+            Self.logger.error("firestoreId is nil after Step 2 for recording \(item.recordingId) — skipping transcription")
+            return
         }
+
+        try? await firestoreService.updateTranscription(
+            tenantId: tenantId,
+            recordingId: fid,
+            transcription: "",
+            status: .processing
+        )
 
         // Step 3: Trigger transcription (with template prompt if available)
         let transcription: String
@@ -245,14 +248,12 @@ actor OutboxSyncService {
         }
 
         // Step 4: Update Firestore with transcription result
-        if let fid = firestoreId {
-            try await firestoreService.updateTranscription(
-                tenantId: tenantId,
-                recordingId: fid,
-                transcription: transcription,
-                status: .done
-            )
-        }
+        try await firestoreService.updateTranscription(
+            tenantId: tenantId,
+            recordingId: fid,
+            transcription: transcription,
+            status: .done
+        )
 
         // Step 5: Update local SwiftData record
         await updateRecordingStatus(
