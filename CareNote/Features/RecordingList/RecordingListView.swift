@@ -182,6 +182,18 @@ struct RecordingDetailView: View {
                 .padding()
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
+                // Playback Section
+                if FileManager.default.fileExists(atPath: recording.localAudioPath) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("再生")
+                            .font(.headline)
+
+                        AudioPlayerView(audioURL: URL(fileURLWithPath: recording.localAudioPath))
+                    }
+                    .padding()
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+
                 // Transcription Section
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
