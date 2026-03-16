@@ -77,16 +77,10 @@ actor TranscriptionService {
     private let model = "gemini-2.5-flash"
     private let region = "asia-northeast1"
 
-    private let transcriptionPrompt = """
-        以下の音声を日本語で文字起こししてください。
-
-        指示:
-        - 句読点（。、）を適切に付与してください
-        - 「えー」「あのー」などのフィラー（つなぎ言葉）は省略してください
-        - 介護用語は正確に記載してください（例: 要介護度、ADL、IADL、ケアプラン、サービス担当者会議 等）
-        - 話者の区別がつく場合は話者を明示してください
-        - 音声が不明瞭な箇所は [不明瞭] と記載してください
-        """
+    /// デフォルトプロンプト（PresetTemplates の文字起こしプリセットを Single Source of Truth とする）
+    private var defaultPrompt: String {
+        PresetTemplates.all[0].prompt
+    }
 
     // MARK: - Properties
 
@@ -129,7 +123,7 @@ actor TranscriptionService {
     ///   - templatePrompt: Custom prompt to use instead of the default. Pass `nil` to use the default.
     /// - Returns: The generated text.
     func transcribe(audioGCSUri: String, templatePrompt: String?) async throws -> String {
-        let prompt = templatePrompt ?? transcriptionPrompt
+        let prompt = templatePrompt ?? defaultPrompt
 
         // Get access token via WIF
         let accessToken: String

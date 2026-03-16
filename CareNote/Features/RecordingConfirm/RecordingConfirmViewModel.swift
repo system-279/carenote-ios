@@ -41,7 +41,7 @@ final class RecordingConfirmViewModel {
 
     /// テンプレート一覧を読み込む
     func loadTemplates() {
-        var descriptor = FetchDescriptor<OutputTemplate>(
+        let descriptor = FetchDescriptor<OutputTemplate>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
         let fetched = (try? modelContext.fetch(descriptor)) ?? []
@@ -98,6 +98,7 @@ final class RecordingConfirmViewModel {
             )
 
             await syncService.startMonitoring()
+            defer { Task { await syncService.stopMonitoring() } }
             try await syncService.processQueueImmediately()
         } catch {
             // エラーチェーンを展開して詳細表示
