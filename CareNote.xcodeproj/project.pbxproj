@@ -10,6 +10,7 @@
 		067B9DD725C1C464134BF7AE /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1DFFB0082E42BA992D89756B /* GoogleSignIn */; };
 		0859FC46515B27F9B97FC1F6 /* SceneSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A269AFC38F3097F4CDCF8DF /* SceneSelectView.swift */; };
 		1068201B5BAD69F7242167F5 /* RecordingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A98BBDBB5774B595F092430F /* RecordingListView.swift */; };
+		13A5A2945594CCE9F062EE03 /* TimeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1618532B76B0B38896644 /* TimeFormatting.swift */; };
 		167F33E85C77C228D0FFFD44 /* RecordingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1773834D66185AC4FF05004 /* RecordingViewModel.swift */; };
 		2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */; };
 		26069C369BF6F266262D0692 /* ClientCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */; };
@@ -96,6 +97,7 @@
 		C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientRepository.swift; sourceTree = "<group>"; };
 		CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		E7B1618532B76B0B38896644 /* TimeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatting.swift; sourceTree = "<group>"; };
 		E882F166342B21411BFDB30A /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
 		EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIFAuthService.swift; sourceTree = "<group>"; };
 		ED7A610D0269818D75C76641 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 			isa = PBXGroup;
 			children = (
 				F2848993801DEF66A676C25D /* AppEnvironment.swift */,
+				E7B1618532B76B0B38896644 /* TimeFormatting.swift */,
 			);
 			path = Infrastructure;
 			sourceTree = "<group>";
@@ -430,6 +433,7 @@
 				577059F7C878462433B3DC11 /* SignInView.swift in Sources */,
 				8F8930B68A64B56B8FF49023 /* StorageService.swift in Sources */,
 				2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */,
+				13A5A2945594CCE9F062EE03 /* TimeFormatting.swift in Sources */,
 				867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */,
 				D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */,
 			);

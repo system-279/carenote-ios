@@ -160,6 +160,7 @@ struct RecordingDetailView: View {
     @State private var isEditing = false
     @State private var editedText = ""
     @State private var isSaving = false
+    @State private var hasLocalAudio = false
 
     var body: some View {
         ScrollView {
@@ -176,14 +177,14 @@ struct RecordingDetailView: View {
                     )
                     DetailRow(
                         label: "録音時間",
-                        value: formatDuration(recording.durationSeconds)
+                        value: formatMMSS(recording.durationSeconds)
                     )
                 }
                 .padding()
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
                 // Playback Section
-                if FileManager.default.fileExists(atPath: recording.localAudioPath) {
+                if hasLocalAudio {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("再生")
                             .font(.headline)
@@ -305,13 +306,9 @@ struct RecordingDetailView: View {
         }
         .navigationTitle("録音詳細")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let totalSeconds = Int(seconds)
-        let minutes = totalSeconds / 60
-        let secs = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, secs)
+        .onAppear {
+            hasLocalAudio = FileManager.default.fileExists(atPath: recording.localAudioPath)
+        }
     }
 }
 
