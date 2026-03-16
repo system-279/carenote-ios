@@ -14,6 +14,7 @@ struct AudioPlayerView: View {
     @State private var totalDuration: TimeInterval = 0
     @State private var isDragging = false
     @State private var trackingTask: Task<Void, Never>?
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -26,14 +27,14 @@ struct AudioPlayerView: View {
             .tint(.accentColor)
 
             HStack {
-                Text(formatTime(currentTime))
+                Text(formatMMSS(currentTime))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
 
                 Spacer()
 
-                Text(formatTime(totalDuration))
+                Text(formatMMSS(totalDuration))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -51,9 +52,12 @@ struct AudioPlayerView: View {
                     .foregroundStyle(.tint)
             }
             .buttonStyle(.plain)
-        }
-        .onAppear {
-            prepareDuration()
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
         .onDisappear {
             stopPlayback()
@@ -62,12 +66,8 @@ struct AudioPlayerView: View {
 
     // MARK: - Private
 
-    private func prepareDuration() {
-        guard let p = try? AVAudioPlayer(contentsOf: audioURL) else { return }
-        totalDuration = p.duration
-    }
-
     private func startPlayback() {
+        errorMessage = nil
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback)
@@ -80,18 +80,18 @@ struct AudioPlayerView: View {
             totalDuration = p.duration
             startTracking()
         } catch {
-            // 再生エラーは静かに無視
+            errorMessage = "再生に失敗しました"
         }
     }
 
     private func stopPlayback() {
+        trackingTask?.cancel()
+        trackingTask = nil
         player?.stop()
         player = nil
         isPlaying = false
         progress = 0
         currentTime = 0
-        trackingTask?.cancel()
-        trackingTask = nil
     }
 
     private func seekTo(progress: Double) {
@@ -122,12 +122,5 @@ struct AudioPlayerView: View {
                 }
             }
         }
-    }
-
-    private func formatTime(_ time: TimeInterval) -> String {
-        let totalSeconds = Int(time)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

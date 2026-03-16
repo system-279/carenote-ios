@@ -101,10 +101,7 @@ final class RecordingConfirmViewModel {
 
     /// 録音時間を MM:SS 形式でフォーマットする
     var formattedDuration: String {
-        let totalSeconds = Int(duration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        formatMMSS(duration)
     }
 
 }
