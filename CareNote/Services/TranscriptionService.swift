@@ -116,10 +116,21 @@ actor TranscriptionService {
 
     // MARK: - Public Methods
 
-    /// Transcribe audio from a GCS URI using Vertex AI Gemini 2.5 Flash.
+    /// Transcribe audio from a GCS URI using the default transcription prompt.
     /// - Parameter audioGCSUri: The `gs://` URI of the audio file in Cloud Storage.
     /// - Returns: The transcribed text.
     func transcribe(audioGCSUri: String) async throws -> String {
+        try await transcribe(audioGCSUri: audioGCSUri, templatePrompt: nil)
+    }
+
+    /// Transcribe audio from a GCS URI using a custom template prompt.
+    /// - Parameters:
+    ///   - audioGCSUri: The `gs://` URI of the audio file in Cloud Storage.
+    ///   - templatePrompt: Custom prompt to use instead of the default. Pass `nil` to use the default.
+    /// - Returns: The generated text.
+    func transcribe(audioGCSUri: String, templatePrompt: String?) async throws -> String {
+        let prompt = templatePrompt ?? transcriptionPrompt
+
         // Get access token via WIF
         let accessToken: String
         do {
@@ -142,7 +153,7 @@ actor TranscriptionService {
                             )
                         ),
                         VertexAIRequest.Part(
-                            text: transcriptionPrompt,
+                            text: prompt,
                             fileData: nil
                         ),
                     ]

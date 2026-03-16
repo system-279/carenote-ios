@@ -26,6 +26,28 @@ struct RecordingConfirmView: View {
             AudioPlayerView(audioURL: viewModel.audioURL)
                 .padding(.horizontal)
 
+            // Template Selection
+            VStack(alignment: .leading, spacing: 8) {
+                Text("出力形式")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(viewModel.templates) { template in
+                            TemplateChip(
+                                name: template.name,
+                                isSelected: viewModel.selectedTemplate?.id == template.id
+                            ) {
+                                viewModel.selectedTemplate = template
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+
             Spacer()
 
             // Error Message
@@ -78,6 +100,9 @@ struct RecordingConfirmView: View {
         .navigationTitle("録音確認")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(viewModel.isSaving)
+        .onAppear {
+            viewModel.loadTemplates()
+        }
         .alert("保存完了", isPresented: $showSaveSuccess) {
             Button("OK") {
                 NotificationCenter.default.post(name: .navigateToRecordingList, object: nil)
@@ -109,10 +134,33 @@ private struct InfoRow: View {
     }
 }
 
+// MARK: - TemplateChip
+
+private struct TemplateChip: View {
+    let name: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(name)
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    isSelected ? Color.accentColor : Color(.systemGray5),
+                    in: Capsule()
+                )
+                .foregroundStyle(isSelected ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Preview
 
 #Preview {
-    let schema = Schema([RecordingRecord.self, ClientCache.self, OutboxItem.self])
+    let schema = Schema([RecordingRecord.self, ClientCache.self, OutboxItem.self, OutputTemplate.self])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
 

@@ -41,3 +41,15 @@ enum TranscriptionStatus: String, Codable, Sendable {
     case done
     case error
 }
+
+// MARK: - OutputType
+
+enum OutputType: String, CaseIterable, Codable, Sendable, Identifiable {
+    case transcription = "文字起こし"
+    case visitRecord = "訪問記録"
+    case meetingMinutes = "会議録"
+    case summary = "要約"
+    case custom = "カスタム"
+
+    var id: String { rawValue }
+}

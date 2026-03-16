@@ -218,10 +218,13 @@ actor OutboxSyncService {
             )
         }
 
-        // Step 3: Trigger transcription
+        // Step 3: Trigger transcription (with template prompt if available)
         let transcription: String
         do {
-            transcription = try await transcriptionService.transcribe(audioGCSUri: gcsUri)
+            transcription = try await transcriptionService.transcribe(
+                audioGCSUri: gcsUri,
+                templatePrompt: recording.templatePromptSnapshot
+            )
         } catch {
             throw OutboxSyncError.transcriptionFailed(error)
         }
@@ -252,7 +255,7 @@ actor OutboxSyncService {
     }
 
     @MainActor
-    private func fetchRecording(id: UUID) -> (localAudioPath: String, firestoreId: String?)? {
+    private func fetchRecording(id: UUID) -> (localAudioPath: String, firestoreId: String?, templatePromptSnapshot: String?)? {
         let context = modelContainer.mainContext
 
         let descriptor = FetchDescriptor<RecordingRecord>(
@@ -263,7 +266,7 @@ actor OutboxSyncService {
             return nil
         }
 
-        return (localAudioPath: record.localAudioPath, firestoreId: record.firestoreId)
+        return (localAudioPath: record.localAudioPath, firestoreId: record.firestoreId, templatePromptSnapshot: record.templatePromptSnapshot)
     }
 
     @MainActor

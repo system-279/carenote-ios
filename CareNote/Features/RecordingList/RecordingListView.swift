@@ -179,6 +179,9 @@ struct RecordingDetailView: View {
                         label: "録音時間",
                         value: formatMMSS(recording.durationSeconds)
                     )
+                    if let templateName = recording.templateNameSnapshot {
+                        DetailRow(label: "出力形式", value: templateName)
+                    }
                 }
                 .padding()
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
