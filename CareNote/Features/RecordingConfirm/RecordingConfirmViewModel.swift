@@ -79,10 +79,7 @@ final class RecordingConfirmViewModel {
         }
 
         // プリセットを先に表示
-        templates = fetched.sorted { a, b in
-            if a.isPreset != b.isPreset { return a.isPreset }
-            return a.createdAt < b.createdAt
-        }
+        templates = fetched.sortedForDisplay()
 
         // デフォルトで最初のプリセット（文字起こし）を選択
         if selectedTemplate == nil {

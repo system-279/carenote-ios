@@ -125,6 +125,16 @@ final class OutputTemplate {
     }
 }
 
+extension Array where Element == OutputTemplate {
+    /// プリセットを先頭、カスタムを後方に、各グループ内は作成日昇順でソート
+    func sortedForDisplay() -> [OutputTemplate] {
+        sorted { a, b in
+            if a.isPreset != b.isPreset { return a.isPreset }
+            return a.createdAt < b.createdAt
+        }
+    }
+}
+
 // MARK: - OutboxItem
 
 @Model
