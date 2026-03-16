@@ -21,6 +21,7 @@ final class RecordingConfirmViewModel {
 
     private let modelContext: ModelContext
     private let tenantId: String
+    private let syncServiceFactory: @Sendable (ModelContainer, String) -> OutboxSyncService
 
     init(
         audioURL: URL,
@@ -29,7 +30,8 @@ final class RecordingConfirmViewModel {
         scene: RecordingScene,
         duration: TimeInterval,
         modelContext: ModelContext,
-        tenantId: String
+        tenantId: String,
+        syncServiceFactory: (@Sendable (ModelContainer, String) -> OutboxSyncService)? = nil
     ) {
         self.audioURL = audioURL
         self.clientId = clientId
@@ -38,6 +40,21 @@ final class RecordingConfirmViewModel {
         self.duration = duration
         self.modelContext = modelContext
         self.tenantId = tenantId
+        self.syncServiceFactory = syncServiceFactory ?? Self.defaultSyncServiceFactory
+    }
+
+    private static let defaultSyncServiceFactory: @Sendable (ModelContainer, String) -> OutboxSyncService = { container, tenantId in
+        let wifService = WIFAuthService()
+        return OutboxSyncService(
+            modelContainer: container,
+            storageService: StorageService(accessTokenProvider: wifService),
+            firestoreService: FirestoreService(),
+            transcriptionService: TranscriptionService(
+                projectId: AppConfig.gcpProject,
+                accessTokenProvider: wifService
+            ),
+            tenantId: tenantId
+        )
     }
 
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "RecordingConfirmVM")
@@ -103,20 +120,7 @@ final class RecordingConfirmViewModel {
             try modelContext.save()
 
             // 3. OutboxSyncService を生成して即時処理
-            let wifService = WIFAuthService()
-            let syncService = OutboxSyncService(
-                modelContainer: modelContext.container,
-                storageService: StorageService(accessTokenProvider: wifService),
-                firestoreService: FirestoreService(),
-                transcriptionService: TranscriptionService(
-                    projectId: AppConfig.gcpProject,
-                    accessTokenProvider: wifService
-                ),
-                tenantId: tenantId
-            )
-
-            await syncService.startMonitoring()
-            defer { Task { await syncService.stopMonitoring() } }
+            let syncService = syncServiceFactory(modelContext.container, tenantId)
             try await syncService.processQueueImmediately()
         } catch {
             // エラーチェーンを展開して詳細表示

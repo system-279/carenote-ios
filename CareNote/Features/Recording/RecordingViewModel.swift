@@ -103,10 +103,7 @@ final class RecordingViewModel {
 
     /// 経過時間を MM:SS 形式でフォーマットする
     func formatElapsedTime() -> String {
-        let totalSeconds = Int(elapsedTime)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        formatMMSS(elapsedTime)
     }
 
     // MARK: - Private
