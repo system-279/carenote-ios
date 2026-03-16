@@ -114,6 +114,14 @@ struct MainTabView: View {
                 Label("新規録音", systemImage: "mic.circle.fill")
             }
             .tag(1)
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label("設定", systemImage: "gearshape")
+            }
+            .tag(2)
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToRecordingList)) { _ in
             selectedTab = 0
