@@ -17,10 +17,19 @@ protocol RecordingStoring: Sendable {
     func updateTranscription(tenantId: String, recordingId: String, transcription: String, status: TranscriptionStatus) async throws
 }
 
+// MARK: - WhitelistManaging
+
+protocol WhitelistManaging: Sendable {
+    func fetchWhitelist(tenantId: String) async throws -> [FirestoreWhitelistEntry]
+    func addToWhitelist(tenantId: String, email: String, addedBy: String) async throws
+    func removeFromWhitelist(tenantId: String, entryId: String) async throws
+    func isEmailWhitelisted(tenantId: String, email: String) async throws -> Bool
+}
+
 // MARK: - FirestoreService
 
 /// Firestore CRUD service with multi-tenant structure: `tenants/{tenantId}/...`
-actor FirestoreService: RecordingStoring {
+actor FirestoreService: RecordingStoring, WhitelistManaging {
 
     // MARK: - Properties
 
@@ -44,6 +53,10 @@ actor FirestoreService: RecordingStoring {
 
     private func recordingsCollection(tenantId: String) -> CollectionReference {
         db.collection("tenants").document(tenantId).collection("recordings")
+    }
+
+    private func whitelistCollection(tenantId: String) -> CollectionReference {
+        db.collection("tenants").document(tenantId).collection("whitelist")
     }
 
     // MARK: - Clients
@@ -196,6 +209,62 @@ actor FirestoreService: RecordingStoring {
                     updatedAt: updatedAt
                 )
             }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    // MARK: - Whitelist
+
+    func fetchWhitelist(tenantId: String) async throws -> [FirestoreWhitelistEntry] {
+        do {
+            let snapshot = try await whitelistCollection(tenantId: tenantId)
+                .order(by: "addedAt", descending: true)
+                .getDocuments()
+
+            return snapshot.documents.compactMap { document in
+                let data = document.data()
+                let addedAt = (data["addedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+                return FirestoreWhitelistEntry(
+                    id: document.documentID,
+                    email: data["email"] as? String ?? "",
+                    addedBy: data["addedBy"] as? String ?? "",
+                    addedAt: addedAt
+                )
+            }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func addToWhitelist(tenantId: String, email: String, addedBy: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).addDocument(data: [
+                "email": email.normalizedEmail,
+                "addedBy": addedBy,
+                "addedAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func removeFromWhitelist(tenantId: String, entryId: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).document(entryId).delete()
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func isEmailWhitelisted(tenantId: String, email: String) async throws -> Bool {
+        do {
+            let snapshot = try await whitelistCollection(tenantId: tenantId)
+                .whereField("email", isEqualTo: email.normalizedEmail)
+                .limit(to: 1)
+                .getDocuments()
+            return !snapshot.documents.isEmpty
         } catch {
             throw FirestoreError.operationFailed(error)
         }

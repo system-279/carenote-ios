@@ -2,9 +2,33 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /tenants/{tenantId}/{document=**} {
-      allow read, write: if request.auth != null
+    // テナントメンバー判定
+    function isTenantMember(tenantId) {
+      return request.auth != null
         && request.auth.token.tenantId == tenantId;
+    }
+
+    // admin ロール判定
+    function isAdmin(tenantId) {
+      return isTenantMember(tenantId)
+        && request.auth.token.role == 'admin';
+    }
+
+    match /tenants/{tenantId} {
+
+      // ホワイトリスト: テナントメンバーは read 可、write は admin のみ
+      // read はサインイン時の検証（isEmailWhitelisted）で一般ユーザーも必要
+      // 一覧取得（fetchWhitelist）は iOS 側で admin のみに制限
+      match /whitelist/{entryId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, delete: if isAdmin(tenantId);
+        allow update: if false;
+      }
+
+      // その他のコレクション（clients, recordings 等）
+      match /{document=**} {
+        allow read, write: if isTenantMember(tenantId);
+      }
     }
   }
 }

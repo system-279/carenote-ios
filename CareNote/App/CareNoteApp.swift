@@ -47,8 +47,8 @@ struct CareNoteApp: App {
                 switch authViewModel.authState {
                 case .signedOut:
                     SignInView(viewModel: authViewModel)
-                case .signedIn(_, let tenantId):
-                    MainTabView(tenantId: tenantId)
+                case .signedIn(_, let tenantId, _):
+                    MainTabView(tenantId: tenantId, isAdmin: authViewModel.authState.isAdmin)
                         .task {
                             let cacheService = ClientCacheService(
                                 firestoreService: FirestoreService(),
@@ -80,6 +80,7 @@ struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
 
     let tenantId: String
+    let isAdmin: Bool
 
     @State private var selectedTab = 0
     @State private var recordingNavigationId = UUID()
@@ -116,7 +117,7 @@ struct MainTabView: View {
             .tag(1)
 
             NavigationStack {
-                SettingsView()
+                SettingsView(tenantId: tenantId, isAdmin: isAdmin)
             }
             .tabItem {
                 Label("設定", systemImage: "gearshape")
