@@ -1,18 +1,19 @@
 const { initializeApp } = require("firebase-admin/app");
-const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
-const { beforeUserCreated } = require("firebase-functions/v2/identity");
+const { beforeUserSignedIn } = require("firebase-functions/v2/identity");
 const { logger } = require("firebase-functions");
 
 initializeApp();
 
 /**
- * Auth blocking function: 新規ユーザー作成前にホワイトリストを照合し、
- * tenantId と role を custom claims に自動設定する。
+ * Auth blocking function: 毎回サインイン時にホワイトリストを照合し、
+ * tenantId と role を custom claims に設定する。
  *
- * ホワイトリスト未登録のメールはサインインを拒否する。
+ * - ホワイトリスト登録済み → tenantId + role を claims に設定
+ * - ホワイトリスト未登録 → サインインを拒否
+ * - ロール変更も次回サインインで自動反映
  */
-exports.beforeCreate = beforeUserCreated(
+exports.beforeSignIn = beforeUserSignedIn(
   { region: "asia-northeast1" },
   async (event) => {
     const email = (event.data.email || "").toLowerCase().trim();
@@ -21,7 +22,7 @@ exports.beforeCreate = beforeUserCreated(
       throw new Error("メールアドレスが取得できません。");
     }
 
-    logger.info(`beforeCreate: checking whitelist for ${email}`);
+    logger.info(`beforeSignIn: checking whitelist for ${email}`);
 
     const db = getFirestore();
 
@@ -43,10 +44,9 @@ exports.beforeCreate = beforeUserCreated(
         const role = entry.role || "user";
 
         logger.info(
-          `beforeCreate: ${email} found in tenant ${tenantId} with role ${role}`
+          `beforeSignIn: ${email} found in tenant ${tenantId} with role ${role}`
         );
 
-        // custom claims を設定
         return {
           customClaims: {
             tenantId: tenantId,
@@ -57,7 +57,7 @@ exports.beforeCreate = beforeUserCreated(
     }
 
     // ホワイトリスト未登録 → サインイン拒否
-    logger.warn(`beforeCreate: ${email} not found in any whitelist`);
+    logger.warn(`beforeSignIn: ${email} not found in any whitelist`);
     throw new Error(
       "このアカウントは許可されていません。管理者にお問い合わせください。"
     );
