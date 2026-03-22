@@ -13,6 +13,7 @@
 		13A5A2945594CCE9F062EE03 /* TimeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1618532B76B0B38896644 /* TimeFormatting.swift */; };
 		167F33E85C77C228D0FFFD44 /* RecordingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1773834D66185AC4FF05004 /* RecordingViewModel.swift */; };
 		2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */; };
+		23A44695D38CFEE84E35F01C /* WhitelistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE98442DFB42EA8E720479A /* WhitelistView.swift */; };
 		26069C369BF6F266262D0692 /* ClientCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */; };
 		33992576E1D90FE68CFBFFA2 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */; };
 		3F752F8424C4122A17EF1FEE /* PresetTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */; };
@@ -45,6 +46,7 @@
 		AFC68317B2584D1DD4BD0DEC /* CareNoteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F9FC31CCE425A0E9107ACB3 /* CareNoteApp.swift */; };
 		B64BA4F7909AFDD553C357F5 /* RecordingListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933487C9E5291192E20D3FD6 /* RecordingListViewModel.swift */; };
 		B699C2BBB845DE4A8ACC0619 /* RecordingRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */; };
+		C30107324D7A1816ECFCB4A6 /* WhitelistViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F63743C3463B0EAA1438813 /* WhitelistViewModelTests.swift */; };
 		C6072255D88F74D009713EF5 /* OutboxSyncServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */; };
 		C60B40FD6A5D17715EAE0AD4 /* AuthViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD36BBA888E8960D96DC910 /* AuthViewModelTests.swift */; };
 		C6CF4C9D8589E6E86057F63E /* RecordingConfirmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF9442D22A121622206F23 /* RecordingConfirmView.swift */; };
@@ -54,6 +56,7 @@
 		D500243B9B526706E3BCE5AF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */; };
 		D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */; };
 		DEA5BEF6533AC992CA56ACE1 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 780EB4E4898BE568D7C4B343 /* FirebaseAuth */; };
+		E181ED0DE8A6D290C297BC49 /* WhitelistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1FBEE6E3B3697880071C9 /* WhitelistViewModel.swift */; };
 		F503CBD6C43A313174F070AA /* OutboxSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31A63277501286D0902113FA /* OutboxSyncService.swift */; };
 /* End PBXBuildFile section */
 
@@ -83,7 +86,10 @@
 		314ECA9225E94AACAFBC6557 /* SceneSelectViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneSelectViewModel.swift; sourceTree = "<group>"; };
 		31A176AE8830BEDDEBD57A2F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		31A63277501286D0902113FA /* OutboxSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxSyncService.swift; sourceTree = "<group>"; };
+		38A1FBEE6E3B3697880071C9 /* WhitelistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistViewModel.swift; sourceTree = "<group>"; };
+		3AE98442DFB42EA8E720479A /* WhitelistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistView.swift; sourceTree = "<group>"; };
 		3ECEF75B614C6A2B223AB02F /* TemplateCreateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateCreateViewModel.swift; sourceTree = "<group>"; };
+		3F63743C3463B0EAA1438813 /* WhitelistViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistViewModelTests.swift; sourceTree = "<group>"; };
 		43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServiceTests.swift; sourceTree = "<group>"; };
 		47604C61474A5EA44EABDF67 /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
@@ -258,6 +264,7 @@
 				13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */,
 				7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */,
 				46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */,
+				3F63743C3463B0EAA1438813 /* WhitelistViewModelTests.swift */,
 			);
 			path = CareNoteTests;
 			sourceTree = "<group>";
@@ -311,6 +318,8 @@
 				3ECEF75B614C6A2B223AB02F /* TemplateCreateViewModel.swift */,
 				11F7A54E6C83AA0B51126525 /* TemplateListView.swift */,
 				045FD4755BC7F09BF6967EB7 /* TemplateListViewModel.swift */,
+				3AE98442DFB42EA8E720479A /* WhitelistView.swift */,
+				38A1FBEE6E3B3697880071C9 /* WhitelistViewModel.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -430,6 +439,7 @@
 				B699C2BBB845DE4A8ACC0619 /* RecordingRepositoryTests.swift in Sources */,
 				4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */,
 				CCA4CF007249D2BA99FD5315 /* TranscriptionServiceTests.swift in Sources */,
+				C30107324D7A1816ECFCB4A6 /* WhitelistViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -472,6 +482,8 @@
 				13A5A2945594CCE9F062EE03 /* TimeFormatting.swift in Sources */,
 				867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */,
 				D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */,
+				23A44695D38CFEE84E35F01C /* WhitelistView.swift in Sources */,
+				E181ED0DE8A6D290C297BC49 /* WhitelistViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -574,7 +586,7 @@
 				CODE_SIGN_ENTITLEMENTS = CareNote/CareNote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;
@@ -672,7 +684,7 @@
 				CODE_SIGN_ENTITLEMENTS = CareNote/CareNote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;

@@ -8,7 +8,7 @@ import UIKit
 
 enum AuthState: Sendable, Equatable {
     case signedOut
-    case signedIn(userId: String, tenantId: String)
+    case signedIn(userId: String, tenantId: String, role: String)
 
     var isSignedIn: Bool {
         if case .signedIn = self { return true }
@@ -16,20 +16,29 @@ enum AuthState: Sendable, Equatable {
     }
 
     var userId: String? {
-        if case .signedIn(let userId, _) = self { return userId }
+        if case .signedIn(let userId, _, _) = self { return userId }
         return nil
     }
 
     var tenantId: String? {
-        if case .signedIn(_, let tenantId) = self { return tenantId }
+        if case .signedIn(_, let tenantId, _) = self { return tenantId }
         return nil
+    }
+
+    var role: String? {
+        if case .signedIn(_, _, let role) = self { return role }
+        return nil
+    }
+
+    var isAdmin: Bool {
+        role == "admin"
     }
 }
 
 // MARK: - AuthProviding Protocol
 
 protocol AuthProviding: Sendable {
-    @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?)
+    @MainActor func signInWithGoogle() async throws -> (userId: String, email: String?, tenantId: String?, role: String?)
     func signOut() throws
 }
 
@@ -44,7 +53,7 @@ enum AuthError: Error, Sendable {
 
 final class FirebaseGoogleAuthProvider: AuthProviding {
     @MainActor
-    func signInWithGoogle() async throws -> (userId: String, tenantId: String?) {
+    func signInWithGoogle() async throws -> (userId: String, email: String?, tenantId: String?, role: String?) {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else {
             throw AuthError.viewControllerNotFound
@@ -64,8 +73,9 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
         let authResult = try await Auth.auth().signIn(with: credential)
         let tokenResult = try await authResult.user.getIDTokenResult()
         let tenantId = tokenResult.claims["tenantId"] as? String
+        let role = tokenResult.claims["role"] as? String
 
-        return (userId: authResult.user.uid, tenantId: tenantId)
+        return (userId: authResult.user.uid, email: authResult.user.email, tenantId: tenantId, role: role)
     }
 
     func signOut() throws {
@@ -84,10 +94,12 @@ final class AuthViewModel {
     var errorMessage: String?
 
     private let authProvider: AuthProviding
+    private let whitelistService: WhitelistManaging
     private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
 
-    init(authProvider: AuthProviding = FirebaseGoogleAuthProvider()) {
+    init(authProvider: AuthProviding = FirebaseGoogleAuthProvider(), whitelistService: WhitelistManaging = FirestoreService()) {
         self.authProvider = authProvider
+        self.whitelistService = whitelistService
     }
 
     deinit {
@@ -110,7 +122,21 @@ final class AuthViewModel {
                 return
             }
 
-            authState = .signedIn(userId: result.userId, tenantId: tenantId)
+            let email = result.email ?? ""
+            let claimsRole = result.role ?? "user"
+
+            // Firestore whitelist から role を取得（未登録なら custom claims をフォールバック）
+            let firestoreRole = try await whitelistService.fetchRoleForEmail(tenantId: tenantId, email: email)
+            let role = firestoreRole ?? claimsRole
+
+            // admin は常に許可、一般ユーザーはホワイトリスト検証
+            if role != "admin" && firestoreRole == nil {
+                errorMessage = "このアカウントは許可されていません。管理者にお問い合わせください。"
+                try? authProvider.signOut()
+                return
+            }
+
+            authState = .signedIn(userId: result.userId, tenantId: tenantId, role: role)
         } catch {
             errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
         }
@@ -143,7 +169,26 @@ final class AuthViewModel {
                         self.authState = .signedOut
                         return
                     }
-                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId)
+                    let email = user.email ?? ""
+                    let claimsRole = tokenResult?.claims["role"] as? String ?? "user"
+
+                    // Firestore whitelist から role を取得
+                    do {
+                        let firestoreRole = try await self.whitelistService.fetchRoleForEmail(tenantId: tenantId, email: email)
+                        let role = firestoreRole ?? claimsRole
+
+                        if role != "admin" && firestoreRole == nil {
+                            try? self.authProvider.signOut()
+                            self.authState = .signedOut
+                            self.errorMessage = "このアカウントは許可されていません。管理者にお問い合わせください。"
+                            return
+                        }
+
+                        self.authState = .signedIn(userId: user.uid, tenantId: tenantId, role: role)
+                    } catch {
+                        // ネットワーク障害時は既存セッションを維持
+                        print("[AuthViewModel] whitelist check failed, keeping current state: \(error)")
+                    }
                 } else {
                     self.authState = .signedOut
                 }

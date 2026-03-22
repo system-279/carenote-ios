@@ -43,3 +43,21 @@ struct FirestoreMember: Codable, Sendable, Identifiable {
     let role: String
     let createdAt: Date
 }
+
+// MARK: - Email Normalization
+
+extension String {
+    var normalizedEmail: String {
+        lowercased().trimmingCharacters(in: .whitespaces)
+    }
+}
+
+// MARK: - FirestoreWhitelistEntry
+
+struct FirestoreWhitelistEntry: Codable, Sendable, Identifiable {
+    var id: String?
+    let email: String
+    let role: String
+    let addedBy: String
+    let addedAt: Date
+}
