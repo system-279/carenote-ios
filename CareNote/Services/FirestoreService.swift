@@ -21,9 +21,11 @@ protocol RecordingStoring: Sendable {
 
 protocol WhitelistManaging: Sendable {
     func fetchWhitelist(tenantId: String) async throws -> [FirestoreWhitelistEntry]
-    func addToWhitelist(tenantId: String, email: String, addedBy: String) async throws
+    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws
     func removeFromWhitelist(tenantId: String, entryId: String) async throws
+    func updateRole(tenantId: String, entryId: String, role: String) async throws
     func isEmailWhitelisted(tenantId: String, email: String) async throws -> Bool
+    func fetchRoleForEmail(tenantId: String, email: String) async throws -> String?
 }
 
 // MARK: - FirestoreService
@@ -229,6 +231,7 @@ actor FirestoreService: RecordingStoring, WhitelistManaging {
                 return FirestoreWhitelistEntry(
                     id: document.documentID,
                     email: data["email"] as? String ?? "",
+                    role: data["role"] as? String ?? "user",
                     addedBy: data["addedBy"] as? String ?? "",
                     addedAt: addedAt
                 )
@@ -238,10 +241,11 @@ actor FirestoreService: RecordingStoring, WhitelistManaging {
         }
     }
 
-    func addToWhitelist(tenantId: String, email: String, addedBy: String) async throws {
+    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws {
         do {
             try await whitelistCollection(tenantId: tenantId).addDocument(data: [
                 "email": email.normalizedEmail,
+                "role": role,
                 "addedBy": addedBy,
                 "addedAt": Timestamp(date: Date()),
             ])
@@ -258,6 +262,16 @@ actor FirestoreService: RecordingStoring, WhitelistManaging {
         }
     }
 
+    func updateRole(tenantId: String, entryId: String, role: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).document(entryId).updateData([
+                "role": role,
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
     func isEmailWhitelisted(tenantId: String, email: String) async throws -> Bool {
         do {
             let snapshot = try await whitelistCollection(tenantId: tenantId)
@@ -265,6 +279,18 @@ actor FirestoreService: RecordingStoring, WhitelistManaging {
                 .limit(to: 1)
                 .getDocuments()
             return !snapshot.documents.isEmpty
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func fetchRoleForEmail(tenantId: String, email: String) async throws -> String? {
+        do {
+            let snapshot = try await whitelistCollection(tenantId: tenantId)
+                .whereField("email", isEqualTo: email.normalizedEmail)
+                .limit(to: 1)
+                .getDocuments()
+            return snapshot.documents.first?.data()["role"] as? String
         } catch {
             throw FirestoreError.operationFailed(error)
         }

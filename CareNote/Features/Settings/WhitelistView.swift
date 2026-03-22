@@ -9,21 +9,29 @@ struct WhitelistView: View {
 
     var body: some View {
         List {
-            Section("メールアドレス追加") {
-                HStack {
+            Section("メンバー追加") {
+                VStack(spacing: 12) {
                     TextField("example@email.com", text: $viewModel.newEmail)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
 
-                    Button {
-                        Task { await viewModel.addEmail() }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
+                    HStack {
+                        Picker("ロール", selection: $viewModel.newRole) {
+                            Text("一般ユーザー").tag("user")
+                            Text("管理者").tag("admin")
+                        }
+                        .pickerStyle(.segmented)
+
+                        Button {
+                            Task { await viewModel.addEmail() }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                        }
+                        .disabled(!viewModel.isValidEmail)
                     }
-                    .disabled(!viewModel.isValidEmail)
                 }
             }
 
@@ -34,25 +42,27 @@ struct WhitelistView: View {
                         .listRowBackground(Color.clear)
                 } else if viewModel.entries.isEmpty {
                     ContentUnavailableView(
-                        "許可済みメールなし",
+                        "メンバーなし",
                         systemImage: "person.badge.plus",
-                        description: Text("メールアドレスを追加すると、そのユーザーがサインインできるようになります")
+                        description: Text("メールアドレスとロールを指定してメンバーを追加できます")
                     )
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(viewModel.entries) { entry in
-                        WhitelistRow(entry: entry)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    entryToDelete = entry
-                                } label: {
-                                    Label("削除", systemImage: "trash")
-                                }
+                        WhitelistRow(entry: entry) { newRole in
+                            Task { await viewModel.updateRole(entry: entry, newRole: newRole) }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                entryToDelete = entry
+                            } label: {
+                                Label("削除", systemImage: "trash")
                             }
+                        }
                     }
                 }
             } header: {
-                Text("許可済みメールアドレス（\(viewModel.entries.count)件）")
+                Text("メンバー一覧（\(viewModel.entries.count)件）")
             }
 
             if let error = viewModel.errorMessage {
@@ -68,7 +78,7 @@ struct WhitelistView: View {
         .task {
             await viewModel.loadWhitelist()
         }
-        .alert("メールアドレスを削除", isPresented: Binding(
+        .alert("メンバーを削除", isPresented: Binding(
             get: { entryToDelete != nil },
             set: { if !$0 { entryToDelete = nil } }
         )) {
@@ -93,11 +103,37 @@ struct WhitelistView: View {
 
 private struct WhitelistRow: View {
     let entry: FirestoreWhitelistEntry
+    let onRoleChange: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry.email)
-                .font(.body)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(entry.email)
+                    .font(.body)
+
+                Spacer()
+
+                Menu {
+                    Button {
+                        onRoleChange("user")
+                    } label: {
+                        Label("一般ユーザー", systemImage: entry.role == "user" ? "checkmark" : "")
+                    }
+                    Button {
+                        onRoleChange("admin")
+                    } label: {
+                        Label("管理者", systemImage: entry.role == "admin" ? "checkmark" : "")
+                    }
+                } label: {
+                    Text(entry.role == "admin" ? "管理者" : "ユーザー")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(entry.role == "admin" ? Color.blue.opacity(0.15) : Color.secondary.opacity(0.15), in: Capsule())
+                        .foregroundStyle(entry.role == "admin" ? .blue : .secondary)
+                }
+            }
 
             Text("追加日: \(entry.addedAt.formatted(date: .abbreviated, time: .omitted))")
                 .font(.caption)

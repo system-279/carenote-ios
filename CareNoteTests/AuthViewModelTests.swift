@@ -26,14 +26,19 @@ final class MockAuthProvider: @unchecked Sendable, AuthProviding {
 // MARK: - MockWhitelistService
 
 final class MockWhitelistService: @unchecked Sendable, WhitelistManaging {
-    var whitelistedEmails: [String] = ["test@example.com"]
+    var emailRoles: [String: String] = ["test@example.com": "user"]
 
     func fetchWhitelist(tenantId: String) async throws -> [FirestoreWhitelistEntry] { [] }
-    func addToWhitelist(tenantId: String, email: String, addedBy: String) async throws {}
+    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws {}
     func removeFromWhitelist(tenantId: String, entryId: String) async throws {}
+    func updateRole(tenantId: String, entryId: String, role: String) async throws {}
 
     func isEmailWhitelisted(tenantId: String, email: String) async throws -> Bool {
-        whitelistedEmails.contains(email.lowercased())
+        emailRoles.keys.contains(email.lowercased())
+    }
+
+    func fetchRoleForEmail(tenantId: String, email: String) async throws -> String? {
+        emailRoles[email.lowercased()]
     }
 }
 
@@ -84,7 +89,7 @@ struct AuthViewModelTests {
         let mock = MockAuthProvider()
         mock.signInResult = (userId: "user-1", email: "unknown@example.com", tenantId: "tenant-1", role: "user")
         let whitelistMock = MockWhitelistService()
-        whitelistMock.whitelistedEmails = ["allowed@example.com"]
+        whitelistMock.emailRoles = ["allowed@example.com": "user"]
         let vm = AuthViewModel(authProvider: mock, whitelistService: whitelistMock)
 
         await vm.signInWithGoogle()
@@ -98,7 +103,7 @@ struct AuthViewModelTests {
         let mock = MockAuthProvider()
         mock.signInResult = (userId: "user-1", email: "admin@example.com", tenantId: "tenant-1", role: "admin")
         let whitelistMock = MockWhitelistService()
-        whitelistMock.whitelistedEmails = [] // 空のホワイトリスト
+        whitelistMock.emailRoles = [:] // 空のホワイトリスト
         let vm = AuthViewModel(authProvider: mock, whitelistService: whitelistMock)
 
         await vm.signInWithGoogle()

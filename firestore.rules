@@ -22,7 +22,8 @@ service cloud.firestore {
       match /whitelist/{entryId} {
         allow read: if isTenantMember(tenantId);
         allow create, delete: if isAdmin(tenantId);
-        allow update: if false;
+        allow update: if isAdmin(tenantId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
       }
 
       // その他のコレクション（clients, recordings 等）

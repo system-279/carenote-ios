@@ -6,8 +6,9 @@ import Testing
 
 private final class StubWhitelistService: @unchecked Sendable, WhitelistManaging {
     var entries: [FirestoreWhitelistEntry] = []
-    var addedEmails: [(email: String, addedBy: String)] = []
+    var addedEmails: [(email: String, role: String, addedBy: String)] = []
     var removedIds: [String] = []
+    var updatedRoles: [(entryId: String, role: String)] = []
     var shouldThrow = false
 
     func fetchWhitelist(tenantId: String) async throws -> [FirestoreWhitelistEntry] {
@@ -15,12 +16,13 @@ private final class StubWhitelistService: @unchecked Sendable, WhitelistManaging
         return entries
     }
 
-    func addToWhitelist(tenantId: String, email: String, addedBy: String) async throws {
+    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws {
         if shouldThrow { throw FirestoreError.operationFailed(NSError(domain: "", code: -1)) }
-        addedEmails.append((email: email, addedBy: addedBy))
+        addedEmails.append((email: email, role: role, addedBy: addedBy))
         entries.append(FirestoreWhitelistEntry(
             id: "new-\(entries.count)",
             email: email,
+            role: role,
             addedBy: addedBy,
             addedAt: Date()
         ))
@@ -32,8 +34,21 @@ private final class StubWhitelistService: @unchecked Sendable, WhitelistManaging
         entries.removeAll { $0.id == entryId }
     }
 
+    func updateRole(tenantId: String, entryId: String, role: String) async throws {
+        if shouldThrow { throw FirestoreError.operationFailed(NSError(domain: "", code: -1)) }
+        updatedRoles.append((entryId: entryId, role: role))
+        if let index = entries.firstIndex(where: { $0.id == entryId }) {
+            let e = entries[index]
+            entries[index] = FirestoreWhitelistEntry(id: e.id, email: e.email, role: role, addedBy: e.addedBy, addedAt: e.addedAt)
+        }
+    }
+
     func isEmailWhitelisted(tenantId: String, email: String) async throws -> Bool {
         entries.contains { $0.email == email.lowercased() }
+    }
+
+    func fetchRoleForEmail(tenantId: String, email: String) async throws -> String? {
+        entries.first { $0.email == email.lowercased() }?.role
     }
 }
 
@@ -52,8 +67,8 @@ struct WhitelistViewModelTests {
     func loadWhitelistで一覧が取得される() async {
         let service = StubWhitelistService()
         service.entries = [
-            FirestoreWhitelistEntry(id: "1", email: "a@example.com", addedBy: "admin-1", addedAt: Date()),
-            FirestoreWhitelistEntry(id: "2", email: "b@example.com", addedBy: "admin-1", addedAt: Date()),
+            FirestoreWhitelistEntry(id: "1", email: "a@example.com", role: "user", addedBy: "admin-1", addedAt: Date()),
+            FirestoreWhitelistEntry(id: "2", email: "b@example.com", role: "admin", addedBy: "admin-1", addedAt: Date()),
         ]
         let (vm, _) = makeVM(service: service)
 
@@ -64,22 +79,39 @@ struct WhitelistViewModelTests {
     }
 
     @Test @MainActor
-    func addEmailで新規メールが追加される() async {
+    func addEmailでロール付きメールが追加される() async {
         let (vm, service) = makeVM()
         vm.newEmail = "new@example.com"
+        vm.newRole = "admin"
 
         await vm.addEmail()
 
         #expect(service.addedEmails.count == 1)
         #expect(service.addedEmails.first?.email == "new@example.com")
-        #expect(vm.newEmail == "") // 入力がクリアされる
+        #expect(service.addedEmails.first?.role == "admin")
+        #expect(vm.newEmail == "")
+        #expect(vm.newRole == "user") // デフォルトに戻る
+    }
+
+    @Test @MainActor
+    func updateRoleでロールが変更される() async {
+        let service = StubWhitelistService()
+        let entry = FirestoreWhitelistEntry(id: "1", email: "user@example.com", role: "user", addedBy: "admin-1", addedAt: Date())
+        service.entries = [entry]
+        let (vm, _) = makeVM(service: service)
+        await vm.loadWhitelist()
+
+        await vm.updateRole(entry: entry, newRole: "admin")
+
+        #expect(vm.entries.first?.role == "admin")
+        #expect(service.updatedRoles.first?.role == "admin")
     }
 
     @Test @MainActor
     func 重複メールは追加されない() async {
         let service = StubWhitelistService()
         service.entries = [
-            FirestoreWhitelistEntry(id: "1", email: "dup@example.com", addedBy: "admin-1", addedAt: Date()),
+            FirestoreWhitelistEntry(id: "1", email: "dup@example.com", role: "user", addedBy: "admin-1", addedAt: Date()),
         ]
         let (vm, _) = makeVM(service: service)
         await vm.loadWhitelist()
@@ -93,7 +125,7 @@ struct WhitelistViewModelTests {
     @Test @MainActor
     func removeEntryでエントリが削除される() async {
         let service = StubWhitelistService()
-        let entry = FirestoreWhitelistEntry(id: "1", email: "del@example.com", addedBy: "admin-1", addedAt: Date())
+        let entry = FirestoreWhitelistEntry(id: "1", email: "del@example.com", role: "user", addedBy: "admin-1", addedAt: Date())
         service.entries = [entry]
         let (vm, _) = makeVM(service: service)
         await vm.loadWhitelist()

@@ -57,6 +57,7 @@ extension String {
 struct FirestoreWhitelistEntry: Codable, Sendable, Identifiable {
     var id: String?
     let email: String
+    let role: String
     let addedBy: String
     let addedAt: Date
 }

@@ -122,17 +122,18 @@ final class AuthViewModel {
                 return
             }
 
-            let role = result.role ?? "user"
+            let email = result.email ?? ""
+            let claimsRole = result.role ?? "user"
+
+            // Firestore whitelist から role を取得（未登録なら custom claims をフォールバック）
+            let firestoreRole = try await whitelistService.fetchRoleForEmail(tenantId: tenantId, email: email)
+            let role = firestoreRole ?? claimsRole
 
             // admin は常に許可、一般ユーザーはホワイトリスト検証
-            if role != "admin" {
-                let email = result.email ?? ""
-                let isWhitelisted = try await whitelistService.isEmailWhitelisted(tenantId: tenantId, email: email)
-                if !isWhitelisted {
-                    errorMessage = "このアカウントは許可されていません。管理者にお問い合わせください。"
-                    try? authProvider.signOut()
-                    return
-                }
+            if role != "admin" && firestoreRole == nil {
+                errorMessage = "このアカウントは許可されていません。管理者にお問い合わせください。"
+                try? authProvider.signOut()
+                return
             }
 
             authState = .signedIn(userId: result.userId, tenantId: tenantId, role: role)
@@ -168,26 +169,26 @@ final class AuthViewModel {
                         self.authState = .signedOut
                         return
                     }
-                    let role = tokenResult?.claims["role"] as? String ?? "user"
+                    let email = user.email ?? ""
+                    let claimsRole = tokenResult?.claims["role"] as? String ?? "user"
 
-                    // admin は常に許可、一般ユーザーはホワイトリスト検証
-                    if role != "admin" {
-                        let email = user.email ?? ""
-                        do {
-                            let isWhitelisted = try await self.whitelistService.isEmailWhitelisted(tenantId: tenantId, email: email)
-                            if !isWhitelisted {
-                                try? self.authProvider.signOut()
-                                self.authState = .signedOut
-                                self.errorMessage = "このアカウントは許可されていません。管理者にお問い合わせください。"
-                                return
-                            }
-                        } catch {
-                            // ネットワーク障害時は既存セッションを維持
-                            print("[AuthViewModel] whitelist check failed, keeping current state: \(error)")
+                    // Firestore whitelist から role を取得
+                    do {
+                        let firestoreRole = try await self.whitelistService.fetchRoleForEmail(tenantId: tenantId, email: email)
+                        let role = firestoreRole ?? claimsRole
+
+                        if role != "admin" && firestoreRole == nil {
+                            try? self.authProvider.signOut()
+                            self.authState = .signedOut
+                            self.errorMessage = "このアカウントは許可されていません。管理者にお問い合わせください。"
+                            return
                         }
-                    }
 
-                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId, role: role)
+                        self.authState = .signedIn(userId: user.uid, tenantId: tenantId, role: role)
+                    } catch {
+                        // ネットワーク障害時は既存セッションを維持
+                        print("[AuthViewModel] whitelist check failed, keeping current state: \(error)")
+                    }
                 } else {
                     self.authState = .signedOut
                 }
