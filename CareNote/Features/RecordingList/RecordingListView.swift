@@ -54,8 +54,18 @@ struct RecordingListView: View {
                     },
                     onSave: { text in
                         try await viewModel.saveTranscription(recording, text: text)
-                    }
+                    },
+                    onExport: {
+                        await viewModel.exportToGoogleDocs(
+                            recording: recording,
+                            authProvider: FirebaseGoogleAuthProvider()
+                        )
+                    },
+                    exportedURL: viewModel.exportedURL,
+                    exportError: viewModel.exportError
                 )
+                .onChange(of: viewModel.exportedURL) { _, _ in }
+                .onChange(of: viewModel.exportError) { _, _ in }
             }
         }
     }
@@ -156,11 +166,18 @@ struct RecordingDetailView: View {
     let recording: RecordingRecord
     var onRetry: (() async throws -> Void)?
     var onSave: ((String) async throws -> Void)?
+    var onExport: (() async -> Void)?
+    var exportedURL: URL?
+    var exportError: String?
     @State private var isRetrying = false
     @State private var isEditing = false
     @State private var editedText = ""
     @State private var isSaving = false
     @State private var hasLocalAudio = false
+    @State private var isExporting = false
+    @State private var showExportSuccess = false
+    @State private var localExportURL: URL?
+    @State private var localExportError: String?
 
     var body: some View {
         ScrollView {
@@ -181,6 +198,22 @@ struct RecordingDetailView: View {
                     )
                     if let templateName = recording.templateNameSnapshot {
                         DetailRow(label: "出力形式", value: templateName)
+                    }
+                    if let docsUrlString = recording.googleDocsUrl,
+                       let docsUrl = URL(string: docsUrlString)
+                    {
+                        HStack {
+                            Text("Google Docs")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 80, alignment: .leading)
+                            Button {
+                                UIApplication.shared.open(docsUrl)
+                            } label: {
+                                Label("開く", systemImage: "doc.text")
+                                    .font(.subheadline)
+                            }
+                        }
                     }
                 }
                 .padding()
@@ -309,8 +342,57 @@ struct RecordingDetailView: View {
         }
         .navigationTitle("録音詳細")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if recording.transcriptionStatus == TranscriptionStatus.done.rawValue,
+               recording.transcription != nil
+            {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task {
+                            isExporting = true
+                            await onExport?()
+                            isExporting = false
+                        }
+                    } label: {
+                        if isExporting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("エクスポート", systemImage: "doc.text")
+                        }
+                    }
+                    .disabled(isExporting || isEditing)
+                }
+            }
+        }
         .onAppear {
             hasLocalAudio = FileManager.default.fileExists(atPath: recording.localAudioPath)
+        }
+        .onChange(of: exportedURL) { _, newURL in
+            if let url = newURL {
+                localExportURL = url
+                showExportSuccess = true
+            }
+        }
+        .onChange(of: exportError) { _, newError in
+            if let error = newError {
+                localExportError = error
+            }
+        }
+        .alert("エクスポート完了", isPresented: $showExportSuccess) {
+            if let url = localExportURL {
+                Button("Google Docsで開く") { UIApplication.shared.open(url) }
+            }
+            Button("閉じる", role: .cancel) {}
+        } message: {
+            Text("Google Docsにエクスポートしました")
+        }
+        .alert("エクスポートエラー", isPresented: .init(
+            get: { localExportError != nil },
+            set: { if !$0 { localExportError = nil } }
+        )) {
+            Button("OK") { localExportError = nil }
+        } message: {
+            Text(localExportError ?? "")
         }
     }
 }

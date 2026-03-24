@@ -17,10 +17,19 @@ protocol RecordingStoring: Sendable {
     func updateTranscription(tenantId: String, recordingId: String, transcription: String, status: TranscriptionStatus) async throws
 }
 
+// MARK: - ClientManaging
+
+protocol ClientManaging: Sendable {
+    func fetchClients(tenantId: String) async throws -> [FirestoreClient]
+    func addClient(tenantId: String, name: String, furigana: String) async throws
+    func updateClient(tenantId: String, clientId: String, name: String, furigana: String) async throws
+    func deleteClient(tenantId: String, clientId: String) async throws
+}
+
 // MARK: - FirestoreService
 
 /// Firestore CRUD service with multi-tenant structure: `tenants/{tenantId}/...`
-actor FirestoreService: RecordingStoring {
+actor FirestoreService: RecordingStoring, ClientManaging {
 
     // MARK: - Properties
 
@@ -65,6 +74,38 @@ actor FirestoreService: RecordingStoring {
                     furigana: data["furigana"] as? String ?? ""
                 )
             }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func addClient(tenantId: String, name: String, furigana: String) async throws {
+        do {
+            try await clientsCollection(tenantId: tenantId).addDocument(data: [
+                "name": name,
+                "furigana": furigana,
+                "createdAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func updateClient(tenantId: String, clientId: String, name: String, furigana: String) async throws {
+        do {
+            try await clientsCollection(tenantId: tenantId).document(clientId).updateData([
+                "name": name,
+                "furigana": furigana,
+                "updatedAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func deleteClient(tenantId: String, clientId: String) async throws {
+        do {
+            try await clientsCollection(tenantId: tenantId).document(clientId).delete()
         } catch {
             throw FirestoreError.operationFailed(error)
         }

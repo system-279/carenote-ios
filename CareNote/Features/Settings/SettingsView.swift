@@ -8,9 +8,20 @@ struct SettingsView: View {
     @Environment(AuthViewModel.self) private var authViewModel
 
     @State private var templateListViewModel: TemplateListViewModel?
+    @State private var clientManagementViewModel: ClientManagementViewModel?
 
     var body: some View {
         List {
+            Section("利用者") {
+                NavigationLink {
+                    if let vm = clientManagementViewModel {
+                        ClientManagementView(viewModel: vm)
+                    }
+                } label: {
+                    Label("利用者管理", systemImage: "person.crop.rectangle.stack")
+                }
+            }
+
             Section("テンプレート") {
                 NavigationLink {
                     TemplateListView(
@@ -34,6 +45,15 @@ struct SettingsView: View {
         .task {
             if templateListViewModel == nil {
                 templateListViewModel = TemplateListViewModel(modelContext: modelContext)
+            }
+            if clientManagementViewModel == nil, let tenantId = authViewModel.authState.tenantId {
+                clientManagementViewModel = ClientManagementViewModel(
+                    tenantId: tenantId,
+                    cacheService: ClientCacheService(
+                        firestoreService: FirestoreService(),
+                        modelContainer: modelContext.container
+                    )
+                )
             }
         }
     }

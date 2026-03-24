@@ -1,4 +1,5 @@
 import FirebaseCore
+import GoogleSignIn
 import SwiftData
 import SwiftUI
 
@@ -58,7 +59,8 @@ struct CareNoteApp: App {
                         }
                 }
             }
-            .onAppear {
+            .task {
+                GIDSignIn.sharedInstance.restorePreviousSignIn { _, _ in }
                 authViewModel.checkAuthState()
                 PresetTemplates.seedIfNeeded(modelContext: modelContainer.mainContext)
             }

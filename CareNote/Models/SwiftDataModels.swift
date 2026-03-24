@@ -22,6 +22,7 @@ final class RecordingRecord {
     var templateId: UUID?
     var templateNameSnapshot: String?
     var templatePromptSnapshot: String?
+    var googleDocsUrl: String?
 
     init(
         id: UUID = UUID(),
@@ -38,7 +39,8 @@ final class RecordingRecord {
         outputType: String? = OutputType.transcription.rawValue,
         templateId: UUID? = nil,
         templateNameSnapshot: String? = nil,
-        templatePromptSnapshot: String? = nil
+        templatePromptSnapshot: String? = nil,
+        googleDocsUrl: String? = nil
     ) {
         self.id = id
         self.clientId = clientId
@@ -55,6 +57,7 @@ final class RecordingRecord {
         self.templateId = templateId
         self.templateNameSnapshot = templateNameSnapshot
         self.templatePromptSnapshot = templatePromptSnapshot
+        self.googleDocsUrl = googleDocsUrl
     }
 }
 

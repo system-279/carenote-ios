@@ -29,8 +29,10 @@ struct ClientSelectView: View {
                 )
             }
         }
-        .task {
-            await viewModel.loadClients()
+        .onAppear {
+            Task {
+                await viewModel.loadClients()
+            }
         }
     }
 }

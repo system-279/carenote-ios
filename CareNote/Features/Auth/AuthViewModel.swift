@@ -31,13 +31,29 @@ enum AuthState: Sendable, Equatable {
 protocol AuthProviding: Sendable {
     @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?)
     func signOut() throws
+    @MainActor func ensureDocsScopes() async throws -> String
+}
+
+extension AuthProviding {
+    @MainActor func ensureDocsScopes() async throws -> String {
+        throw AuthError.notAuthenticated
+    }
 }
 
 // MARK: - AuthError
 
-enum AuthError: Error, Sendable {
+enum AuthError: Error, LocalizedError, Sendable {
     case viewControllerNotFound
     case googleIdTokenMissing
+    case notAuthenticated
+
+    var errorDescription: String? {
+        switch self {
+        case .viewControllerNotFound: "画面の取得に失敗しました"
+        case .googleIdTokenMissing: "Google認証トークンが取得できません"
+        case .notAuthenticated: "Googleアカウントの認証が必要です。再サインインしてください"
+        }
+    }
 }
 
 // MARK: - FirebaseGoogleAuthProvider
@@ -50,7 +66,15 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
             throw AuthError.viewControllerNotFound
         }
 
-        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        let additionalScopes = [
+            "https://www.googleapis.com/auth/documents",
+            "https://www.googleapis.com/auth/drive.file",
+        ]
+        let result = try await GIDSignIn.sharedInstance.signIn(
+            withPresenting: rootViewController,
+            hint: nil,
+            additionalScopes: additionalScopes
+        )
 
         guard let idToken = result.user.idToken?.tokenString else {
             throw AuthError.googleIdTokenMissing
@@ -71,6 +95,32 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
     func signOut() throws {
         GIDSignIn.sharedInstance.signOut()
         try Auth.auth().signOut()
+    }
+
+    @MainActor
+    func ensureDocsScopes() async throws -> String {
+        // アプリ再起動後のセッション復元を試みる
+        if GIDSignIn.sharedInstance.currentUser == nil {
+            try? await GIDSignIn.sharedInstance.restorePreviousSignIn()
+        }
+        guard let currentUser = GIDSignIn.sharedInstance.currentUser else {
+            throw AuthError.notAuthenticated
+        }
+        let requiredScopes = [
+            "https://www.googleapis.com/auth/documents",
+            "https://www.googleapis.com/auth/drive.file",
+        ]
+        let grantedScopes = currentUser.grantedScopes ?? []
+        let missingScopes = requiredScopes.filter { !grantedScopes.contains($0) }
+        if !missingScopes.isEmpty {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootViewController = windowScene.windows.first?.rootViewController else {
+                throw AuthError.viewControllerNotFound
+            }
+            _ = try await currentUser.addScopes(missingScopes, presenting: rootViewController)
+        }
+        let freshUser = try await currentUser.refreshTokensIfNeeded()
+        return freshUser.accessToken.tokenString
     }
 }
 

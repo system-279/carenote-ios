@@ -36,6 +36,17 @@ final class ClientRepository: @unchecked Sendable {
         try modelContext.save()
     }
 
+    /// 利用者キャッシュを ID で削除する
+    func delete(id: String) throws {
+        let descriptor = FetchDescriptor<ClientCache>(
+            predicate: #Predicate { $0.id == id }
+        )
+        if let existing = try modelContext.fetch(descriptor).first {
+            modelContext.delete(existing)
+            try modelContext.save()
+        }
+    }
+
     /// 全利用者キャッシュを入れ替える（Firestore からの全量同期用）
     func replaceAll(with clients: [ClientCache]) throws {
         try modelContext.delete(model: ClientCache.self)

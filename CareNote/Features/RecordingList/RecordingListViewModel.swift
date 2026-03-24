@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Observation
 import SwiftData
 
@@ -9,6 +10,11 @@ final class RecordingListViewModel {
     var recordings: [RecordingRecord] = []
     var isLoading: Bool = false
     var errorMessage: String?
+
+    // Export state
+    var isExporting: Bool = false
+    var exportedURL: URL?
+    var exportError: String?
 
     private let recordingRepository: RecordingRepository
     private let firestoreService: FirestoreService?
@@ -73,6 +79,40 @@ final class RecordingListViewModel {
                 transcription: text,
                 status: .done
             )
+        }
+    }
+
+    // MARK: - Google Docs Export
+
+    func exportToGoogleDocs(recording: RecordingRecord, authProvider: AuthProviding) async {
+        guard let transcription = recording.transcription, !transcription.isEmpty else {
+            exportError = "文字起こしがありません"
+            return
+        }
+        isExporting = true
+        exportedURL = nil
+        exportError = nil
+        defer { isExporting = false }
+
+        do {
+            let accessToken = try await authProvider.ensureDocsScopes()
+            let exportable = ExportableRecording(
+                clientName: recording.clientName,
+                scene: recording.scene,
+                recordedAt: recording.recordedAt,
+                durationSeconds: recording.durationSeconds,
+                templateName: recording.templateNameSnapshot,
+                transcription: transcription
+            )
+            let service = GoogleDocsExportService()
+            let url = try await service.exportRecording(exportable, accessToken: accessToken)
+            recording.googleDocsUrl = url.absoluteString
+            try? recordingRepository.save()
+            exportedURL = url
+        } catch {
+            Logger(subsystem: "jp.carenote.app", category: "RecordingListVM")
+                .error("Google Docs export failed: \(error)")
+            exportError = "エクスポートに失敗しました: \(error.localizedDescription)"
         }
     }
 
