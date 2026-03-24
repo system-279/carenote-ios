@@ -32,7 +32,7 @@ struct AuthViewModelTests {
     func signOut後はsignedOutになる() {
         let mock = MockAuthProvider()
         let vm = AuthViewModel(authProvider: mock)
-        vm.authState = .signedIn(userId: "user-1", tenantId: "tenant-1")
+        vm.authState = .signedIn(userId: "user-1", tenantId: "tenant-1", role: "user")
 
         vm.signOut()
 
@@ -48,7 +48,7 @@ struct AuthViewModelTests {
 
         await vm.signInWithGoogle()
 
-        #expect(vm.authState == .signedIn(userId: "user-1", tenantId: "tenant-1"))
+        #expect(vm.authState == .signedIn(userId: "user-1", tenantId: "tenant-1", role: "user"))
         #expect(vm.errorMessage == nil)
     }
 

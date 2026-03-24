@@ -43,3 +43,13 @@ struct FirestoreMember: Codable, Sendable, Identifiable {
     let role: String
     let createdAt: Date
 }
+
+// MARK: - WhitelistEntry
+
+struct WhitelistEntry: Sendable, Identifiable {
+    let id: String
+    let email: String
+    let role: String
+    let addedBy: String
+    let addedAt: Date
+}

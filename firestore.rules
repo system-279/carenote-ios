@@ -2,9 +2,35 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /tenants/{tenantId}/{document=**} {
-      allow read, write: if request.auth != null
+    // テナントメンバー判定
+    function isTenantMember(tenantId) {
+      return request.auth != null
         && request.auth.token.tenantId == tenantId;
+    }
+
+    // admin ロール判定
+    function isAdmin(tenantId) {
+      return isTenantMember(tenantId)
+        && request.auth.token.role == 'admin';
+    }
+
+    match /tenants/{tenantId} {
+      // テナントドキュメント: メンバーは読み取り可、adminのみ書き込み可
+      allow read: if isTenantMember(tenantId);
+      allow write: if isAdmin(tenantId);
+
+      // ホワイトリスト: メンバーは読み取り可、adminのみ書き込み可
+      match /whitelist/{entryId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, delete: if isAdmin(tenantId);
+        allow update: if isAdmin(tenantId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
+      }
+
+      // その他のコレクション（clients, recordings）
+      match /{document=**} {
+        allow read, write: if isTenantMember(tenantId);
+      }
     }
   }
 }

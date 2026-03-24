@@ -14,6 +14,7 @@
 		167F33E85C77C228D0FFFD44 /* RecordingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1773834D66185AC4FF05004 /* RecordingViewModel.swift */; };
 		1EA4A14A94257315F53C19AC /* ClientManagementViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 316E837613E6CFDD2306525A /* ClientManagementViewModelTests.swift */; };
 		2100435B19F33397ED56284E /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */; };
+		23A44695D38CFEE84E35F01C /* WhitelistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE98442DFB42EA8E720479A /* WhitelistView.swift */; };
 		26069C369BF6F266262D0692 /* ClientCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */; };
 		322266CC018CC565C02B5CD9 /* GoogleDocsExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D58AE749A053DB9C979CC842 /* GoogleDocsExportService.swift */; };
 		33992576E1D90FE68CFBFFA2 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C6A8EFE7C4356D0F17B5D689 /* GoogleSignInSwift */; };
@@ -59,6 +60,7 @@
 		D500243B9B526706E3BCE5AF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */; };
 		D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */; };
 		DEA5BEF6533AC992CA56ACE1 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 780EB4E4898BE568D7C4B343 /* FirebaseAuth */; };
+		E181ED0DE8A6D290C297BC49 /* WhitelistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1FBEE6E3B3697880071C9 /* WhitelistViewModel.swift */; };
 		F503CBD6C43A313174F070AA /* OutboxSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31A63277501286D0902113FA /* OutboxSyncService.swift */; };
 /* End PBXBuildFile section */
 
@@ -90,6 +92,8 @@
 		316E837613E6CFDD2306525A /* ClientManagementViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientManagementViewModelTests.swift; sourceTree = "<group>"; };
 		31A176AE8830BEDDEBD57A2F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		31A63277501286D0902113FA /* OutboxSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxSyncService.swift; sourceTree = "<group>"; };
+		38A1FBEE6E3B3697880071C9 /* WhitelistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistViewModel.swift; sourceTree = "<group>"; };
+		3AE98442DFB42EA8E720479A /* WhitelistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistView.swift; sourceTree = "<group>"; };
 		3ECEF75B614C6A2B223AB02F /* TemplateCreateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateCreateViewModel.swift; sourceTree = "<group>"; };
 		43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServiceTests.swift; sourceTree = "<group>"; };
@@ -326,6 +330,8 @@
 				3ECEF75B614C6A2B223AB02F /* TemplateCreateViewModel.swift */,
 				11F7A54E6C83AA0B51126525 /* TemplateListView.swift */,
 				045FD4755BC7F09BF6967EB7 /* TemplateListViewModel.swift */,
+				3AE98442DFB42EA8E720479A /* WhitelistView.swift */,
+				38A1FBEE6E3B3697880071C9 /* WhitelistViewModel.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -492,6 +498,8 @@
 				13A5A2945594CCE9F062EE03 /* TimeFormatting.swift in Sources */,
 				867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */,
 				D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */,
+				23A44695D38CFEE84E35F01C /* WhitelistView.swift in Sources */,
+				E181ED0DE8A6D290C297BC49 /* WhitelistViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -594,7 +602,7 @@
 				CODE_SIGN_ENTITLEMENTS = CareNote/CareNote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;
@@ -692,7 +700,7 @@
 				CODE_SIGN_ENTITLEMENTS = CareNote/CareNote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CareNote/Info.plist;

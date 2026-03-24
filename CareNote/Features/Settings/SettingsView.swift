@@ -9,9 +9,22 @@ struct SettingsView: View {
 
     @State private var templateListViewModel: TemplateListViewModel?
     @State private var clientManagementViewModel: ClientManagementViewModel?
+    @State private var whitelistViewModel: WhitelistViewModel?
 
     var body: some View {
         List {
+            if authViewModel.authState.isAdmin {
+                Section("メンバー") {
+                    NavigationLink {
+                        if let vm = whitelistViewModel {
+                            WhitelistView(viewModel: vm)
+                        }
+                    } label: {
+                        Label("メンバー管理", systemImage: "person.badge.key")
+                    }
+                }
+            }
+
             Section("利用者") {
                 NavigationLink {
                     if let vm = clientManagementViewModel {
@@ -45,6 +58,15 @@ struct SettingsView: View {
         .task {
             if templateListViewModel == nil {
                 templateListViewModel = TemplateListViewModel(modelContext: modelContext)
+            }
+            if whitelistViewModel == nil,
+               let tenantId = authViewModel.authState.tenantId,
+               let userId = authViewModel.authState.userId
+            {
+                whitelistViewModel = WhitelistViewModel(
+                    tenantId: tenantId,
+                    userId: userId
+                )
             }
             if clientManagementViewModel == nil, let tenantId = authViewModel.authState.tenantId {
                 clientManagementViewModel = ClientManagementViewModel(

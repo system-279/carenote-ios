@@ -111,6 +111,86 @@ actor FirestoreService: RecordingStoring, ClientManaging {
         }
     }
 
+    // MARK: - Whitelist
+
+    private func whitelistCollection(tenantId: String) -> CollectionReference {
+        db.collection("tenants").document(tenantId).collection("whitelist")
+    }
+
+    func fetchWhitelist(tenantId: String) async throws -> [WhitelistEntry] {
+        do {
+            let snapshot = try await whitelistCollection(tenantId: tenantId)
+                .getDocuments()
+
+            return snapshot.documents.compactMap { document in
+                let data = document.data()
+                let addedAt = (data["addedAt"] as? Timestamp)?.dateValue() ?? Date()
+                return WhitelistEntry(
+                    id: document.documentID,
+                    email: data["email"] as? String ?? "",
+                    role: data["role"] as? String ?? "user",
+                    addedBy: data["addedBy"] as? String ?? "",
+                    addedAt: addedAt
+                )
+            }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).addDocument(data: [
+                "email": email.lowercased().trimmingCharacters(in: .whitespaces),
+                "role": role,
+                "addedBy": addedBy,
+                "addedAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func removeFromWhitelist(tenantId: String, entryId: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).document(entryId).delete()
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func updateWhitelistRole(tenantId: String, entryId: String, role: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).document(entryId).updateData([
+                "role": role,
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    // MARK: - Allowed Domains
+
+    func fetchAllowedDomains(tenantId: String) async throws -> [String] {
+        do {
+            let document = try await db.collection("tenants").document(tenantId).getDocument()
+            guard document.exists, let data = document.data() else { return [] }
+            return data["allowedDomains"] as? [String] ?? []
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func setAllowedDomains(tenantId: String, domains: [String]) async throws {
+        do {
+            try await db.collection("tenants").document(tenantId).setData([
+                "allowedDomains": domains.map { $0.lowercased().trimmingCharacters(in: .whitespaces) },
+            ], merge: true)
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
     // MARK: - Recordings
 
     /// Create a new recording document.

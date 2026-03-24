@@ -8,7 +8,7 @@ import UIKit
 
 enum AuthState: Sendable, Equatable {
     case signedOut
-    case signedIn(userId: String, tenantId: String)
+    case signedIn(userId: String, tenantId: String, role: String)
 
     var isSignedIn: Bool {
         if case .signedIn = self { return true }
@@ -16,13 +16,22 @@ enum AuthState: Sendable, Equatable {
     }
 
     var userId: String? {
-        if case .signedIn(let userId, _) = self { return userId }
+        if case .signedIn(let userId, _, _) = self { return userId }
         return nil
     }
 
     var tenantId: String? {
-        if case .signedIn(_, let tenantId) = self { return tenantId }
+        if case .signedIn(_, let tenantId, _) = self { return tenantId }
         return nil
+    }
+
+    var role: String? {
+        if case .signedIn(_, _, let role) = self { return role }
+        return nil
+    }
+
+    var isAdmin: Bool {
+        role == "admin"
     }
 }
 
@@ -160,7 +169,9 @@ final class AuthViewModel {
                 return
             }
 
-            authState = .signedIn(userId: result.userId, tenantId: tenantId)
+            // role は checkAuthState のリスナーで custom claims から取得されるため、
+            // ここでは一旦 "user" で設定（リスナーが即座に上書き）
+            authState = .signedIn(userId: result.userId, tenantId: tenantId, role: "user")
         } catch {
             errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
         }
@@ -193,7 +204,8 @@ final class AuthViewModel {
                         self.authState = .signedOut
                         return
                     }
-                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId)
+                    let role = tokenResult?.claims["role"] as? String ?? "user"
+                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId, role: role)
                 } else {
                     self.authState = .signedOut
                 }
