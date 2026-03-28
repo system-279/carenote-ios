@@ -29,14 +29,40 @@ struct RecordingConfirmView: View {
                     Label("出力形式を選択", systemImage: "doc.text")
                         .font(.headline)
 
-                    VStack(spacing: 8) {
-                        ForEach(viewModel.templates) { template in
-                            TemplateOptionRow(
-                                template: template,
-                                isSelected: viewModel.selectedTemplate?.id == template.id
-                            ) {
-                                viewModel.selectedTemplate = template
-                            }
+                    let presets = viewModel.templateItems.filter { $0.source == .preset }
+                    let tenantItems = viewModel.templateItems.filter { $0.source == .tenant }
+                    let personalItems = viewModel.templateItems.filter { $0.source == .personal }
+
+                    if !presets.isEmpty {
+                        TemplateSectionView(
+                            title: "プリセット",
+                            icon: "star",
+                            items: presets,
+                            selectedItem: viewModel.selectedItem
+                        ) { item in
+                            viewModel.selectedItem = item
+                        }
+                    }
+
+                    if !tenantItems.isEmpty {
+                        TemplateSectionView(
+                            title: "テナント共有",
+                            icon: "building.2",
+                            items: tenantItems,
+                            selectedItem: viewModel.selectedItem
+                        ) { item in
+                            viewModel.selectedItem = item
+                        }
+                    }
+
+                    if !personalItems.isEmpty {
+                        TemplateSectionView(
+                            title: "個人",
+                            icon: "person",
+                            items: personalItems,
+                            selectedItem: viewModel.selectedItem
+                        ) { item in
+                            viewModel.selectedItem = item
                         }
                     }
                 }
@@ -97,7 +123,7 @@ struct RecordingConfirmView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(viewModel.isSaving)
         .task {
-            viewModel.loadTemplates()
+            await viewModel.loadTemplates()
         }
         .alert("保存完了", isPresented: $showSaveSuccess) {
             Button("OK") {
@@ -105,6 +131,34 @@ struct RecordingConfirmView: View {
             }
         } message: {
             Text("文字起こしが完了するまでしばらくお待ちください。")
+        }
+    }
+}
+
+// MARK: - TemplateSectionView
+
+private struct TemplateSectionView: View {
+    let title: String
+    let icon: String
+    let items: [TemplateItem]
+    let selectedItem: TemplateItem?
+    let onSelect: (TemplateItem) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: icon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            ForEach(items) { item in
+                TemplateOptionRow(
+                    item: item,
+                    isSelected: selectedItem?.id == item.id
+                ) {
+                    onSelect(item)
+                }
+            }
         }
     }
 }
@@ -133,12 +187,12 @@ private struct InfoRow: View {
 // MARK: - TemplateOptionRow
 
 private struct TemplateOptionRow: View {
-    let template: OutputTemplate
+    let item: TemplateItem
     let isSelected: Bool
     let action: () -> Void
 
     private var description: String {
-        switch OutputType(rawValue: template.outputType) {
+        switch OutputType(rawValue: item.outputType) {
         case .transcription:
             return "音声をそのままテキストに変換"
         case .visitRecord:
@@ -160,7 +214,7 @@ private struct TemplateOptionRow: View {
                     .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(template.name)
+                    Text(item.name)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundStyle(.primary)
@@ -184,7 +238,7 @@ private struct TemplateOptionRow: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(template.name): \(description)")
+        .accessibilityLabel("\(item.name): \(description)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

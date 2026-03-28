@@ -13,10 +13,9 @@ struct SettingsView: View {
         List {
             Section("テンプレート") {
                 NavigationLink {
-                    TemplateListView(
-                        viewModel: templateListViewModel
-                            ?? TemplateListViewModel(modelContext: modelContext)
-                    )
+                    if let vm = templateListViewModel {
+                        TemplateListView(viewModel: vm)
+                    }
                 } label: {
                     Label("テンプレート管理", systemImage: "doc.text")
                 }
@@ -33,7 +32,11 @@ struct SettingsView: View {
         .navigationTitle("設定")
         .task {
             if templateListViewModel == nil {
-                templateListViewModel = TemplateListViewModel(modelContext: modelContext)
+                templateListViewModel = TemplateListViewModel(
+                    modelContext: modelContext,
+                    tenantId: authViewModel.authState.tenantId,
+                    isAdmin: authViewModel.authState.isAdmin
+                )
             }
         }
     }

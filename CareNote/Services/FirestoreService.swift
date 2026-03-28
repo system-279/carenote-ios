@@ -17,10 +17,19 @@ protocol RecordingStoring: Sendable {
     func updateTranscription(tenantId: String, recordingId: String, transcription: String, status: TranscriptionStatus) async throws
 }
 
+// MARK: - ClientManaging
+
+protocol ClientManaging: Sendable {
+    func fetchClients(tenantId: String) async throws -> [FirestoreClient]
+    func addClient(tenantId: String, name: String, furigana: String) async throws
+    func updateClient(tenantId: String, clientId: String, name: String, furigana: String) async throws
+    func deleteClient(tenantId: String, clientId: String) async throws
+}
+
 // MARK: - FirestoreService
 
 /// Firestore CRUD service with multi-tenant structure: `tenants/{tenantId}/...`
-actor FirestoreService: RecordingStoring {
+actor FirestoreService: RecordingStoring, ClientManaging {
 
     // MARK: - Properties
 
@@ -65,6 +74,189 @@ actor FirestoreService: RecordingStoring {
                     furigana: data["furigana"] as? String ?? ""
                 )
             }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func addClient(tenantId: String, name: String, furigana: String) async throws {
+        do {
+            try await clientsCollection(tenantId: tenantId).addDocument(data: [
+                "name": name,
+                "furigana": furigana,
+                "createdAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func updateClient(tenantId: String, clientId: String, name: String, furigana: String) async throws {
+        do {
+            try await clientsCollection(tenantId: tenantId).document(clientId).updateData([
+                "name": name,
+                "furigana": furigana,
+                "updatedAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func deleteClient(tenantId: String, clientId: String) async throws {
+        do {
+            try await clientsCollection(tenantId: tenantId).document(clientId).delete()
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    // MARK: - Whitelist
+
+    private func whitelistCollection(tenantId: String) -> CollectionReference {
+        db.collection("tenants").document(tenantId).collection("whitelist")
+    }
+
+    func fetchWhitelist(tenantId: String) async throws -> [WhitelistEntry] {
+        do {
+            let snapshot = try await whitelistCollection(tenantId: tenantId)
+                .getDocuments()
+
+            return snapshot.documents.compactMap { document in
+                let data = document.data()
+                let addedAt = (data["addedAt"] as? Timestamp)?.dateValue() ?? Date()
+                return WhitelistEntry(
+                    id: document.documentID,
+                    email: data["email"] as? String ?? "",
+                    role: data["role"] as? String ?? "user",
+                    addedBy: data["addedBy"] as? String ?? "",
+                    addedAt: addedAt
+                )
+            }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).addDocument(data: [
+                "email": email.lowercased().trimmingCharacters(in: .whitespaces),
+                "role": role,
+                "addedBy": addedBy,
+                "addedAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func removeFromWhitelist(tenantId: String, entryId: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).document(entryId).delete()
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func updateWhitelistRole(tenantId: String, entryId: String, role: String) async throws {
+        do {
+            try await whitelistCollection(tenantId: tenantId).document(entryId).updateData([
+                "role": role,
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    // MARK: - Allowed Domains
+
+    func fetchAllowedDomains(tenantId: String) async throws -> [String] {
+        do {
+            let document = try await db.collection("tenants").document(tenantId).getDocument()
+            guard document.exists, let data = document.data() else { return [] }
+            return data["allowedDomains"] as? [String] ?? []
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func setAllowedDomains(tenantId: String, domains: [String]) async throws {
+        do {
+            try await db.collection("tenants").document(tenantId).setData([
+                "allowedDomains": domains.map { $0.lowercased().trimmingCharacters(in: .whitespaces) },
+            ], merge: true)
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    // MARK: - Templates
+
+    private func templatesCollection(tenantId: String) -> CollectionReference {
+        db.collection("tenants").document(tenantId).collection("templates")
+    }
+
+    func fetchTemplates(tenantId: String) async throws -> [FirestoreTemplate] {
+        do {
+            let snapshot = try await templatesCollection(tenantId: tenantId)
+                .order(by: "createdAt")
+                .getDocuments()
+
+            return snapshot.documents.compactMap { document in
+                let data = document.data()
+                let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+                return FirestoreTemplate(
+                    id: document.documentID,
+                    name: data["name"] as? String ?? "",
+                    prompt: data["prompt"] as? String ?? "",
+                    outputType: data["outputType"] as? String ?? OutputType.custom.rawValue,
+                    createdBy: data["createdBy"] as? String ?? "",
+                    createdByName: data["createdByName"] as? String ?? "",
+                    createdAt: createdAt,
+                    updatedAt: updatedAt
+                )
+            }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func createTemplate(tenantId: String, name: String, prompt: String, outputType: String, createdBy: String, createdByName: String) async throws -> String {
+        do {
+            let docRef = try await templatesCollection(tenantId: tenantId).addDocument(data: [
+                "name": name,
+                "prompt": prompt,
+                "outputType": outputType,
+                "createdBy": createdBy,
+                "createdByName": createdByName,
+                "createdAt": Timestamp(date: Date()),
+                "updatedAt": Timestamp(date: Date()),
+            ])
+            return docRef.documentID
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func updateTemplate(tenantId: String, templateId: String, name: String, prompt: String, outputType: String) async throws {
+        do {
+            try await templatesCollection(tenantId: tenantId).document(templateId).updateData([
+                "name": name,
+                "prompt": prompt,
+                "outputType": outputType,
+                "updatedAt": Timestamp(date: Date()),
+            ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    func deleteTemplate(tenantId: String, templateId: String) async throws {
+        do {
+            try await templatesCollection(tenantId: tenantId).document(templateId).delete()
         } catch {
             throw FirestoreError.operationFailed(error)
         }
