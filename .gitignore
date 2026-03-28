@@ -51,3 +51,9 @@ generated-images/
 
 # Serena
 .serena/
+
+# Firebase
+.firebase/
+
+# Playwright MCP
+.playwright-mcp/
