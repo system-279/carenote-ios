@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADR - CareNote Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <script src="js/tab-switcher.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
+</head>
+<body class="audience-general">
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <span class="logo-icon">CN</span>CareNote<span class="logo-sub">Architecture Docs</span>
+      </a>
+    </div>
+  </header>
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-link">Top</a>
+      <a href="architecture.html" class="nav-link">Architecture</a>
+      <a href="auth-security.html" class="nav-link">Auth</a>
+      <a href="data-flow.html" class="nav-link">Data Flow</a>
+      <a href="multi-tenant.html" class="nav-link">Multi-Tenant</a>
+      <a href="adr.html" class="nav-link active">ADR</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <span class="badge badge-primary">ADR</span>
+      <h1>Architecture Decision Records</h1>
+      <p class="subtitle">プロジェクトで行われた主要な技術的決定とその背景</p>
+    </div>
+
+    <div class="info-box info-box-blue">
+      <span class="icon">&#128221;</span>
+      <div>
+        <strong>ADR（Architecture Decision Record）</strong>は、プロジェクトで行われた重要な技術的決定を記録したものです。「なぜその技術を選んだのか」「他にどんな選択肢があったのか」が分かるようになっています。
+      </div>
+    </div>
+
+    <!-- ADR-001 -->
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <h3>
+          <span class="adr-number">ADR-001</span>
+          Google Sign-In 採用
+          <span class="adr-status adr-status-accepted">Accepted</span>
+        </h3>
+        <span class="accordion-arrow">&#9660;</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p style="font-size:12px;color:var(--text-muted);">2026-03-03</p>
+          <h4>コンテキスト</h4>
+          <p>仕様書 v4.0 では Apple Sign-In を採用していたが、ユーザーの要望により認証プロバイダーを変更する必要があった。</p>
+          <h4>決定</h4>
+          <p><strong>Google Sign-In のみ</strong>を認証プロバイダーとして採用する。</p>
+          <h4>理由</h4>
+          <ul>
+            <li>ユーザーの直接的な要望</li>
+            <li>WIFAuthService は Firebase ID Token ベースのため、認証プロバイダー変更の影響が限定的</li>
+            <li>GoogleSignIn-iOS SDK (v9.0.0+) は SwiftUI ネイティブの <code>GoogleSignInButton</code> を提供</li>
+            <li>Apple Sign-In entitlement が不要になり、開発者アカウント設定が簡素化</li>
+          </ul>
+          <h4>影響</h4>
+          <ul>
+            <li><code>project.yml</code>: GoogleSignIn-iOS パッケージ追加、Apple Sign-In entitlement 削除</li>
+            <li><code>AuthViewModel</code>: <code>signInWithGoogle()</code> 実装</li>
+            <li><code>SignInView</code>: <code>GoogleSignInButton</code> 使用</li>
+            <li>WIFAuthService, 全サービス層: 変更不要</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADR-002 -->
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <h3>
+          <span class="adr-number">ADR-002</span>
+          Workload Identity Federation (WIF) 認証フロー
+          <span class="adr-status adr-status-accepted">Accepted</span>
+        </h3>
+        <span class="accordion-arrow">&#9660;</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p style="font-size:12px;color:var(--text-muted);">2026-03-03</p>
+          <h4>コンテキスト</h4>
+          <p>iOS アプリから GCP サービス (Vertex AI, Cloud Storage) にアクセスするための認証方式を決定する必要があった。</p>
+          <h4>決定</h4>
+          <p><strong>Workload Identity Federation (WIF)</strong> を採用し、サービスアカウントキー (JSON) をアプリに同梱しない。</p>
+          <h4>認証フロー</h4>
+          <ol>
+            <li>Firebase Auth で Google Sign-In → Firebase ID Token 取得</li>
+            <li>STS Token Exchange: Firebase ID Token → Federated Token</li>
+            <li>SA Impersonation: Federated Token → GCP Access Token</li>
+            <li>GCP Access Token で Vertex AI / Cloud Storage にアクセス</li>
+          </ol>
+          <h4>理由</h4>
+          <ul>
+            <li>SA キーのアプリ同梱はセキュリティリスク（リバースエンジニアリング）</li>
+            <li>WIF は Google 推奨の認証パターン</li>
+            <li>Firebase ID Token ベースのため認証プロバイダーに非依存</li>
+          </ul>
+          <h4>影響</h4>
+          <ul>
+            <li><code>WIFAuthService</code>: STS + SA Impersonation の実装</li>
+            <li><code>AppConfig</code>: GCP プロジェクト番号・SA メール設定</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADR-003 -->
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <h3>
+          <span class="adr-number">ADR-003</span>
+          Gemini 2.5 Flash による文字起こし
+          <span class="adr-status adr-status-accepted">Accepted</span>
+        </h3>
+        <span class="accordion-arrow">&#9660;</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p style="font-size:12px;color:var(--text-muted);">2026-03-03</p>
+          <h4>コンテキスト</h4>
+          <p>録音音声の文字起こしサービスを選定する必要があった。仕様書 v3 では Cloud Speech-to-Text V2 を採用していた。</p>
+          <h4>決定</h4>
+          <p><strong>Vertex AI Gemini 2.5 Flash</strong>（<code>gemini-2.5-flash</code>, <code>asia-northeast1</code>）を文字起こしに使用する。</p>
+          <h4>理由</h4>
+          <ul>
+            <li>マルチモーダル対応: 音声ファイルを直接入力可能</li>
+            <li>高精度: 介護現場の専門用語に対応しやすい</li>
+            <li>コスト効率: Flash モデルは低コスト・高速</li>
+            <li>プロンプトエンジニアリング: 発話者分離、要約等を柔軟に制御可能</li>
+          </ul>
+          <h4>制約</h4>
+          <ul>
+            <li><code>thinkingBudget</code> は 0 に設定（必須）</li>
+            <li>Gemini 3 Flash / Preview モデルは使用禁止</li>
+          </ul>
+          <h4>影響</h4>
+          <ul>
+            <li><code>TranscriptionService</code>: Vertex AI REST API 経由で Gemini 呼び出し</li>
+            <li>録音フォーマット: M4A/AAC（ADR-004 参照）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADR-004 -->
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <h3>
+          <span class="adr-number">ADR-004</span>
+          M4A/AAC 録音フォーマット
+          <span class="adr-status adr-status-accepted">Accepted</span>
+        </h3>
+        <span class="accordion-arrow">&#9660;</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p style="font-size:12px;color:var(--text-muted);">2026-03-03</p>
+          <h4>コンテキスト</h4>
+          <p>録音フォーマットを決定する必要があった。仕様書 v3 以前では WAV を採用していた。</p>
+          <h4>決定</h4>
+          <p><strong>M4A/AAC</strong>（44.1kHz, mono, high quality）を録音フォーマットとして採用する。</p>
+          <h4>理由</h4>
+          <ul>
+            <li>ファイルサイズ: WAV 比で約 1/10（モバイル通信・ストレージに有利）</li>
+            <li>音声品質: AAC High Quality は文字起こしに十分な品質</li>
+            <li>互換性: iOS ネイティブサポート、Gemini も M4A 入力に対応</li>
+            <li>アップロード: Cloud Storage へのアップロード時間短縮</li>
+          </ul>
+          <h4>設定</h4>
+          <pre><code>[
+  .commonFormat: .pcmFormatFloat32,
+  .sampleRate: 44100.0,
+  .numberOfChannels: 1,              // mono
+  .encoderAudioQualityKey: .high
+]</code></pre>
+          <h4>影響</h4>
+          <ul>
+            <li><code>AudioRecorderService</code>: AVAudioRecorder の設定</li>
+            <li><code>StorageService</code>: アップロード時の MIME type (<code>audio/mp4</code>)</li>
+            <li><code>TranscriptionService</code>: Gemini API への MIME type 指定</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADR-005 -->
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <h3>
+          <span class="adr-number">ADR-005</span>
+          Auth Blocking Function によるホワイトリスト照合・自動 claims 設定
+          <span class="adr-status adr-status-accepted">Accepted</span>
+        </h3>
+        <span class="accordion-arrow">&#9660;</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p style="font-size:12px;color:var(--text-muted);">2026-03-22</p>
+          <h4>コンテキスト</h4>
+          <p>テナントごとにメールアドレスのホワイトリストを管理し、許可されたユーザーのみサインイン可能にする必要がある。従来は Firebase Auth の custom claims をスクリプト（<code>set-tenant-claim.sh</code>）で手動設定していたが、admin がアプリ内でメンバー登録した際に別途スクリプト実行が必要で運用が破綻していた。</p>
+          <h4>決定</h4>
+          <p>Firebase Cloud Functions v2 の <strong>Blocking Function（<code>beforeUserSignedIn</code>）</strong>を採用し、毎回のサインイン時にホワイトリスト照合と custom claims 自動設定を行う。</p>
+          <h4>フロー</h4>
+          <ol>
+            <li>admin がアプリ内でメールアドレス + ロールをホワイトリストに登録（Firestore）</li>
+            <li>ユーザーが Google Sign-In を実行</li>
+            <li><code>beforeUserSignedIn</code> が発火</li>
+            <li>全テナントの <code>whitelist</code> コレクションからメールを検索</li>
+            <li>一致 → <code>tenantId</code> + <code>role</code> を custom claims に設定 → サインイン許可</li>
+            <li>不一致 → サインイン拒否（Firebase Auth レベル）</li>
+          </ol>
+          <h4>検討した代替案</h4>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>方式</th><th>不採用理由</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>beforeUserCreated</code></td><td>新規ユーザー作成時のみ発火。既存ユーザーの再サインインに対応不可</td></tr>
+                <tr><td>Callable Function</td><td>iOS 側の変更が必要。サインインフロー外で呼び出すため claims 反映タイミングが不確実</td></tr>
+                <tr><td>REST API 直接呼び出し</td><td>GCP トークンがクライアントに必要でセキュリティリスク高</td></tr>
+                <tr><td>手動スクリプト</td><td>運用が破綻（ホワイトリスト登録とは別にスクリプト実行が必要）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h4>影響</h4>
+          <ul>
+            <li><code>functions/index.js</code> に <code>beforeUserSignedIn</code> を追加</li>
+            <li>Firebase Auth の Blocking Function として登録</li>
+            <li>サインインのレイテンシが若干増加（Firestore クエリ分）</li>
+            <li>テナント数が増加した場合、全テナント走査の最適化が必要（collectionGroup query 等）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    CareNote Architecture Docs &mdash; 279 Inc.
+  </footer>
+</body>
+</html>

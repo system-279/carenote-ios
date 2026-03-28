@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Tenant - CareNote Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="js/tab-switcher.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
+</head>
+<body class="audience-general">
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <span class="logo-icon">CN</span>CareNote<span class="logo-sub">Architecture Docs</span>
+      </a>
+    </div>
+  </header>
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-link">Top</a>
+      <a href="architecture.html" class="nav-link">Architecture</a>
+      <a href="auth-security.html" class="nav-link">Auth</a>
+      <a href="data-flow.html" class="nav-link">Data Flow</a>
+      <a href="multi-tenant.html" class="nav-link active">Multi-Tenant</a>
+      <a href="adr.html" class="nav-link">ADR</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <span class="badge badge-primary">Multi-Tenant</span>
+      <h1>マルチテナント</h1>
+      <p class="subtitle">施設ごとのデータ完全分離とテナント管理の仕組み</p>
+    </div>
+
+    <div class="audience-switcher">
+      <button class="audience-btn active" data-tab="general">Overview</button>
+      <button class="audience-btn" data-tab="engineer">Technical</button>
+    </div>
+
+    <!-- ===== General ===== -->
+    <div class="audience-content" data-audience="general">
+      <section class="section">
+        <h2>施設ごとにデータが完全に分離</h2>
+        <p>CareNoteでは、各施設（テナント）のデータが完全に分離されています。ある施設のスタッフが別の施設のデータを見ることは技術的に不可能です。</p>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon card-icon-blue">&#127970;</div>
+            <h3>施設 A</h3>
+            <p>施設Aの利用者情報、録音データ、文字起こし結果は施設Aのスタッフだけがアクセスできます。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-green">&#127970;</div>
+            <h3>施設 B</h3>
+            <p>施設Bのデータは施設Bのスタッフだけがアクセスでき、施設Aからは見えません。</p>
+          </div>
+        </div>
+        <div class="info-box info-box-blue">
+          <span class="icon">&#128274;</span>
+          <div>
+            <strong>分離の仕組み: </strong>ユーザーがサインインすると、所属施設の「ID」が自動的に設定されます。このIDにより、アプリもクラウドも該当施設のデータだけを表示・操作します。
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>メンバー管理の流れ</h2>
+        <ol class="step-list">
+          <li class="step-item">
+            <div class="step-content">
+              <h3>管理者がメンバーを登録</h3>
+              <p>設定画面から、新しいスタッフのメールアドレスと役割（管理者 or 一般）を登録します。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>スタッフがサインイン</h3>
+              <p>登録されたGoogleアカウントでサインインすると、自動的に施設に紐付けられます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>施設のデータにアクセス</h3>
+              <p>自分が所属する施設の利用者情報や録音データのみが表示されます。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section">
+        <h2>ドメイン許可（オプション）</h2>
+        <div class="info-box info-box-green">
+          <span class="icon">&#127760;</span>
+          <div>
+            管理者は特定のメールドメイン（例: @facility-a.jp）を許可ドメインとして設定できます。許可ドメインのメールアドレスを持つユーザーは、ホワイトリストに個別登録しなくてもサインインが可能になります。
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Engineer ===== -->
+    <div class="audience-content" data-audience="engineer">
+      <section class="section">
+        <h2>Firestore Data Structure</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">Tenant Isolation Tree</div>
+          <div class="mermaid">
+graph TD
+    Root["Firestore Root"] --> T1["tenants/facility-a"]
+    Root --> T2["tenants/facility-b"]
+    Root --> TN["tenants/..."]
+
+    T1 --> W1["whitelist/<br/>{email, role, addedBy}"]
+    T1 --> C1["clients/<br/>{name, furigana}"]
+    T1 --> R1["recordings/<br/>{clientId, scene,<br/>transcription, ...}"]
+
+    T2 --> W2["whitelist/"]
+    T2 --> C2["clients/"]
+    T2 --> R2["recordings/"]
+
+    style T1 fill:#DBEAFE,stroke:#60A5FA,color:#1E40AF
+    style T2 fill:#D1FAE5,stroke:#34D399,color:#065F46
+    style TN fill:#F1F5F9,stroke:#CBD5E1,color:#64748B
+          </div>
+        </div>
+
+        <div class="dir-tree"><span class="folder">firestore/</span>
+<span class="folder">&#9492;&#9472;&#9472; tenants/</span>
+    <span class="folder">&#9492;&#9472;&#9472; {tenantId}/</span>                  <span class="comment"># Custom claim から取得</span>
+        <span class="file">&#9500;&#9472;&#9472; allowedDomains: [String]</span>  <span class="comment"># ドメイン許可リスト</span>
+        <span class="folder">&#9500;&#9472;&#9472; whitelist/</span>
+        <span class="comment">&#9474;   &#9492;&#9472;&#9472; {entryId}/</span>
+        <span class="comment">&#9474;       &#9500;&#9472;&#9472; email: String</span>
+        <span class="comment">&#9474;       &#9500;&#9472;&#9472; role: "admin" | "user"</span>
+        <span class="comment">&#9474;       &#9500;&#9472;&#9472; addedBy: String (user.uid)</span>
+        <span class="comment">&#9474;       &#9492;&#9472;&#9472; addedAt: Timestamp</span>
+        <span class="folder">&#9500;&#9472;&#9472; clients/</span>
+        <span class="comment">&#9474;   &#9492;&#9472;&#9472; {clientId}/</span>
+        <span class="comment">&#9474;       &#9500;&#9472;&#9472; name: String</span>
+        <span class="comment">&#9474;       &#9500;&#9472;&#9472; furigana: String</span>
+        <span class="comment">&#9474;       &#9492;&#9472;&#9472; createdAt: Timestamp</span>
+        <span class="folder">&#9492;&#9472;&#9472; recordings/</span>
+            <span class="comment">&#9492;&#9472;&#9472; {recordingId}/</span>
+                <span class="comment">&#9500;&#9472;&#9472; clientId: String</span>
+                <span class="comment">&#9500;&#9472;&#9472; clientName: String</span>
+                <span class="comment">&#9500;&#9472;&#9472; scene: String</span>
+                <span class="comment">&#9500;&#9472;&#9472; recordedAt: Timestamp</span>
+                <span class="comment">&#9500;&#9472;&#9472; audioStoragePath: String (gs://...)</span>
+                <span class="comment">&#9500;&#9472;&#9472; transcription: String?</span>
+                <span class="comment">&#9500;&#9472;&#9472; transcriptionStatus: String</span>
+                <span class="comment">&#9500;&#9472;&#9472; createdBy: String (user.uid)</span>
+                <span class="comment">&#9500;&#9472;&#9472; createdAt: Timestamp</span>
+                <span class="comment">&#9492;&#9472;&#9472; updatedAt: Timestamp</span></div>
+      </section>
+
+      <section class="section">
+        <h2>Cloud Storage Path Structure</h2>
+        <div class="dir-tree"><span class="folder">gs://carenote-{dev|prod}-audio/</span>
+<span class="folder">&#9492;&#9472;&#9472; {tenantId}/</span>
+    <span class="file">&#9500;&#9472;&#9472; {recordingId-1}.m4a</span>
+    <span class="file">&#9500;&#9472;&#9472; {recordingId-2}.m4a</span>
+    <span class="file">&#9492;&#9472;&#9472; ...</span></div>
+        <div class="info-box info-box-amber">
+          <span class="icon">&#9888;</span>
+          <div>
+            <strong>Cloud Storage もテナントIDでパス分離。</strong>Firestore同様、音声ファイルも <code>{tenantId}/</code> プレフィックスで完全分離。Storage Rulesで認証済みユーザーのみアクセス可。
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>tenantId の取得・伝播</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">tenantId Propagation</div>
+          <div class="mermaid">
+flowchart TD
+    A["Firebase Auth<br/>signIn()"] --> B["IDTokenResult<br/>.claims['tenantId']"]
+    B --> C["AuthViewModel<br/>AuthState.signedIn(<br/>userId, tenantId, role)"]
+    C --> D["MainTabView<br/>@State tenantId"]
+    D --> E1["RecordingListViewModel<br/>init(tenantId:)"]
+    D --> E2["ClientSelectViewModel<br/>init(tenantId:)"]
+    D --> E3["SettingsView<br/>tenantId param"]
+    E1 --> F1["FirestoreService<br/>tenantId param"]
+    E1 --> F2["OutboxSyncService<br/>tenantId param"]
+    E2 --> F3["ClientCacheService<br/>tenantId param"]
+
+    style A fill:#ECFDF5,stroke:#6EE7B7
+    style B fill:#FFFBEB,stroke:#FDE68A
+    style C fill:#DBEAFE,stroke:#60A5FA
+          </div>
+        </div>
+        <div class="info-box info-box-amber">
+          <span class="icon">&#9888;</span>
+          <div>
+            <strong>tenantId のハードコーディング絶対禁止。</strong>すべての Service は init パラメータで tenantId を受け取ります。ViewModel レイヤーが AuthState から取得した値を下位レイヤーに伝播させます。
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Tenant Isolation Enforcement</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Layer</th><th>Mechanism</th><th>Details</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Firebase Auth</td><td>Custom Claims</td><td><code>tenantId</code> は Blocking Function が設定</td></tr>
+              <tr><td>Firestore</td><td>Security Rules</td><td><code>isTenantMember(tenantId)</code> でアクセス制御</td></tr>
+              <tr><td>Cloud Storage</td><td>Path Prefix</td><td><code>{tenantId}/</code> でファイル分離</td></tr>
+              <tr><td>App Code</td><td>Parameter Injection</td><td>全 Service が tenantId をパラメータで受け取る</td></tr>
+              <tr><td>SwiftData (Local)</td><td>N/A</td><td>端末内データはサインインユーザーのテナントのみ</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>GCP Environment</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Item</th><th>Dev</th><th>Prod</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Project ID</td><td><code>carenote-dev-279</code></td><td><code>carenote-prod-279</code></td></tr>
+              <tr><td>Project Number</td><td>444137368705</td><td>781674225072</td></tr>
+              <tr><td>Storage Bucket</td><td><code>carenote-dev-279-audio</code></td><td><code>carenote-prod-279-audio</code></td></tr>
+              <tr><td>SA Email</td><td colspan="2"><code>carenote-ios-client@{project}.iam.gserviceaccount.com</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    CareNote Architecture Docs &mdash; 279 Inc.
+  </footer>
+</body>
+</html>
