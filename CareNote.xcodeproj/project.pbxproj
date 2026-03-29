@@ -607,6 +607,8 @@
 				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
+				GID_CLIENT_ID = "781674225072-ggct0s6glel3ma7isb79ge72mn8sbivj.apps.googleusercontent.com";
+				GID_REVERSED_CLIENT_ID = "com.googleusercontent.apps.781674225072-ggct0s6glel3ma7isb79ge72mn8sbivj";
 				INFOPLIST_FILE = CareNote/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -705,6 +707,8 @@
 				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = C96A7EHVW8;
 				GENERATE_INFOPLIST_FILE = NO;
+				GID_CLIENT_ID = "444137368705-6tppcletq10h3qhuprhafktpk5e2h1me.apps.googleusercontent.com";
+				GID_REVERSED_CLIENT_ID = "com.googleusercontent.apps.444137368705-6tppcletq10h3qhuprhafktpk5e2h1me";
 				INFOPLIST_FILE = CareNote/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

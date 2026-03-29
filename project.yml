@@ -38,8 +38,12 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          GID_CLIENT_ID: 444137368705-6tppcletq10h3qhuprhafktpk5e2h1me.apps.googleusercontent.com
+          GID_REVERSED_CLIENT_ID: com.googleusercontent.apps.444137368705-6tppcletq10h3qhuprhafktpk5e2h1me
         Release:
           SWIFT_OPTIMIZATION_LEVEL: -O
+          GID_CLIENT_ID: 781674225072-ggct0s6glel3ma7isb79ge72mn8sbivj.apps.googleusercontent.com
+          GID_REVERSED_CLIENT_ID: com.googleusercontent.apps.781674225072-ggct0s6glel3ma7isb79ge72mn8sbivj
     dependencies:
       - package: firebase-ios-sdk
         product: FirebaseAuth
