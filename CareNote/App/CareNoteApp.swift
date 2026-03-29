@@ -47,7 +47,7 @@ struct CareNoteApp: App {
                 switch authViewModel.authState {
                 case .signedOut:
                     SignInView(viewModel: authViewModel)
-                case .signedIn(_, let tenantId):
+                case .signedIn(_, let tenantId, _):
                     MainTabView(tenantId: tenantId)
                         .task {
                             let cacheService = ClientCacheService(

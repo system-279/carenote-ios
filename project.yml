@@ -21,7 +21,9 @@ targets:
     type: application
     platform: iOS
     sources:
-      - CareNote
+      - path: CareNote
+        excludes:
+          - "Firebase/*/GoogleService-Info.plist"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.carenote.app
@@ -47,6 +49,21 @@ targets:
         product: GoogleSignIn
       - package: GoogleSignIn-iOS
         product: GoogleSignInSwift
+    preBuildScripts:
+      - name: Copy GoogleService-Info.plist
+        script: |
+          if [ "${CONFIGURATION}" == "Debug" ]; then
+            PLIST_SRC="${SRCROOT}/CareNote/Firebase/Dev/GoogleService-Info.plist"
+          else
+            PLIST_SRC="${SRCROOT}/CareNote/Firebase/Prod/GoogleService-Info.plist"
+          fi
+          PLIST_DST="${SRCROOT}/CareNote/GoogleService-Info.plist"
+          if [ -f "${PLIST_SRC}" ]; then
+            cp "${PLIST_SRC}" "${PLIST_DST}"
+            echo "Copied ${PLIST_SRC} to ${PLIST_DST}"
+          else
+            echo "warning: GoogleService-Info.plist not found at ${PLIST_SRC}"
+          fi
     entitlements:
       path: CareNote/CareNote.entitlements
 

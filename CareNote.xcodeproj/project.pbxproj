@@ -133,6 +133,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		02EF1D8DECD9EBEB680D0E7E /* Firebase */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Firebase;
+			sourceTree = "<group>";
+		};
 		0608AB76C8F15076D4663D31 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -231,6 +238,7 @@
 				3B6570B3B3F19396EF7BC0DB /* App */,
 				D165B4A9A01BA36EB9B96905 /* Components */,
 				9212CBF96B3FD21D8A96FFDD /* Features */,
+				02EF1D8DECD9EBEB680D0E7E /* Firebase */,
 				7BAC40690331C711B6ADEED8 /* Infrastructure */,
 				3774B894D705EE6CB01F078A /* Models */,
 				4EDB372E877FA6E8AE3D5370 /* Repositories */,
@@ -348,6 +356,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 6A0BF1848C426D083BCA7CB8 /* Build configuration list for PBXNativeTarget "CareNote" */;
 			buildPhases = (
+				47275F0FD1169CB473133022 /* Copy GoogleService-Info.plist */,
 				8DEECE0DE08803F38D4D75A6 /* Sources */,
 				BF7A0D09170A8E36144516F6 /* Resources */,
 				DCEE0F94AFE77DE8AADE1FB4 /* Frameworks */,
@@ -417,6 +426,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		47275F0FD1169CB473133022 /* Copy GoogleService-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy GoogleService-Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${CONFIGURATION}\" == \"Debug\" ]; then\n  PLIST_SRC=\"${SRCROOT}/CareNote/Firebase/Dev/GoogleService-Info.plist\"\nelse\n  PLIST_SRC=\"${SRCROOT}/CareNote/Firebase/Prod/GoogleService-Info.plist\"\nfi\nPLIST_DST=\"${SRCROOT}/CareNote/GoogleService-Info.plist\"\nif [ -f \"${PLIST_SRC}\" ]; then\n  cp \"${PLIST_SRC}\" \"${PLIST_DST}\"\n  echo \"Copied ${PLIST_SRC} to ${PLIST_DST}\"\nelse\n  echo \"warning: GoogleService-Info.plist not found at ${PLIST_SRC}\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		300A3A7AE89015BA63AF359F /* Sources */ = {

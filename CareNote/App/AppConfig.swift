@@ -3,7 +3,11 @@ import Foundation
 // MARK: - AppConfig
 
 struct AppConfig: Sendable {
+    #if DEBUG
     nonisolated(unsafe) static var current: AppEnvironment = .dev
+    #else
+    nonisolated(unsafe) static var current: AppEnvironment = .prod
+    #endif
 
     static var gcpProject: String {
         switch current {
