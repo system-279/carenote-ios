@@ -63,7 +63,7 @@ struct TemplateListViewModelTests {
         let container = try Self.makeContainer()
         let mock = MockTemplateService()
         mock.fetchResult = [
-            FirestoreTemplate(id: "1", name: "T", prompt: "P", outputType: "カスタム", createdBy: "u", createdByName: "U", createdAt: Date(), updatedAt: Date()),
+            FirestoreTemplate(id: "1", name: "T", prompt: "P", outputType: .custom, createdBy: "u", createdByName: "U", createdAt: Date(), updatedAt: Date()),
         ]
 
         let vm = TemplateListViewModel(
@@ -82,8 +82,8 @@ struct TemplateListViewModelTests {
         let container = try Self.makeContainer()
         let mock = MockTemplateService()
         mock.fetchResult = [
-            FirestoreTemplate(id: "1", name: "共有1", prompt: "P1", outputType: "カスタム", createdBy: "u1", createdByName: "User1", createdAt: Date(), updatedAt: Date()),
-            FirestoreTemplate(id: "2", name: "共有2", prompt: "P2", outputType: "文字起こし", createdBy: "u2", createdByName: "User2", createdAt: Date(), updatedAt: Date()),
+            FirestoreTemplate(id: "1", name: "共有1", prompt: "P1", outputType: .custom, createdBy: "u1", createdByName: "User1", createdAt: Date(), updatedAt: Date()),
+            FirestoreTemplate(id: "2", name: "共有2", prompt: "P2", outputType: .transcription, createdBy: "u2", createdByName: "User2", createdAt: Date(), updatedAt: Date()),
         ]
 
         let vm = TemplateListViewModel(
@@ -164,7 +164,7 @@ struct TemplateListViewModelTests {
     func admin権限ありでテナントテンプレート削除成功() async throws {
         let container = try Self.makeContainer()
         let mock = MockTemplateService()
-        let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: "カスタム", createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
+        let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: .custom, createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
 
         let vm = TemplateListViewModel(
             modelContext: container.mainContext,
@@ -184,7 +184,7 @@ struct TemplateListViewModelTests {
     func admin権限なしではテナントテンプレート削除されない() async throws {
         let container = try Self.makeContainer()
         let mock = MockTemplateService()
-        let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: "カスタム", createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
+        let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: .custom, createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
 
         let vm = TemplateListViewModel(
             modelContext: container.mainContext,
@@ -205,7 +205,7 @@ struct TemplateListViewModelTests {
         let container = try Self.makeContainer()
         let mock = MockTemplateService()
         mock.deleteError = NSError(domain: "test", code: 1)
-        let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: "カスタム", createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
+        let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: .custom, createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
 
         let vm = TemplateListViewModel(
             modelContext: container.mainContext,
@@ -219,5 +219,29 @@ struct TemplateListViewModelTests {
 
         #expect(vm.tenantTemplates.count == 1)
         #expect(vm.errorMessage != nil)
+    }
+
+    // MARK: - OutputType Fallback
+
+    @Test
+    func 未知のoutputTypeはcustomにフォールバック() {
+        let item = TemplateItem(from: OutputTemplate(
+            name: "テスト",
+            prompt: "p",
+            outputType: "未知の値",
+            isPreset: false
+        ))
+        #expect(item.outputType == .custom)
+    }
+
+    @Test
+    func 既知のoutputTypeは正しくマッピング() {
+        let item = TemplateItem(from: OutputTemplate(
+            name: "テスト",
+            prompt: "p",
+            outputType: OutputType.transcription.rawValue,
+            isPreset: false
+        ))
+        #expect(item.outputType == .transcription)
     }
 }

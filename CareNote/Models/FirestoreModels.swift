@@ -6,8 +6,8 @@ enum UserRole: String, Sendable, Codable {
     case admin
     case member
 
-    init(from string: String?) {
-        self = (string == "admin") ? .admin : .member
+    static func from(firestoreValue string: String?) -> UserRole {
+        (string == "admin") ? .admin : .member
     }
 }
 
@@ -49,7 +49,7 @@ struct FirestoreClient: Codable, Sendable, Identifiable {
 // MARK: - FirestoreMember
 
 struct FirestoreMember: Codable, Sendable, Identifiable {
-    var id: String?
+    let id: String?
     let name: String
     let role: UserRole
     let createdAt: Date
@@ -61,7 +61,7 @@ struct FirestoreTemplate: Codable, Sendable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let prompt: String
-    let outputType: String
+    let outputType: OutputType
     let createdBy: String
     let createdByName: String
     let createdAt: Date
@@ -83,7 +83,7 @@ struct TemplateItem: Identifiable, Equatable, Sendable {
     let rawId: String
     let name: String
     let prompt: String
-    let outputType: String
+    let outputType: OutputType
     let source: Source
     /// OutputTemplate の UUID（個人・プリセット時のみ。RecordingRecord.templateId 保存用）
     let localTemplateId: UUID?
@@ -92,7 +92,7 @@ struct TemplateItem: Identifiable, Equatable, Sendable {
         self.rawId = local.id.uuidString
         self.name = local.name
         self.prompt = local.prompt
-        self.outputType = local.outputType
+        self.outputType = OutputType(rawValue: local.outputType) ?? .custom
         self.source = local.isPreset ? .preset : .personal
         self.localTemplateId = local.id
     }

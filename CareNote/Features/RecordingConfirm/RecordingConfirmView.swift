@@ -192,7 +192,7 @@ private struct TemplateOptionRow: View {
     let action: () -> Void
 
     private var description: String {
-        switch OutputType(rawValue: item.outputType) {
+        switch item.outputType {
         case .transcription:
             return "音声をそのままテキストに変換"
         case .visitRecord:
@@ -201,7 +201,7 @@ private struct TemplateOptionRow: View {
             return "議題・決定事項を構造化"
         case .summary:
             return "要点を簡潔にまとめる"
-        case .custom, .none:
+        case .custom:
             return "カスタムテンプレート"
         }
     }

@@ -207,7 +207,7 @@ struct TemplateCreateViewModelTests {
             id: "tmpl-1",
             name: "既存",
             prompt: "既存プロンプト",
-            outputType: OutputType.custom.rawValue,
+            outputType: .custom,
             createdBy: "user-1",
             createdByName: "テスト",
             createdAt: Date(),
@@ -240,7 +240,7 @@ struct TemplateCreateViewModelTests {
         mock.updateError = NSError(domain: "test", code: 500)
         let existing = FirestoreTemplate(
             id: "tmpl-1", name: "既存", prompt: "既存P",
-            outputType: OutputType.custom.rawValue,
+            outputType: .custom,
             createdBy: "u1", createdByName: "User", createdAt: Date(), updatedAt: Date()
         )
         let vm = TemplateCreateViewModel(

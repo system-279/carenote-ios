@@ -57,7 +57,7 @@ final class TemplateCreateViewModel {
         if let template = editingTemplate {
             self.name = template.name
             self.prompt = template.prompt
-            self.selectedOutputType = OutputType(rawValue: template.outputType) ?? .custom
+            self.selectedOutputType = template.outputType
             self.scope = .tenant
         }
     }
@@ -98,7 +98,7 @@ final class TemplateCreateViewModel {
                         templateId: editingId,
                         name: trimmedName,
                         prompt: trimmedPrompt,
-                        outputType: selectedOutputType.rawValue
+                        outputType: selectedOutputType
                     )
                 } else {
                     // 新規テナントテンプレートの作成
@@ -106,7 +106,7 @@ final class TemplateCreateViewModel {
                         tenantId: tenantId,
                         name: trimmedName,
                         prompt: trimmedPrompt,
-                        outputType: selectedOutputType.rawValue,
+                        outputType: selectedOutputType,
                         createdBy: userId,
                         createdByName: userName ?? ""
                     )

@@ -70,14 +70,25 @@ final class RecordingConfirmViewModel {
         let descriptor = FetchDescriptor<OutputTemplate>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        var fetched = (try? modelContext.fetch(descriptor)) ?? []
+        var fetched: [OutputTemplate]
+        do {
+            fetched = try modelContext.fetch(descriptor)
+        } catch {
+            Self.logger.error("SwiftData fetch failed: \(error)")
+            fetched = []
+        }
         Self.logger.info("Initial fetch: \(fetched.count) templates")
 
         let hasPresets = fetched.contains { $0.isPreset }
         if !hasPresets {
             Self.logger.warning("No preset templates found, attempting seed fallback")
             PresetTemplates.seedIfNeeded(modelContext: modelContext)
-            fetched = (try? modelContext.fetch(descriptor)) ?? []
+            do {
+                fetched = try modelContext.fetch(descriptor)
+            } catch {
+                Self.logger.error("SwiftData fetch after seed failed: \(error)")
+                fetched = []
+            }
             Self.logger.info("After seed fallback: \(fetched.count) templates")
         }
 
@@ -121,7 +132,7 @@ final class RecordingConfirmViewModel {
                 scene: scene.rawValue,
                 durationSeconds: duration,
                 localAudioPath: audioURL.path,
-                outputType: selectedItem?.outputType ?? OutputType.transcription.rawValue,
+                outputType: (selectedItem?.outputType ?? .transcription).rawValue,
                 templateId: selectedItem?.localTemplateId,
                 templateNameSnapshot: selectedItem?.name,
                 templatePromptSnapshot: selectedItem?.prompt
