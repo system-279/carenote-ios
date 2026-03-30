@@ -38,6 +38,7 @@ final class TemplateListViewModel {
             fetched = try modelContext.fetch(descriptor)
         } catch {
             Self.logger.error("SwiftData fetch failed: \(error)")
+            templates = []
             return
         }
         templates = fetched.sortedForDisplay()

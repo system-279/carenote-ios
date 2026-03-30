@@ -220,4 +220,28 @@ struct TemplateListViewModelTests {
         #expect(vm.tenantTemplates.count == 1)
         #expect(vm.errorMessage != nil)
     }
+
+    // MARK: - OutputType Fallback
+
+    @Test
+    func 未知のoutputTypeはcustomにフォールバック() {
+        let item = TemplateItem(from: OutputTemplate(
+            name: "テスト",
+            prompt: "p",
+            outputType: "未知の値",
+            isPreset: false
+        ))
+        #expect(item.outputType == .custom)
+    }
+
+    @Test
+    func 既知のoutputTypeは正しくマッピング() {
+        let item = TemplateItem(from: OutputTemplate(
+            name: "テスト",
+            prompt: "p",
+            outputType: OutputType.transcription.rawValue,
+            isPreset: false
+        ))
+        #expect(item.outputType == .transcription)
+    }
 }

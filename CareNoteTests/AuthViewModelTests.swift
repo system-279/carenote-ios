@@ -115,3 +115,29 @@ struct AuthViewModelTests {
         #expect(vm.isLoading == false)
     }
 }
+
+// MARK: - UserRole Tests
+
+@Suite("UserRole Tests")
+struct UserRoleTests {
+
+    @Test func nilはmemberにマッピングされる() {
+        #expect(UserRole.from(firestoreValue: nil) == .member)
+    }
+
+    @Test func adminはadminにマッピングされる() {
+        #expect(UserRole.from(firestoreValue: "admin") == .admin)
+    }
+
+    @Test func memberはmemberにマッピングされる() {
+        #expect(UserRole.from(firestoreValue: "member") == .member)
+    }
+
+    @Test func 未知の文字列はmemberにフォールバック() {
+        #expect(UserRole.from(firestoreValue: "unknown") == .member)
+    }
+
+    @Test func 空文字列はmemberにフォールバック() {
+        #expect(UserRole.from(firestoreValue: "") == .member)
+    }
+}
