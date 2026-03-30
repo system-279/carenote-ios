@@ -28,7 +28,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.carenote.app
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "10"
+        CURRENT_PROJECT_VERSION: "11"
         INFOPLIST_FILE: CareNote/Info.plist
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: false
