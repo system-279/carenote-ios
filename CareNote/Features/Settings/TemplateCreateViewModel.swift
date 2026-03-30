@@ -130,6 +130,7 @@ final class TemplateCreateViewModel {
                 try modelContext.save()
                 return true
             } catch {
+                Self.logger.error("Failed to save personal template: \(error.localizedDescription)")
                 errorMessage = "保存に失敗しました: \(error.localizedDescription)"
                 return false
             }

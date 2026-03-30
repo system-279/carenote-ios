@@ -129,13 +129,14 @@ final class AuthViewModel {
 
     /// サインアウトする
     func signOut() {
+        errorMessage = nil
         do {
             try authProvider.signOut()
         } catch {
             Self.logger.error("signOut failed: \(error.localizedDescription)")
+            errorMessage = "ログアウトに失敗しました。再度お試しください。"
         }
         authState = .signedOut
-        errorMessage = nil
         displayName = nil
     }
 

@@ -233,6 +233,33 @@ struct TemplateCreateViewModelTests {
         #expect(mock.updateCalledWith?.name == "更新後")
     }
 
+    @Test @MainActor
+    func テナントテンプレート更新でFirestore失敗時にerrorMessage設定() async throws {
+        let container = try Self.makeContainer()
+        let mock = MockTemplateService()
+        mock.updateError = NSError(domain: "test", code: 500)
+        let existing = FirestoreTemplate(
+            id: "tmpl-1", name: "既存", prompt: "既存P",
+            outputType: OutputType.custom.rawValue,
+            createdBy: "u1", createdByName: "User", createdAt: Date(), updatedAt: Date()
+        )
+        let vm = TemplateCreateViewModel(
+            modelContext: container.mainContext,
+            tenantId: "tenant-1",
+            isAdmin: true,
+            userId: "user-1",
+            firestoreService: mock,
+            editingTemplate: existing
+        )
+        vm.name = "更新後"
+        vm.prompt = "更新P"
+
+        let result = await vm.save()
+
+        #expect(result == false)
+        #expect(vm.errorMessage?.contains("共有テンプレートの保存に失敗しました") == true)
+    }
+
     // MARK: - Validation failure
 
     @Test @MainActor
