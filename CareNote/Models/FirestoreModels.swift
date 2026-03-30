@@ -1,5 +1,16 @@
 import Foundation
 
+// MARK: - UserRole
+
+enum UserRole: String, Sendable, Codable {
+    case admin
+    case member
+
+    init(from string: String?) {
+        self = (string == "admin") ? .admin : .member
+    }
+}
+
 // MARK: - FirestoreRecording
 
 struct FirestoreRecording: Codable, Sendable, Identifiable {
@@ -40,13 +51,13 @@ struct FirestoreClient: Codable, Sendable, Identifiable {
 struct FirestoreMember: Codable, Sendable, Identifiable {
     var id: String?
     let name: String
-    let role: String
+    let role: UserRole
     let createdAt: Date
 }
 
 // MARK: - FirestoreTemplate
 
-struct FirestoreTemplate: Sendable, Identifiable, Equatable, Hashable {
+struct FirestoreTemplate: Codable, Sendable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let prompt: String
@@ -61,14 +72,14 @@ struct FirestoreTemplate: Sendable, Identifiable, Equatable, Hashable {
 
 /// 録音確認画面でプリセット・テナント共有・個人テンプレートを統一的に扱うための型
 struct TemplateItem: Identifiable, Equatable, Sendable {
-    enum Source: Sendable, Equatable {
+    enum Source: String, Sendable, Equatable {
         case preset
         case tenant
         case personal
     }
 
     /// Identifiable用の一意キー（source + rawId の組み合わせ）
-    var id: String { "\(source):\(rawId)" }
+    var id: String { "\(source.rawValue):\(rawId)" }
     let rawId: String
     let name: String
     let prompt: String
@@ -101,7 +112,7 @@ struct TemplateItem: Identifiable, Equatable, Sendable {
 struct WhitelistEntry: Sendable, Identifiable {
     let id: String
     let email: String
-    let role: String
+    let role: UserRole
     let addedBy: String
     let addedAt: Date
 }

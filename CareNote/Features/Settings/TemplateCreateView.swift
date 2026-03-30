@@ -1,4 +1,3 @@
-import FirebaseAuth
 import SwiftData
 import SwiftUI
 
@@ -32,13 +31,12 @@ struct TemplateCreateView: View {
             }
             .task {
                 if viewModel == nil {
-                    let currentUser = Auth.auth().currentUser
                     viewModel = TemplateCreateViewModel(
                         modelContext: modelContext,
                         tenantId: tenantId,
                         isAdmin: isAdmin,
                         userId: authViewModel.authState.userId,
-                        userName: currentUser?.displayName ?? currentUser?.email,
+                        userName: authViewModel.displayName,
                         editingTemplate: editingTemplate
                     )
                 }

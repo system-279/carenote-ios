@@ -26,10 +26,19 @@ protocol ClientManaging: Sendable {
     func deleteClient(tenantId: String, clientId: String) async throws
 }
 
+// MARK: - TemplateManaging
+
+protocol TemplateManaging: Sendable {
+    func fetchTemplates(tenantId: String) async throws -> [FirestoreTemplate]
+    func createTemplate(tenantId: String, name: String, prompt: String, outputType: String, createdBy: String, createdByName: String) async throws -> String
+    func updateTemplate(tenantId: String, templateId: String, name: String, prompt: String, outputType: String) async throws
+    func deleteTemplate(tenantId: String, templateId: String) async throws
+}
+
 // MARK: - FirestoreService
 
 /// Firestore CRUD service with multi-tenant structure: `tenants/{tenantId}/...`
-actor FirestoreService: RecordingStoring, ClientManaging {
+actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
 
     // MARK: - Properties
 
@@ -128,7 +137,7 @@ actor FirestoreService: RecordingStoring, ClientManaging {
                 return WhitelistEntry(
                     id: document.documentID,
                     email: data["email"] as? String ?? "",
-                    role: data["role"] as? String ?? "user",
+                    role: UserRole(from: data["role"] as? String),
                     addedBy: data["addedBy"] as? String ?? "",
                     addedAt: addedAt
                 )
@@ -138,11 +147,11 @@ actor FirestoreService: RecordingStoring, ClientManaging {
         }
     }
 
-    func addToWhitelist(tenantId: String, email: String, role: String, addedBy: String) async throws {
+    func addToWhitelist(tenantId: String, email: String, role: UserRole, addedBy: String) async throws {
         do {
             try await whitelistCollection(tenantId: tenantId).addDocument(data: [
                 "email": email.lowercased().trimmingCharacters(in: .whitespaces),
-                "role": role,
+                "role": role.rawValue,
                 "addedBy": addedBy,
                 "addedAt": Timestamp(date: Date()),
             ])
@@ -159,10 +168,10 @@ actor FirestoreService: RecordingStoring, ClientManaging {
         }
     }
 
-    func updateWhitelistRole(tenantId: String, entryId: String, role: String) async throws {
+    func updateWhitelistRole(tenantId: String, entryId: String, role: UserRole) async throws {
         do {
             try await whitelistCollection(tenantId: tenantId).document(entryId).updateData([
-                "role": role,
+                "role": role.rawValue,
             ])
         } catch {
             throw FirestoreError.operationFailed(error)
@@ -226,14 +235,15 @@ actor FirestoreService: RecordingStoring, ClientManaging {
 
     func createTemplate(tenantId: String, name: String, prompt: String, outputType: String, createdBy: String, createdByName: String) async throws -> String {
         do {
+            let now = Timestamp(date: Date())
             let docRef = try await templatesCollection(tenantId: tenantId).addDocument(data: [
                 "name": name,
                 "prompt": prompt,
                 "outputType": outputType,
                 "createdBy": createdBy,
                 "createdByName": createdByName,
-                "createdAt": Timestamp(date: Date()),
-                "updatedAt": Timestamp(date: Date()),
+                "createdAt": now,
+                "updatedAt": now,
             ])
             return docRef.documentID
         } catch {
