@@ -144,15 +144,19 @@ final class AuthViewModel {
             Task { @MainActor in
                 guard let self else { return }
                 if let user {
-                    let tokenResult = try? await user.getIDTokenResult()
-                    guard let tenantId = tokenResult?.claims["tenantId"] as? String,
-                          !tenantId.isEmpty else {
-                        self.authState = .signedOut
-                        return
+                    do {
+                        let tokenResult = try await user.getIDTokenResult()
+                        guard let tenantId = tokenResult.claims["tenantId"] as? String,
+                              !tenantId.isEmpty else {
+                            self.authState = .signedOut
+                            return
+                        }
+                        let role = tokenResult.claims["role"] as? String
+                        let isAdmin = role == "admin"
+                        self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
+                    } catch {
+                        // トークン取得の一時的な失敗ではサインアウトしない
                     }
-                    let role = tokenResult?.claims["role"] as? String
-                    let isAdmin = role == "admin"
-                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
                 } else {
                     self.authState = .signedOut
                 }

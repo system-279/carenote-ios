@@ -49,8 +49,12 @@ struct CareNoteApp: App {
     private static func migrateToProIfNeeded() {
         let key = "didMigrateToProd_v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
-        try? Auth.auth().signOut()
-        UserDefaults.standard.set(true, forKey: key)
+        do {
+            try Auth.auth().signOut()
+            UserDefaults.standard.set(true, forKey: key)
+        } catch {
+            // signOut失敗時はフラグを立てず次回起動で再試行
+        }
     }
 
     var body: some Scene {
