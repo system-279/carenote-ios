@@ -1,3 +1,4 @@
+import FirebaseAuth
 import SwiftData
 import SwiftUI
 
@@ -6,8 +7,19 @@ import SwiftUI
 struct TemplateCreateView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthViewModel.self) private var authViewModel
+
+    let tenantId: String?
+    let isAdmin: Bool
+    let editingTemplate: FirestoreTemplate?
 
     @State private var viewModel: TemplateCreateViewModel?
+
+    init(tenantId: String? = nil, isAdmin: Bool = false, editingTemplate: FirestoreTemplate? = nil) {
+        self.tenantId = tenantId
+        self.isAdmin = isAdmin
+        self.editingTemplate = editingTemplate
+    }
 
     var body: some View {
         NavigationStack {
@@ -20,10 +32,18 @@ struct TemplateCreateView: View {
             }
             .task {
                 if viewModel == nil {
-                    viewModel = TemplateCreateViewModel(modelContext: modelContext)
+                    let currentUser = Auth.auth().currentUser
+                    viewModel = TemplateCreateViewModel(
+                        modelContext: modelContext,
+                        tenantId: tenantId,
+                        isAdmin: isAdmin,
+                        userId: authViewModel.authState.userId,
+                        userName: currentUser?.displayName ?? currentUser?.email,
+                        editingTemplate: editingTemplate
+                    )
                 }
             }
-            .navigationTitle("テンプレート作成")
+            .navigationTitle(editingTemplate != nil ? "テンプレート編集" : "テンプレート作成")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -46,6 +66,23 @@ private struct TemplateCreateForm: View {
 
     var body: some View {
         Form {
+            if viewModel.canSelectTenantScope && !viewModel.isEditing {
+                Section {
+                    Picker("保存先", selection: $viewModel.scope) {
+                        ForEach(TemplateScope.allCases) { scope in
+                            Text(scope.rawValue).tag(scope)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("保存先")
+                } footer: {
+                    Text(viewModel.scope == .tenant
+                        ? "テナント全メンバーが利用できるテンプレートとして保存します"
+                        : "このデバイスでのみ利用できる個人テンプレートとして保存します")
+                }
+            }
+
             Section("基本情報") {
                 TextField("テンプレート名", text: $viewModel.name)
 
@@ -76,15 +113,22 @@ private struct TemplateCreateForm: View {
 
             Section {
                 Button {
-                    if viewModel.save() {
-                        dismiss()
+                    Task {
+                        if await viewModel.save() {
+                            dismiss()
+                        }
                     }
                 } label: {
-                    Text("保存")
-                        .frame(maxWidth: .infinity)
-                        .fontWeight(.semibold)
+                    if viewModel.isSaving {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("保存")
+                            .frame(maxWidth: .infinity)
+                            .fontWeight(.semibold)
+                    }
                 }
-                .disabled(!viewModel.isValid)
+                .disabled(!viewModel.isValid || viewModel.isSaving)
             }
         }
     }
@@ -93,5 +137,6 @@ private struct TemplateCreateForm: View {
 // MARK: - Preview
 
 #Preview {
-    TemplateCreateView()
+    TemplateCreateView(tenantId: "preview-tenant", isAdmin: true)
+        .environment(AuthViewModel())
 }

@@ -21,12 +21,14 @@ targets:
     type: application
     platform: iOS
     sources:
-      - CareNote
+      - path: CareNote
+        excludes:
+          - "Firebase/*/GoogleService-Info.plist"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.carenote.app
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "9"
+        CURRENT_PROJECT_VERSION: "11"
         INFOPLIST_FILE: CareNote/Info.plist
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: false
@@ -36,8 +38,12 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          GID_CLIENT_ID: 444137368705-6tppcletq10h3qhuprhafktpk5e2h1me.apps.googleusercontent.com
+          GID_REVERSED_CLIENT_ID: com.googleusercontent.apps.444137368705-6tppcletq10h3qhuprhafktpk5e2h1me
         Release:
           SWIFT_OPTIMIZATION_LEVEL: -O
+          GID_CLIENT_ID: 781674225072-ggct0s6glel3ma7isb79ge72mn8sbivj.apps.googleusercontent.com
+          GID_REVERSED_CLIENT_ID: com.googleusercontent.apps.781674225072-ggct0s6glel3ma7isb79ge72mn8sbivj
     dependencies:
       - package: firebase-ios-sdk
         product: FirebaseAuth
@@ -47,6 +53,21 @@ targets:
         product: GoogleSignIn
       - package: GoogleSignIn-iOS
         product: GoogleSignInSwift
+    preBuildScripts:
+      - name: Copy GoogleService-Info.plist
+        script: |
+          if [ "${CONFIGURATION}" == "Debug" ]; then
+            PLIST_SRC="${SRCROOT}/CareNote/Firebase/Dev/GoogleService-Info.plist"
+          else
+            PLIST_SRC="${SRCROOT}/CareNote/Firebase/Prod/GoogleService-Info.plist"
+          fi
+          PLIST_DST="${SRCROOT}/CareNote/GoogleService-Info.plist"
+          if [ -f "${PLIST_SRC}" ]; then
+            cp "${PLIST_SRC}" "${PLIST_DST}"
+            echo "Copied ${PLIST_SRC} to ${PLIST_DST}"
+          else
+            echo "warning: GoogleService-Info.plist not found at ${PLIST_SRC}"
+          fi
     entitlements:
       path: CareNote/CareNote.entitlements
 

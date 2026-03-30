@@ -8,7 +8,7 @@ import UIKit
 
 enum AuthState: Sendable, Equatable {
     case signedOut
-    case signedIn(userId: String, tenantId: String)
+    case signedIn(userId: String, tenantId: String, isAdmin: Bool = false)
 
     var isSignedIn: Bool {
         if case .signedIn = self { return true }
@@ -16,20 +16,25 @@ enum AuthState: Sendable, Equatable {
     }
 
     var userId: String? {
-        if case .signedIn(let userId, _) = self { return userId }
+        if case .signedIn(let userId, _, _) = self { return userId }
         return nil
     }
 
     var tenantId: String? {
-        if case .signedIn(_, let tenantId) = self { return tenantId }
+        if case .signedIn(_, let tenantId, _) = self { return tenantId }
         return nil
+    }
+
+    var isAdmin: Bool {
+        if case .signedIn(_, _, let isAdmin) = self { return isAdmin }
+        return false
     }
 }
 
 // MARK: - AuthProviding Protocol
 
 protocol AuthProviding: Sendable {
-    @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?)
+    @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: String?)
     func signOut() throws
 }
 
@@ -44,7 +49,7 @@ enum AuthError: Error, Sendable {
 
 final class FirebaseGoogleAuthProvider: AuthProviding {
     @MainActor
-    func signInWithGoogle() async throws -> (userId: String, tenantId: String?) {
+    func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: String?) {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else {
             throw AuthError.viewControllerNotFound
@@ -64,8 +69,9 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
         let authResult = try await Auth.auth().signIn(with: credential)
         let tokenResult = try await authResult.user.getIDTokenResult()
         let tenantId = tokenResult.claims["tenantId"] as? String
+        let role = tokenResult.claims["role"] as? String
 
-        return (userId: authResult.user.uid, tenantId: tenantId)
+        return (userId: authResult.user.uid, tenantId: tenantId, role: role)
     }
 
     func signOut() throws {
@@ -110,7 +116,8 @@ final class AuthViewModel {
                 return
             }
 
-            authState = .signedIn(userId: result.userId, tenantId: tenantId)
+            let isAdmin = result.role == "admin"
+            authState = .signedIn(userId: result.userId, tenantId: tenantId, isAdmin: isAdmin)
         } catch {
             errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
         }
@@ -137,13 +144,19 @@ final class AuthViewModel {
             Task { @MainActor in
                 guard let self else { return }
                 if let user {
-                    let tokenResult = try? await user.getIDTokenResult()
-                    guard let tenantId = tokenResult?.claims["tenantId"] as? String,
-                          !tenantId.isEmpty else {
-                        self.authState = .signedOut
-                        return
+                    do {
+                        let tokenResult = try await user.getIDTokenResult()
+                        guard let tenantId = tokenResult.claims["tenantId"] as? String,
+                              !tenantId.isEmpty else {
+                            self.authState = .signedOut
+                            return
+                        }
+                        let role = tokenResult.claims["role"] as? String
+                        let isAdmin = role == "admin"
+                        self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
+                    } catch {
+                        // トークン取得の一時的な失敗ではサインアウトしない
                     }
-                    self.authState = .signedIn(userId: user.uid, tenantId: tenantId)
                 } else {
                     self.authState = .signedOut
                 }

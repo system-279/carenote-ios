@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "carenote-dev-279",
+    "prod": "carenote-prod-279"
+  }
+}

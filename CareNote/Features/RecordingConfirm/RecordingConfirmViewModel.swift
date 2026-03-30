@@ -16,11 +16,12 @@ final class RecordingConfirmViewModel {
 
     var isSaving: Bool = false
     var errorMessage: String?
-    var templates: [OutputTemplate] = []
-    var selectedTemplate: OutputTemplate?
+    var templateItems: [TemplateItem] = []
+    var selectedItem: TemplateItem?
 
     private let modelContext: ModelContext
     private let tenantId: String
+    private let firestoreService: FirestoreService
     private let syncServiceFactory: @Sendable (ModelContainer, String) -> OutboxSyncService
 
     init(
@@ -31,6 +32,7 @@ final class RecordingConfirmViewModel {
         duration: TimeInterval,
         modelContext: ModelContext,
         tenantId: String,
+        firestoreService: FirestoreService = FirestoreService(),
         syncServiceFactory: (@Sendable (ModelContainer, String) -> OutboxSyncService)? = nil
     ) {
         self.audioURL = audioURL
@@ -40,6 +42,7 @@ final class RecordingConfirmViewModel {
         self.duration = duration
         self.modelContext = modelContext
         self.tenantId = tenantId
+        self.firestoreService = firestoreService
         self.syncServiceFactory = syncServiceFactory ?? Self.defaultSyncServiceFactory
     }
 
@@ -59,17 +62,17 @@ final class RecordingConfirmViewModel {
 
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "RecordingConfirmVM")
 
-    /// テンプレート一覧を読み込む（プリセット0件ならseedしてリトライ）
-    func loadTemplates() {
+    /// テンプレート一覧を読み込む（プリセット + テナント共有 + 個人）
+    func loadTemplates() async {
         Self.logger.info("loadTemplates called")
 
+        // 1. ローカルテンプレート（プリセット + 個人）
         let descriptor = FetchDescriptor<OutputTemplate>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
         var fetched = (try? modelContext.fetch(descriptor)) ?? []
         Self.logger.info("Initial fetch: \(fetched.count) templates")
 
-        // プリセットが0件の場合、seedしてリトライ
         let hasPresets = fetched.contains { $0.isPreset }
         if !hasPresets {
             Self.logger.warning("No preset templates found, attempting seed fallback")
@@ -78,15 +81,29 @@ final class RecordingConfirmViewModel {
             Self.logger.info("After seed fallback: \(fetched.count) templates")
         }
 
-        // プリセットを先に表示
-        templates = fetched.sortedForDisplay()
+        let sorted = fetched.sortedForDisplay()
+        let presetItems = sorted.filter(\.isPreset).map { TemplateItem(from: $0) }
+        let personalItems = sorted.filter { !$0.isPreset }.map { TemplateItem(from: $0) }
 
-        // デフォルトで最初のプリセット（文字起こし）を選択
-        if selectedTemplate == nil {
-            selectedTemplate = templates.first
+        // 2. テナント共有テンプレート（Firestore）— tenantIdが空の場合はスキップ
+        var tenantItems: [TemplateItem] = []
+        if !tenantId.isEmpty {
+            do {
+                let tenantTemplates = try await firestoreService.fetchTemplates(tenantId: tenantId)
+                tenantItems = tenantTemplates.map { TemplateItem(from: $0) }
+            } catch {
+                Self.logger.error("Failed to load tenant templates: \(error.localizedDescription)")
+            }
         }
 
-        Self.logger.info("loadTemplates done: \(self.templates.count) templates, selected=\(self.selectedTemplate?.name ?? "nil")")
+        // 3. 統合: プリセット → テナント共有 → 個人
+        templateItems = presetItems + tenantItems + personalItems
+
+        if selectedItem == nil {
+            selectedItem = templateItems.first
+        }
+
+        Self.logger.info("loadTemplates done: \(self.templateItems.count) items, selected=\(self.selectedItem?.name ?? "nil")")
     }
 
     /// 録音を保存し文字起こしを開始する
@@ -103,10 +120,10 @@ final class RecordingConfirmViewModel {
                 scene: scene.rawValue,
                 durationSeconds: duration,
                 localAudioPath: audioURL.path,
-                outputType: selectedTemplate?.outputType ?? OutputType.transcription.rawValue,
-                templateId: selectedTemplate?.id,
-                templateNameSnapshot: selectedTemplate?.name,
-                templatePromptSnapshot: selectedTemplate?.prompt
+                outputType: selectedItem?.outputType ?? OutputType.transcription.rawValue,
+                templateId: selectedItem?.localTemplateId,
+                templateNameSnapshot: selectedItem?.name,
+                templatePromptSnapshot: selectedItem?.prompt
             )
             modelContext.insert(recording)
             try modelContext.save()
@@ -120,7 +137,6 @@ final class RecordingConfirmViewModel {
             let syncService = syncServiceFactory(modelContext.container, tenantId)
             try await syncService.processQueueImmediately()
         } catch {
-            // エラーチェーンを展開して詳細表示
             let detail: String
             if let syncError = error as? OutboxSyncError {
                 switch syncError {

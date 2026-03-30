@@ -1,3 +1,4 @@
+import FirebaseAuth
 import FirebaseCore
 import SwiftData
 import SwiftUI
@@ -13,6 +14,7 @@ struct CareNoteApp: App {
     init() {
         if !CareNoteApp.isRunningTests {
             FirebaseApp.configure()
+            Self.migrateToProIfNeeded()
         }
 
         let schema = Schema([
@@ -41,13 +43,27 @@ struct CareNoteApp: App {
             || NSClassFromString("XCTestCase") != nil
     }
 
+    /// Dev→Prod移行: 古いFirebase Authセッション(Keychain)をクリアして再認証を強制する
+    /// UserDefaultsのフラグで一度だけ実行される
+    // TODO: 全TestFlightユーザーが更新完了後に削除する (added 2026-03-30)
+    private static func migrateToProIfNeeded() {
+        let key = "didMigrateToProd_v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        do {
+            try Auth.auth().signOut()
+            UserDefaults.standard.set(true, forKey: key)
+        } catch {
+            // signOut失敗時はフラグを立てず次回起動で再試行
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
                 switch authViewModel.authState {
                 case .signedOut:
                     SignInView(viewModel: authViewModel)
-                case .signedIn(_, let tenantId):
+                case .signedIn(_, let tenantId, _):
                     MainTabView(tenantId: tenantId)
                         .task {
                             let cacheService = ClientCacheService(
