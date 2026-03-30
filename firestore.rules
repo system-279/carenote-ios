@@ -33,8 +33,13 @@ service cloud.firestore {
         allow create, update, delete: if isAdmin(tenantId);
       }
 
-      // その他のコレクション（clients, recordings）
-      match /{document=**} {
+      // 利用者
+      match /clients/{clientId} {
+        allow read, write: if isTenantMember(tenantId);
+      }
+
+      // 録音
+      match /recordings/{recordingId} {
         allow read, write: if isTenantMember(tenantId);
       }
     }

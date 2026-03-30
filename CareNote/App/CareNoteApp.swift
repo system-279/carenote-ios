@@ -45,6 +45,7 @@ struct CareNoteApp: App {
 
     /// Dev→Prod移行: 古いFirebase Authセッション(Keychain)をクリアして再認証を強制する
     /// UserDefaultsのフラグで一度だけ実行される
+    // TODO: 全TestFlightユーザーが更新完了後に削除する (added 2026-03-30)
     private static func migrateToProIfNeeded() {
         let key = "didMigrateToProd_v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }

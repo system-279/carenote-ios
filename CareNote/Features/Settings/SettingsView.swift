@@ -15,6 +15,8 @@ struct SettingsView: View {
                 NavigationLink {
                     if let vm = templateListViewModel {
                         TemplateListView(viewModel: vm)
+                    } else {
+                        ProgressView()
                     }
                 } label: {
                     Label("テンプレート管理", systemImage: "doc.text")
