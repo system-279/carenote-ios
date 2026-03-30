@@ -4,12 +4,12 @@ import Testing
 // MARK: - MockAuthProvider
 
 final class MockAuthProvider: @unchecked Sendable, AuthProviding {
-    var signInResult: (userId: String, tenantId: String?, role: String?) = ("user-1", "tenant-1", nil)
+    var signInResult: (userId: String, tenantId: String?, role: UserRole) = ("user-1", "tenant-1", .member)
     var signInError: Error?
     var signOutError: Error?
 
     @MainActor
-    func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: String?) {
+    func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: UserRole) {
         if let error = signInError {
             throw error
         }
@@ -43,7 +43,7 @@ struct AuthViewModelTests {
     @Test @MainActor
     func signIn成功時にsignedInになる() async {
         let mock = MockAuthProvider()
-        mock.signInResult = (userId: "user-1", tenantId: "tenant-1", role: nil)
+        mock.signInResult = (userId: "user-1", tenantId: "tenant-1", role: .member)
         let vm = AuthViewModel(authProvider: mock)
 
         await vm.signInWithGoogle()
@@ -55,7 +55,7 @@ struct AuthViewModelTests {
     @Test @MainActor
     func admin権限でsignInするとisAdminがtrueになる() async {
         let mock = MockAuthProvider()
-        mock.signInResult = (userId: "user-1", tenantId: "tenant-1", role: "admin")
+        mock.signInResult = (userId: "user-1", tenantId: "tenant-1", role: .admin)
         let vm = AuthViewModel(authProvider: mock)
 
         await vm.signInWithGoogle()
@@ -67,7 +67,7 @@ struct AuthViewModelTests {
     @Test @MainActor
     func tenantIdが空の場合はsignedOutのまま() async {
         let mock = MockAuthProvider()
-        mock.signInResult = (userId: "user-1", tenantId: "", role: nil)
+        mock.signInResult = (userId: "user-1", tenantId: "", role: .member)
         let vm = AuthViewModel(authProvider: mock)
 
         await vm.signInWithGoogle()
@@ -79,7 +79,7 @@ struct AuthViewModelTests {
     @Test @MainActor
     func tenantIdがnilの場合はsignedOutのまま() async {
         let mock = MockAuthProvider()
-        mock.signInResult = (userId: "user-1", tenantId: nil, role: nil)
+        mock.signInResult = (userId: "user-1", tenantId: nil, role: .member)
         let vm = AuthViewModel(authProvider: mock)
 
         await vm.signInWithGoogle()
@@ -104,7 +104,7 @@ struct AuthViewModelTests {
     @Test @MainActor
     func signIn中はisLoadingがtrueになる() async {
         let mock = MockAuthProvider()
-        mock.signInResult = (userId: "user-1", tenantId: "tenant-1", role: nil)
+        mock.signInResult = (userId: "user-1", tenantId: "tenant-1", role: .member)
         let vm = AuthViewModel(authProvider: mock)
 
         #expect(vm.isLoading == false)

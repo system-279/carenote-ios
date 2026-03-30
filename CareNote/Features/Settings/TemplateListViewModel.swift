@@ -33,7 +33,13 @@ final class TemplateListViewModel {
 
     func loadTemplates() {
         let descriptor = FetchDescriptor<OutputTemplate>()
-        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        let fetched: [OutputTemplate]
+        do {
+            fetched = try modelContext.fetch(descriptor)
+        } catch {
+            Self.logger.error("SwiftData fetch failed: \(error)")
+            return
+        }
         templates = fetched.sortedForDisplay()
     }
 

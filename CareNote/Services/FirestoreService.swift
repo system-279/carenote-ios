@@ -30,8 +30,8 @@ protocol ClientManaging: Sendable {
 
 protocol TemplateManaging: Sendable {
     func fetchTemplates(tenantId: String) async throws -> [FirestoreTemplate]
-    func createTemplate(tenantId: String, name: String, prompt: String, outputType: String, createdBy: String, createdByName: String) async throws -> String
-    func updateTemplate(tenantId: String, templateId: String, name: String, prompt: String, outputType: String) async throws
+    func createTemplate(tenantId: String, name: String, prompt: String, outputType: OutputType, createdBy: String, createdByName: String) async throws -> String
+    func updateTemplate(tenantId: String, templateId: String, name: String, prompt: String, outputType: OutputType) async throws
     func deleteTemplate(tenantId: String, templateId: String) async throws
 }
 
@@ -137,7 +137,7 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                 return WhitelistEntry(
                     id: document.documentID,
                     email: data["email"] as? String ?? "",
-                    role: UserRole(from: data["role"] as? String),
+                    role: UserRole.from(firestoreValue: data["role"] as? String),
                     addedBy: data["addedBy"] as? String ?? "",
                     addedAt: addedAt
                 )
@@ -221,7 +221,7 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                     id: document.documentID,
                     name: data["name"] as? String ?? "",
                     prompt: data["prompt"] as? String ?? "",
-                    outputType: data["outputType"] as? String ?? OutputType.custom.rawValue,
+                    outputType: OutputType(rawValue: data["outputType"] as? String ?? "") ?? .custom,
                     createdBy: data["createdBy"] as? String ?? "",
                     createdByName: data["createdByName"] as? String ?? "",
                     createdAt: createdAt,
@@ -233,13 +233,13 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
         }
     }
 
-    func createTemplate(tenantId: String, name: String, prompt: String, outputType: String, createdBy: String, createdByName: String) async throws -> String {
+    func createTemplate(tenantId: String, name: String, prompt: String, outputType: OutputType, createdBy: String, createdByName: String) async throws -> String {
         do {
             let now = Timestamp(date: Date())
             let docRef = try await templatesCollection(tenantId: tenantId).addDocument(data: [
                 "name": name,
                 "prompt": prompt,
-                "outputType": outputType,
+                "outputType": outputType.rawValue,
                 "createdBy": createdBy,
                 "createdByName": createdByName,
                 "createdAt": now,
@@ -251,12 +251,12 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
         }
     }
 
-    func updateTemplate(tenantId: String, templateId: String, name: String, prompt: String, outputType: String) async throws {
+    func updateTemplate(tenantId: String, templateId: String, name: String, prompt: String, outputType: OutputType) async throws {
         do {
             try await templatesCollection(tenantId: tenantId).document(templateId).updateData([
                 "name": name,
                 "prompt": prompt,
-                "outputType": outputType,
+                "outputType": outputType.rawValue,
                 "updatedAt": Timestamp(date: Date()),
             ])
         } catch {

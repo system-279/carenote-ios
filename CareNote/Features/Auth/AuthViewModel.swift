@@ -35,7 +35,7 @@ enum AuthState: Sendable, Equatable {
 // MARK: - AuthProviding Protocol
 
 protocol AuthProviding: Sendable {
-    @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: String?)
+    @MainActor func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: UserRole)
     func signOut() throws
 }
 
@@ -50,7 +50,7 @@ enum AuthError: Error, Sendable {
 
 final class FirebaseGoogleAuthProvider: AuthProviding {
     @MainActor
-    func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: String?) {
+    func signInWithGoogle() async throws -> (userId: String, tenantId: String?, role: UserRole) {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else {
             throw AuthError.viewControllerNotFound
@@ -70,7 +70,7 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
         let authResult = try await Auth.auth().signIn(with: credential)
         let tokenResult = try await authResult.user.getIDTokenResult()
         let tenantId = tokenResult.claims["tenantId"] as? String
-        let role = tokenResult.claims["role"] as? String
+        let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
 
         return (userId: authResult.user.uid, tenantId: tenantId, role: role)
     }
@@ -119,7 +119,7 @@ final class AuthViewModel {
                 return
             }
 
-            let isAdmin = UserRole(from: result.role) == .admin
+            let isAdmin = result.role == .admin
             authState = .signedIn(userId: result.userId, tenantId: tenantId, isAdmin: isAdmin)
             updateDisplayName()
         } catch {
@@ -163,8 +163,8 @@ final class AuthViewModel {
                             self.authState = .signedOut
                             return
                         }
-                        let role = tokenResult.claims["role"] as? String
-                        let isAdmin = UserRole(from: role) == .admin
+                        let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
+                        let isAdmin = role == .admin
                         self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
                         self.updateDisplayName()
                     } catch {
