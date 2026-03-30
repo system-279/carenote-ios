@@ -21,10 +21,10 @@ final class TemplateListViewModel {
     let isAdmin: Bool
 
     private let modelContext: ModelContext
-    private let firestoreService: FirestoreService
+    private let firestoreService: any TemplateManaging
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "TemplateListVM")
 
-    init(modelContext: ModelContext, tenantId: String? = nil, isAdmin: Bool = false, firestoreService: FirestoreService = FirestoreService()) {
+    init(modelContext: ModelContext, tenantId: String? = nil, isAdmin: Bool = false, firestoreService: any TemplateManaging = FirestoreService()) {
         self.modelContext = modelContext
         self.tenantId = tenantId
         self.isAdmin = isAdmin

@@ -109,4 +109,31 @@ struct RecordingConfirmViewModelTests {
 
         #expect(vm.selectedItem?.name == "文字起こし（デフォルト）")
     }
+
+    @Test @MainActor
+    func テナントテンプレート取得失敗時にerrorMessageが設定されプリセットは残る() async throws {
+        let container = try Self.makeContainer()
+        let context = container.mainContext
+        let mock = MockTemplateService()
+        mock.fetchError = NSError(domain: "test", code: 1)
+
+        let vm = RecordingConfirmViewModel(
+            audioURL: URL(fileURLWithPath: "/tmp/test.m4a"),
+            clientId: "c1",
+            clientName: "テスト",
+            scene: .visit,
+            duration: 60,
+            modelContext: context,
+            tenantId: "tenant-1",
+            firestoreService: mock
+        )
+
+        await vm.loadTemplates()
+
+        #expect(vm.errorMessage?.contains("共有テンプレートの読み込みに失敗しました") == true)
+        let presets = vm.templateItems.filter { $0.source == .preset }
+        #expect(presets.count == 4)
+        let tenantItems = vm.templateItems.filter { $0.source == .tenant }
+        #expect(tenantItems.isEmpty)
+    }
 }

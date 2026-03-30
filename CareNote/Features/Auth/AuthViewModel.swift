@@ -2,6 +2,7 @@ import FirebaseAuth
 import FirebaseCore
 import GoogleSignIn
 import Observation
+import os.log
 import UIKit
 
 // MARK: - AuthState
@@ -88,9 +89,11 @@ final class AuthViewModel {
     var authState: AuthState = .signedOut
     var isLoading: Bool = false
     var errorMessage: String?
+    var displayName: String?
 
     private let authProvider: AuthProviding
     private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "AuthVM")
 
     init(authProvider: AuthProviding = FirebaseGoogleAuthProvider()) {
         self.authProvider = authProvider
@@ -116,8 +119,9 @@ final class AuthViewModel {
                 return
             }
 
-            let isAdmin = result.role == "admin"
+            let isAdmin = UserRole(from: result.role) == .admin
             authState = .signedIn(userId: result.userId, tenantId: tenantId, isAdmin: isAdmin)
+            updateDisplayName()
         } catch {
             errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
         }
@@ -125,13 +129,21 @@ final class AuthViewModel {
 
     /// サインアウトする
     func signOut() {
+        errorMessage = nil
         do {
             try authProvider.signOut()
         } catch {
-            print("[AuthViewModel] signOut failed: \(error.localizedDescription)")
+            Self.logger.error("signOut failed: \(error.localizedDescription)")
+            errorMessage = "ログアウトに失敗しました。再度お試しください。"
         }
         authState = .signedOut
-        errorMessage = nil
+        displayName = nil
+    }
+
+    private func updateDisplayName() {
+        guard FirebaseApp.app() != nil else { return }
+        let user = Auth.auth().currentUser
+        displayName = user?.displayName ?? user?.email
     }
 
     /// Firebase Auth の認証状態を監視して authState を更新する
@@ -152,10 +164,11 @@ final class AuthViewModel {
                             return
                         }
                         let role = tokenResult.claims["role"] as? String
-                        let isAdmin = role == "admin"
+                        let isAdmin = UserRole(from: role) == .admin
                         self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
+                        self.updateDisplayName()
                     } catch {
-                        // トークン取得の一時的な失敗ではサインアウトしない
+                        Self.logger.warning("Token refresh failed (keeping current state): \(error.localizedDescription)")
                     }
                 } else {
                     self.authState = .signedOut

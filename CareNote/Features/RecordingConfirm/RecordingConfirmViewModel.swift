@@ -21,7 +21,7 @@ final class RecordingConfirmViewModel {
 
     private let modelContext: ModelContext
     private let tenantId: String
-    private let firestoreService: FirestoreService
+    private let firestoreService: any TemplateManaging
     private let syncServiceFactory: @Sendable (ModelContainer, String) -> OutboxSyncService
 
     init(
@@ -32,7 +32,7 @@ final class RecordingConfirmViewModel {
         duration: TimeInterval,
         modelContext: ModelContext,
         tenantId: String,
-        firestoreService: FirestoreService = FirestoreService(),
+        firestoreService: any TemplateManaging = FirestoreService(),
         syncServiceFactory: (@Sendable (ModelContainer, String) -> OutboxSyncService)? = nil
     ) {
         self.audioURL = audioURL
@@ -93,6 +93,7 @@ final class RecordingConfirmViewModel {
                 tenantItems = tenantTemplates.map { TemplateItem(from: $0) }
             } catch {
                 Self.logger.error("Failed to load tenant templates: \(error.localizedDescription)")
+                errorMessage = "共有テンプレートの読み込みに失敗しました（プリセットは利用可能です）"
             }
         }
 

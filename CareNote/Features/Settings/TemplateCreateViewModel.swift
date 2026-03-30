@@ -32,7 +32,7 @@ final class TemplateCreateViewModel {
     private let editingTemplateId: String?
 
     private let modelContext: ModelContext
-    private let firestoreService: FirestoreService
+    private let firestoreService: any TemplateManaging
     private let userId: String?
     private let userName: String?
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "TemplateCreateVM")
@@ -43,7 +43,7 @@ final class TemplateCreateViewModel {
         isAdmin: Bool = false,
         userId: String? = nil,
         userName: String? = nil,
-        firestoreService: FirestoreService = FirestoreService(),
+        firestoreService: any TemplateManaging = FirestoreService(),
         editingTemplate: FirestoreTemplate? = nil
     ) {
         self.modelContext = modelContext
@@ -85,6 +85,11 @@ final class TemplateCreateViewModel {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if scope == .tenant, let tenantId, isAdmin {
+            guard let userId, !userId.isEmpty else {
+                errorMessage = "ユーザー情報が取得できません。再度サインインしてください。"
+                return false
+            }
+
             do {
                 if let editingId = editingTemplateId {
                     // 既存テナントテンプレートの更新
@@ -102,7 +107,7 @@ final class TemplateCreateViewModel {
                         name: trimmedName,
                         prompt: trimmedPrompt,
                         outputType: selectedOutputType.rawValue,
-                        createdBy: userId ?? "",
+                        createdBy: userId,
                         createdByName: userName ?? ""
                     )
                 }
@@ -125,6 +130,7 @@ final class TemplateCreateViewModel {
                 try modelContext.save()
                 return true
             } catch {
+                Self.logger.error("Failed to save personal template: \(error.localizedDescription)")
                 errorMessage = "保存に失敗しました: \(error.localizedDescription)"
                 return false
             }
