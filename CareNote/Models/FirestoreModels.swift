@@ -92,7 +92,9 @@ struct TemplateItem: Identifiable, Equatable, Sendable {
         self.rawId = local.id.uuidString
         self.name = local.name
         self.prompt = local.prompt
-        self.outputType = OutputType(rawValue: local.outputType) ?? .custom
+        self.outputType = OutputType(rawValue: local.outputType)
+            ?? OutputType.fromLegacy(local.outputType)
+            ?? .custom
         self.source = local.isPreset ? .preset : .personal
         self.localTemplateId = local.id
     }

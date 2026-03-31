@@ -221,7 +221,10 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                     id: document.documentID,
                     name: data["name"] as? String ?? "",
                     prompt: data["prompt"] as? String ?? "",
-                    outputType: OutputType(rawValue: data["outputType"] as? String ?? "") ?? .custom,
+                    outputType: {
+                        let raw = data["outputType"] as? String ?? ""
+                        return OutputType(rawValue: raw) ?? OutputType.fromLegacy(raw) ?? .custom
+                    }(),
                     createdBy: data["createdBy"] as? String ?? "",
                     createdByName: data["createdByName"] as? String ?? "",
                     createdAt: createdAt,

@@ -57,6 +57,36 @@ struct CareNoteApp: App {
         }
     }
 
+    /// OutputType/RecordingScene の旧日本語rawValueを英語識別子に一括変換
+    private static func migrateEnumRawValues(context: ModelContext) {
+        let key = "didMigrateEnumRawValues_v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+
+        do {
+            let recordings = try context.fetch(FetchDescriptor<RecordingRecord>())
+            for record in recordings {
+                if let old = record.outputType, let newType = OutputType.fromLegacy(old) {
+                    record.outputType = newType.rawValue
+                }
+                if let newScene = RecordingScene.fromLegacy(record.scene) {
+                    record.scene = newScene.rawValue
+                }
+            }
+
+            let templates = try context.fetch(FetchDescriptor<OutputTemplate>())
+            for template in templates {
+                if let newType = OutputType.fromLegacy(template.outputType) {
+                    template.outputType = newType.rawValue
+                }
+            }
+
+            try context.save()
+            UserDefaults.standard.set(true, forKey: key)
+        } catch {
+            // マイグレーション失敗時はフラグを立てず次回起動で再試行
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -76,6 +106,7 @@ struct CareNoteApp: App {
             }
             .onAppear {
                 authViewModel.checkAuthState()
+                Self.migrateEnumRawValues(context: modelContainer.mainContext)
                 PresetTemplates.seedIfNeeded(modelContext: modelContainer.mainContext)
             }
             .environment(authViewModel)

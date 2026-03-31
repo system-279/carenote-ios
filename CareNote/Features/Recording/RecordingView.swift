@@ -21,7 +21,7 @@ struct RecordingView: View {
                     .font(.title2)
                     .fontWeight(.bold)
 
-                Text(viewModel.scene.rawValue)
+                Text(viewModel.scene.displayName)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

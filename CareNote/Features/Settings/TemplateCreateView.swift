@@ -86,7 +86,7 @@ private struct TemplateCreateForm: View {
 
                 Picker("出力タイプ", selection: $viewModel.selectedOutputType) {
                     ForEach(outputTypes) { type in
-                        Text(type.rawValue).tag(type)
+                        Text(type.displayName).tag(type)
                     }
                 }
             }

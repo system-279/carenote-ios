@@ -223,7 +223,7 @@ private struct TenantTemplateRow: View {
 
                 Spacer()
 
-                Text(template.outputType.rawValue)
+                Text(template.outputType.displayName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
