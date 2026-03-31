@@ -1,29 +1,40 @@
 @testable import CareNote
 import Foundation
-import SwiftData
 import Testing
 
 // MARK: - ClientSelectViewModel Tests
+//
+// These tests verify search/filter logic only.
+// SwiftData integration is tested in ClientRepositoryTests.
 
-@Suite("ClientSelectViewModel Tests", .serialized)
+@Suite("ClientSelectViewModel Tests")
 struct ClientSelectViewModelTests {
 
+    /// Create a ViewModel with pre-loaded clients (no SwiftData dependency).
     @MainActor
-    private func makeViewModel() throws -> (ClientSelectViewModel, ClientRepository) {
-        let container = try makeTestModelContainer()
+    private func makeViewModel(clients: [ClientCache] = []) -> ClientSelectViewModel {
+        let container = try! makeClientOnlyTestModelContainer()
         let repo = ClientRepository(modelContext: container.mainContext)
         let vm = ClientSelectViewModel(clientRepository: repo)
-        return (vm, repo)
+        vm.clients = clients
+        return vm
+    }
+
+    private func sampleClients() -> [ClientCache] {
+        [
+            ClientCache(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
+            ClientCache(id: "c2", name: "田中花子", furigana: "たなかはなこ"),
+        ]
     }
 
     @Test @MainActor
     func loadClientsでクライアント一覧が読み込まれる() async throws {
-        let (vm, repo) = try makeViewModel()
-        try repo.replaceAll(with: [
-            ClientCache(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
-            ClientCache(id: "c2", name: "田中花子", furigana: "たなかはなこ"),
-        ])
+        let container = try makeClientOnlyTestModelContainer()
+        let repo = ClientRepository(modelContext: container.mainContext)
+        let vm = ClientSelectViewModel(clientRepository: repo)
 
+        // Insert via repo for loadClients test
+        try repo.replaceAll(with: sampleClients())
         await vm.loadClients()
 
         #expect(vm.clients.count == 2)
@@ -31,14 +42,8 @@ struct ClientSelectViewModelTests {
     }
 
     @Test @MainActor
-    func filteredClientsで名前検索がフィルタされる() async throws {
-        let (vm, repo) = try makeViewModel()
-        try repo.replaceAll(with: [
-            ClientCache(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
-            ClientCache(id: "c2", name: "田中花子", furigana: "たなかはなこ"),
-        ])
-
-        await vm.loadClients()
+    func filteredClientsで名前検索がフィルタされる() {
+        let vm = makeViewModel(clients: sampleClients())
         vm.searchText = "山田"
 
         #expect(vm.filteredClients.count == 1)
@@ -46,14 +51,8 @@ struct ClientSelectViewModelTests {
     }
 
     @Test @MainActor
-    func filteredClientsでふりがな検索がフィルタされる() async throws {
-        let (vm, repo) = try makeViewModel()
-        try repo.replaceAll(with: [
-            ClientCache(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
-            ClientCache(id: "c2", name: "田中花子", furigana: "たなかはなこ"),
-        ])
-
-        await vm.loadClients()
+    func filteredClientsでふりがな検索がフィルタされる() {
+        let vm = makeViewModel(clients: sampleClients())
         vm.searchText = "たなか"
 
         #expect(vm.filteredClients.count == 1)
@@ -61,40 +60,26 @@ struct ClientSelectViewModelTests {
     }
 
     @Test @MainActor
-    func filteredClientsで検索テキスト空は全件返す() async throws {
-        let (vm, repo) = try makeViewModel()
-        try repo.replaceAll(with: [
-            ClientCache(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
-            ClientCache(id: "c2", name: "田中花子", furigana: "たなかはなこ"),
-        ])
-
-        await vm.loadClients()
+    func filteredClientsで検索テキスト空は全件返す() {
+        let vm = makeViewModel(clients: sampleClients())
         vm.searchText = ""
 
         #expect(vm.filteredClients.count == 2)
     }
 
     @Test @MainActor
-    func filteredClientsでマッチなしは空配列() async throws {
-        let (vm, repo) = try makeViewModel()
-        try repo.replaceAll(with: [
-            ClientCache(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
-        ])
-
-        await vm.loadClients()
+    func filteredClientsでマッチなしは空配列() {
+        let vm = makeViewModel(clients: sampleClients())
         vm.searchText = "存在しない"
 
         #expect(vm.filteredClients.isEmpty)
     }
 
     @Test @MainActor
-    func 大文字小文字を無視して検索() async throws {
-        let (vm, repo) = try makeViewModel()
-        try repo.replaceAll(with: [
+    func 大文字小文字を無視して検索() {
+        let vm = makeViewModel(clients: [
             ClientCache(id: "c1", name: "TestUser", furigana: "てすとゆーざー"),
         ])
-
-        await vm.loadClients()
         vm.searchText = "testuser"
 
         #expect(vm.filteredClients.count == 1)
