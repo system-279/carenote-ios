@@ -108,10 +108,14 @@ struct CareNoteApp: App {
                     MainTabView(tenantId: tenantId)
                         .task {
                             let cacheService = ClientCacheService(
-                                firestoreService: FirestoreService(),
+                                clientManager: FirestoreService(),
                                 modelContainer: modelContainer
                             )
-                            try? await cacheService.refreshIfNeeded(tenantId: tenantId)
+                            do {
+                                try await cacheService.refreshIfNeeded(tenantId: tenantId)
+                            } catch {
+                                Self.logger.error("Client cache refresh failed: \(error.localizedDescription)")
+                            }
                         }
                 }
             }

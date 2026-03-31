@@ -38,7 +38,10 @@ final class ClientRepository: @unchecked Sendable {
 
     /// 全利用者キャッシュを入れ替える（Firestore からの全量同期用）
     func replaceAll(with clients: [ClientCache]) throws {
-        try modelContext.delete(model: ClientCache.self)
+        let existing = try modelContext.fetch(FetchDescriptor<ClientCache>())
+        for item in existing {
+            modelContext.delete(item)
+        }
         for client in clients {
             modelContext.insert(client)
         }
