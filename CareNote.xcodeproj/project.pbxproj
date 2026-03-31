@@ -57,6 +57,7 @@
 		D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */; };
 		DEA5BEF6533AC992CA56ACE1 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 780EB4E4898BE568D7C4B343 /* FirebaseAuth */; };
 		F503CBD6C43A313174F070AA /* OutboxSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31A63277501286D0902113FA /* OutboxSyncService.swift */; };
+		F816CF04479CE47B08176B58 /* EnumStableIdentifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD5333C19B8D05EBA8B140B /* EnumStableIdentifierTests.swift */; };
 		FD8997F1B7751D73EDA8FD45 /* TemplateListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B4E2778FEE530A1DC4DF06 /* TemplateListViewModelTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -96,6 +97,7 @@
 		5145C7CB43880EF7C55A94B3 /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		58D2B24492527E7C7CE59620 /* FirestoreModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreModels.swift; sourceTree = "<group>"; };
 		7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSelectViewModel.swift; sourceTree = "<group>"; };
+		7BD5333C19B8D05EBA8B140B /* EnumStableIdentifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnumStableIdentifierTests.swift; sourceTree = "<group>"; };
 		7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataModels.swift; sourceTree = "<group>"; };
 		7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingViewModelTests.swift; sourceTree = "<group>"; };
 		88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingListViewModelTests.swift; sourceTree = "<group>"; };
@@ -266,6 +268,7 @@
 			isa = PBXGroup;
 			children = (
 				9BD36BBA888E8960D96DC910 /* AuthViewModelTests.swift */,
+				7BD5333C19B8D05EBA8B140B /* EnumStableIdentifierTests.swift */,
 				39111C77F72B0E1CD982EBF3 /* MockTemplateService.swift */,
 				042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */,
 				E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */,
@@ -463,6 +466,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C60B40FD6A5D17715EAE0AD4 /* AuthViewModelTests.swift in Sources */,
+				F816CF04479CE47B08176B58 /* EnumStableIdentifierTests.swift in Sources */,
 				4FF4C8E0919F05FD11606327 /* MockTemplateService.swift in Sources */,
 				C6072255D88F74D009713EF5 /* OutboxSyncServiceTests.swift in Sources */,
 				7CA851BF8A07B0D97F3903A3 /* RecordingConfirmViewModelTests.swift in Sources */,

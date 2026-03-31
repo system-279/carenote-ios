@@ -244,4 +244,37 @@ struct TemplateListViewModelTests {
         ))
         #expect(item.outputType == .transcription)
     }
+
+    // MARK: - Legacy rawValue Fallback
+
+    @Test
+    func 旧日本語rawValueがfromLegacyで正しく変換される() {
+        let item = TemplateItem(from: OutputTemplate(
+            name: "テスト",
+            prompt: "p",
+            outputType: "文字起こし",
+            isPreset: false
+        ))
+        #expect(item.outputType == .transcription)
+    }
+
+    @Test
+    func 旧日本語rawValue全パターンが変換される() {
+        let legacy: [(String, OutputType)] = [
+            ("文字起こし", .transcription),
+            ("訪問記録", .visitRecord),
+            ("会議録", .meetingMinutes),
+            ("要約", .summary),
+            ("カスタム", .custom),
+        ]
+        for (raw, expected) in legacy {
+            let item = TemplateItem(from: OutputTemplate(
+                name: "テスト",
+                prompt: "p",
+                outputType: raw,
+                isPreset: false
+            ))
+            #expect(item.outputType == expected, "Legacy '\(raw)' should map to \(expected)")
+        }
+    }
 }

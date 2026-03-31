@@ -15,7 +15,7 @@ struct RecordingConfirmView: View {
                 // Recording Info Card
                 VStack(spacing: 12) {
                     InfoRow(label: "利用者", value: viewModel.clientName)
-                    InfoRow(label: "シーン", value: viewModel.scene.rawValue)
+                    InfoRow(label: "シーン", value: viewModel.scene.displayName)
                     InfoRow(label: "録音時間", value: viewModel.formattedDuration)
                 }
                 .padding()

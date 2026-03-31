@@ -42,7 +42,7 @@ private struct SceneRow: View {
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(scene.rawValue)
+                Text(scene.displayName)
                     .font(.body)
                     .fontWeight(.medium)
 
