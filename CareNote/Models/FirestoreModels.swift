@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 // MARK: - UserRole
 
@@ -72,6 +73,7 @@ struct FirestoreTemplate: Codable, Sendable, Identifiable, Equatable, Hashable {
 
 /// 録音確認画面でプリセット・テナント共有・個人テンプレートを統一的に扱うための型
 struct TemplateItem: Identifiable, Equatable, Sendable {
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "TemplateItem")
     enum Source: String, Sendable, Equatable {
         case preset
         case tenant
@@ -92,9 +94,12 @@ struct TemplateItem: Identifiable, Equatable, Sendable {
         self.rawId = local.id.uuidString
         self.name = local.name
         self.prompt = local.prompt
-        self.outputType = OutputType(rawValue: local.outputType)
-            ?? OutputType.fromLegacy(local.outputType)
-            ?? .custom
+        if let type = OutputType(rawValue: local.outputType) ?? OutputType.fromLegacy(local.outputType) {
+            self.outputType = type
+        } else {
+            Self.logger.error("TemplateItem: unrecognized outputType '\(local.outputType)' for template \(local.id), falling back to .custom")
+            self.outputType = .custom
+        }
         self.source = local.isPreset ? .preset : .personal
         self.localTemplateId = local.id
     }

@@ -1,5 +1,6 @@
 import FirebaseAuth
 import FirebaseCore
+import os.log
 import SwiftData
 import SwiftUI
 
@@ -57,6 +58,8 @@ struct CareNoteApp: App {
         }
     }
 
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "CareNoteApp")
+
     /// OutputType/RecordingScene の旧日本語rawValueを英語識別子に一括変換
     private static func migrateEnumRawValues(context: ModelContext) {
         let key = "didMigrateEnumRawValues_v1"
@@ -67,9 +70,13 @@ struct CareNoteApp: App {
             for record in recordings {
                 if let old = record.outputType, let newType = OutputType.fromLegacy(old) {
                     record.outputType = newType.rawValue
+                } else if let old = record.outputType, OutputType(rawValue: old) == nil {
+                    logger.warning("migrateEnumRawValues: unrecognized outputType '\(old)' for record \(record.id), leaving unchanged")
                 }
                 if let newScene = RecordingScene.fromLegacy(record.scene) {
                     record.scene = newScene.rawValue
+                } else if RecordingScene(rawValue: record.scene) == nil {
+                    logger.warning("migrateEnumRawValues: unrecognized scene '\(record.scene)' for record \(record.id), leaving unchanged")
                 }
             }
 
@@ -77,13 +84,17 @@ struct CareNoteApp: App {
             for template in templates {
                 if let newType = OutputType.fromLegacy(template.outputType) {
                     template.outputType = newType.rawValue
+                } else if OutputType(rawValue: template.outputType) == nil {
+                    logger.warning("migrateEnumRawValues: unrecognized outputType '\(template.outputType)' for template \(template.id), leaving unchanged")
                 }
             }
 
             try context.save()
             UserDefaults.standard.set(true, forKey: key)
+            logger.info("migrateEnumRawValues: completed successfully")
         } catch {
-            // マイグレーション失敗時はフラグを立てず次回起動で再試行
+            // フラグを立てず次回起動で再試行。TemplateItem.init の fromLegacy フォールバックが保護層として機能
+            logger.error("migrateEnumRawValues: failed, will retry on next launch: \(error.localizedDescription)")
         }
     }
 

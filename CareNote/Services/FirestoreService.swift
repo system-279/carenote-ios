@@ -1,5 +1,6 @@
 import FirebaseFirestore
 import Foundation
+import os.log
 
 // MARK: - FirestoreError
 
@@ -42,6 +43,7 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
 
     // MARK: - Properties
 
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "FirestoreService")
     private let _firestore: Firestore?
 
     private var db: Firestore {
@@ -223,7 +225,11 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                     prompt: data["prompt"] as? String ?? "",
                     outputType: {
                         let raw = data["outputType"] as? String ?? ""
-                        return OutputType(rawValue: raw) ?? OutputType.fromLegacy(raw) ?? .custom
+                        if let type = OutputType(rawValue: raw) ?? OutputType.fromLegacy(raw) {
+                            return type
+                        }
+                        Self.logger.error("fetchTemplates: unrecognized outputType '\(raw)' in document \(document.documentID), falling back to .custom")
+                        return .custom
                     }(),
                     createdBy: data["createdBy"] as? String ?? "",
                     createdByName: data["createdByName"] as? String ?? "",
