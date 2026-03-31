@@ -21,13 +21,13 @@ actor ClientCacheService {
 
     // MARK: - Properties
 
-    private let firestoreService: FirestoreService
+    private let clientManager: any ClientManaging
     private let modelContainer: ModelContainer
 
     // MARK: - Initialization
 
-    init(firestoreService: FirestoreService, modelContainer: ModelContainer) {
-        self.firestoreService = firestoreService
+    init(clientManager: any ClientManaging, modelContainer: ModelContainer) {
+        self.clientManager = clientManager
         self.modelContainer = modelContainer
     }
 
@@ -66,7 +66,7 @@ actor ClientCacheService {
         // Fetch from Firestore
         let clients: [FirestoreClient]
         do {
-            clients = try await firestoreService.fetchClients(tenantId: tenantId)
+            clients = try await clientManager.fetchClients(tenantId: tenantId)
         } catch {
             throw ClientCacheError.refreshFailed(error)
         }
@@ -75,7 +75,10 @@ actor ClientCacheService {
 
         // Delete existing cache
         do {
-            try context.delete(model: ClientCache.self)
+            let existing = try context.fetch(FetchDescriptor<ClientCache>())
+            for item in existing {
+                context.delete(item)
+            }
         } catch {
             throw ClientCacheError.fetchFailed(error)
         }

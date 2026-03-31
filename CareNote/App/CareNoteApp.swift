@@ -108,7 +108,7 @@ struct CareNoteApp: App {
                     MainTabView(tenantId: tenantId)
                         .task {
                             let cacheService = ClientCacheService(
-                                firestoreService: FirestoreService(),
+                                clientManager: FirestoreService(),
                                 modelContainer: modelContainer
                             )
                             try? await cacheService.refreshIfNeeded(tenantId: tenantId)
