@@ -42,6 +42,24 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Boot Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data['devices'].items():
+              if 'iOS' in runtime:
+                  for d in devices:
+                      if d['name'] == 'iPhone 16 Pro' and d['isAvailable']:
+                          print(d['udid'])
+                          sys.exit(0)
+          " 2>/dev/null)
+          if [ -n "$DEVICE_ID" ]; then
+            echo "Booting simulator $DEVICE_ID"
+            xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+            xcrun simctl bootstatus "$DEVICE_ID" -b
+          fi
+
       - name: Build and Test
         run: |
           set -o pipefail
