@@ -3,10 +3,10 @@ import Foundation
 
 // MARK: - MockURLProtocol
 
-/// URL-based routing mock for parallel test execution safety.
-/// Multiple test suites can register handlers keyed by URL substring.
+/// URL-based routing mock that allows multiple handlers to be registered by URL substring.
+/// Note: `handlers` is a global nonisolated(unsafe) static dictionary. Test suites that register
+/// handlers must use `.serialized` to avoid cross-suite state collisions.
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
     nonisolated(unsafe) static var handlers: [String: (URLRequest) throws -> (HTTPURLResponse, Data)] = [:]
 
     static func setHandler(
@@ -18,7 +18,6 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 
     static func clearHandlers() {
         handlers.removeAll()
-        requestHandler = nil
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -27,7 +26,9 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         let urlString = request.url?.absoluteString ?? ""
 
-        // Try URL-based routing first
+        // URL-based routing: match registered handlers by URL substring
+        // NOTE: Dictionary iteration order is undefined in Swift.
+        // Ensure registered keys are mutually exclusive substrings.
         for (key, handler) in Self.handlers {
             if urlString.contains(key) {
                 do {
@@ -42,29 +43,12 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
             }
         }
 
-        // Fallback to legacy single handler
-        if let handler = Self.requestHandler {
-            do {
-                let (response, data) = try handler(request)
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-                client?.urlProtocol(self, didLoad: data)
-                client?.urlProtocolDidFinishLoading(self)
-            } catch {
-                client?.urlProtocol(self, didFailWithError: error)
-            }
-            return
-        }
-
-        // No handler matched — return 404
-        let response = HTTPURLResponse(
-            url: request.url!,
-            statusCode: 404,
-            httpVersion: nil,
-            headerFields: nil
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data())
-        client?.urlProtocolDidFinishLoading(self)
+        // No handler matched — fail fast to detect test setup errors
+        fatalError("""
+        MockURLProtocol: No handler registered for URL: \(urlString)
+        Registered keys: \(Array(Self.handlers.keys))
+        Did you forget to call MockURLProtocol.setHandler(for:) in your test?
+        """)
     }
 
     override func stopLoading() {}
@@ -73,11 +57,15 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 // MARK: - MockAccessTokenProvider
 
 actor MockAccessTokenProvider: AccessTokenProviding {
-    var tokenToReturn: String = "mock-access-token"
-    var errorToThrow: Error?
+    private var tokenToReturn: String = "mock-access-token"
+    private var errorToThrow: Error?
 
-    func setError(_ error: Error) {
+    func setError(_ error: Error?) {
         self.errorToThrow = error
+    }
+
+    func setToken(_ token: String) {
+        self.tokenToReturn = token
     }
 
     func getAccessToken() async throws -> String {

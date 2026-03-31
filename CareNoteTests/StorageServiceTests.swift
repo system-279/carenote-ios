@@ -64,12 +64,12 @@ struct StorageServiceTests {
     // MARK: - Auth Failure
 
     @Test
-    func 認証失敗時にuploadFailedエラー() async {
+    func 認証失敗時にuploadFailedエラー() async throws {
         let tokenProvider = MockAccessTokenProvider()
         await tokenProvider.setError(WIFError.notAuthenticated)
 
         let service = makeService(tokenProvider: tokenProvider)
-        let fileURL = try! createTempAudioFile()
+        let fileURL = try createTempAudioFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
         await #expect(throws: StorageError.self) {
@@ -80,14 +80,14 @@ struct StorageServiceTests {
     // MARK: - HTTP Error
 
     @Test
-    func HTTP403でuploadFailedエラー() async {
+    func HTTP403でuploadFailedエラー() async throws {
         MockURLProtocol.setHandler(for: storageURLKey) { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!
             return (response, "Forbidden".data(using: .utf8)!)
         }
         defer { MockURLProtocol.handlers.removeValue(forKey: storageURLKey) }
 
-        let fileURL = try! createTempAudioFile()
+        let fileURL = try createTempAudioFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
         let service = makeService()
@@ -97,14 +97,14 @@ struct StorageServiceTests {
     }
 
     @Test
-    func HTTP500でuploadFailedエラー() async {
+    func HTTP500でuploadFailedエラー() async throws {
         MockURLProtocol.setHandler(for: storageURLKey) { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (response, "Internal Server Error".data(using: .utf8)!)
         }
         defer { MockURLProtocol.handlers.removeValue(forKey: storageURLKey) }
 
-        let fileURL = try! createTempAudioFile()
+        let fileURL = try createTempAudioFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
         let service = makeService()
