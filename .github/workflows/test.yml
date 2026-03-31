@@ -50,9 +50,38 @@ jobs:
             -scheme CareNote \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -resultBundlePath TestResults.xcresult \
+            -parallel-testing-enabled NO \
             -retry-tests-on-failure \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee build.log | tail -50
+            2>&1 | tee build.log | tail -100 \
+          || true
+
+      - name: Check test results
+        run: |
+          if [ ! -d TestResults.xcresult ]; then
+            echo "::error::No test results found - build likely failed"
+            exit 1
+          fi
+          SUMMARY=$(xcrun xcresulttool get test-results summary --path TestResults.xcresult 2>/dev/null || echo '{}')
+          PASSED=$(echo "$SUMMARY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('passedTests',0))")
+          FAILED=$(echo "$SUMMARY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('failedTests',0))")
+          echo "Tests passed: $PASSED, failed: $FAILED"
+          if [ "$PASSED" -eq 0 ]; then
+            echo "::error::No tests passed"
+            exit 1
+          fi
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED tests failed"
+            FAILURES=$(echo "$SUMMARY" | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          for f in d.get('testFailures',[])[:10]:
+              print(f'  - {f.get(\"testName\",\"unknown\")}: {f.get(\"failureText\",\"\")[:100]}')
+          " 2>/dev/null || true)
+            echo "$FAILURES"
+            exit 1
+          fi
+          echo "All $PASSED tests passed"
 
       - name: Upload test results
         if: always()
