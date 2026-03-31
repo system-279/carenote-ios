@@ -1,10 +1,12 @@
 {
   "name": "functions",
   "version": "1.0.0",
-  "description": "",
+  "description": "CareNote Cloud Functions & Firestore Rules Tests",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha --timeout 10000 --exit test/**/*.test.js",
+    "test:rules": "mocha --timeout 10000 --exit test/firestore-rules.test.js",
+    "test:auth": "mocha --timeout 10000 --exit test/auth-blocking.test.js"
   },
   "keywords": [],
   "author": "",
@@ -16,5 +18,11 @@
   "dependencies": {
     "firebase-admin": "^13.7.0",
     "firebase-functions": "^7.2.2"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase-functions-test": "^3.4.0",
+    "mocha": "^11.1.0",
+    "chai": "^4.5.0"
   }
 }
