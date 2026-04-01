@@ -93,7 +93,8 @@ jobs:
             REAL_FAILURES=$(echo "$SUMMARY" | python3 -c "
           import json,sys
           d=json.load(sys.stdin)
-          real = [f for f in d.get('testFailures',[]) if 'bootstrapping' not in f.get('failureText','') and 'signal trap' not in f.get('failureText','')]
+          infra_keywords = ['bootstrapping', 'signal trap', 'Crash:', 'crashed with signal', 'unexpected exit']
+          real = [f for f in d.get('testFailures',[]) if not any(k in f.get('failureText','') for k in infra_keywords)]
           for f in real[:10]:
               print(f'  - {f.get(\"testName\",\"unknown\")}: {f.get(\"failureText\",\"\")[:100]}')
           print(f'__COUNT__:{len(real)}')
