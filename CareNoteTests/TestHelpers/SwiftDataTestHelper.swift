@@ -2,14 +2,28 @@
 import Foundation
 import SwiftData
 
-/// Create an in-memory ModelContainer for testing.
-/// Each call creates an independent container to avoid cross-test state leaks.
+/// Create a ModelContainer backed by a unique temporary file for testing.
+/// Each call creates an independent store to avoid cross-test SwiftData conflicts.
 /// NOTE: Add new `@Model` types here when introduced to the schema.
 @MainActor
 func makeTestModelContainer() throws -> ModelContainer {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
+    let config = ModelConfiguration(url: url)
     return try ModelContainer(
         for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
+        configurations: config
+    )
+}
+
+/// Create a minimal ModelContainer with only ClientCache for lightweight tests.
+@MainActor
+func makeClientOnlyTestModelContainer() throws -> ModelContainer {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
+    let config = ModelConfiguration(url: url)
+    return try ModelContainer(
+        for: ClientCache.self,
         configurations: config
     )
 }

@@ -15,7 +15,9 @@ private actor StubAccessTokenProvider: AccessTokenProviding {
 struct OutboxSyncServiceTests {
 
     private static func makeContainer() throws -> ModelContainer {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
+        let config = ModelConfiguration(url: url)
         return try ModelContainer(
             for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
             configurations: config
