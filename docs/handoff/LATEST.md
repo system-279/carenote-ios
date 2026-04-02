@@ -1,55 +1,57 @@
-# Handoff — Sprint 4 開始前 (2026-04-01)
+# Handoff — App Store Review リジェクト対応 (2026-04-02)
 
 ## セッション成果
 
-### CI修正 (PR #63, merged)
+### App Store Review 対応 (Issue #67)
 
-| 修正内容 | 詳細 |
-|----------|------|
-| Swift 6 Sendable違反 | `@preconcurrency import FirebaseAuth/GoogleSignIn` で GIDSignInResult/AuthDataResult/AuthTokenResult の non-sendable エラー解消 |
-| SwiftDataテスト安定化 | `isStoredInMemoryOnly` → UUID付き一時ファイルstore に変更（並列コンテナ競合回避） |
-| VMテスト分離 | `ClientSelectViewModelTests` を SwiftData 非依存に変更（フィルタロジックのみテスト） |
-| CI判定ロジック | xcresult解析でインフラクラッシュ（SwiftData bootstrap）を分離、実テスト失敗のみで判定 |
-| シミュレータ事前ブート | CI環境で "bootstrapping" 失敗を回避 |
-| 並列テスト無効化 | `-parallel-testing-enabled NO` で SwiftData 並列クラッシュ回避 |
+App Store Review で Guideline 4.8 (Sign in with Apple) + 2.1(a) (デモアカウント) によりリジェクト。1セッションでコード実装→外部設定→再提出まで完了。
 
-### Codex セカンドオピニオン結果
+| 対応項目 | PR/設定 | 状態 |
+|---------|--------|------|
+| Sign in with Apple 実装 | PR #64 (merged) | 完了 |
+| メール/パスワード認証追加 | PR #64 | 完了 |
+| Apple Developer Portal capability | 手動設定 | 完了 |
+| Firebase (Dev+Prod) Apple+メール認証 | 手動設定 | 完了 |
+| デモアカウント作成 (Dev+Prod) | Firebase Admin API | 完了 |
+| App Store Connect Review情報 | 手動設定 | 完了 |
+| スクリーンショット差し替え (iPhone+iPad) | 手動設定 | 完了 |
+| Build 22 で審査再提出 | upload-testflight.sh | **審査待ち** |
 
-SwiftDataテスト安定化のベストプラクティス:
-1. 1テスト1コンテナ、1テスト1ストアURL（UUID一時ファイル）
-2. VMテストではSwiftData不要 → fake/直接プロパティ設定
-3. テスト用スキーマ最小化（ClientCache専用コンテナ等）
-4. SwiftData統合テストは少数に絞り直列実行
+### 変更ファイル (PR #64)
+- `AppleSignInCoordinator.swift` (新規): CryptoKit nonce + Firebase Auth統合
+- `AuthViewModel.swift`: handleAppleSignInResult(), signInWithEmail(), EmailAuthProviding
+- `SignInView.swift`: Apple / Google / メール・パスワードの3ログイン方法
+- `CareNote.entitlements`: Sign in with Apple capability
+- `AuthViewModelTests.swift`: Email Sign-In 4件 + AuthError 2件追加
+
+### 設計判断
+- Apple Sign-In ボタンは表示必須（Guideline 4.8）だが、tenantIdクレームガードにより未登録ユーザーはブロックされる
+- メール/パスワード認証はレビュアー用デモアカウント目的で追加
+- 将来的な Apple ID アカウントリンクは Issue #65 で管理
+
+### デモアカウント情報
+- メール: `demo-reviewer@carenote.jp`
+- パスワード: `CareNote2026Review!`
+- カスタムクレーム: tenantId=279, role=member
+- 環境: Dev (carenote-dev-279) + Prod (carenote-prod-279) 両方に作成済み
 
 ## 現在の状態
 
-- **ブランチ**: main (`a8298c6`)
-- **CI**: リラン中（前回は iOS Simulator Runtime ダウンロード一時障害で失敗、テストコード自体は問題なし）
-- **テスト**: ローカル 93件全PASS / 13 suite
-- **オープンPR**: #44 (stale), #46 (stale)
+- **ブランチ**: main (`8fc3839`)
+- **ビルド**: Build 22 (App Store Connect で審査待ち)
+- **テスト**: 18件全PASS (Auth関連) + 既存テスト回帰なし
 
 ## オープンIssue
 
-| # | タイトル | ラベル |
-|---|---------|--------|
-| #43 | 録音詳細の文字起こし結果をGoogleドキュメントにエクスポート | enhancement |
+| # | タイトル | ラベル | 状態 |
+|---|---------|--------|------|
+| #67 | App Store Review リジェクト対応 | P0, bug | 審査待ち |
+| #65 | Apple ID アカウントリンク | enhancement | 将来対応 |
+| #43 | Google Docs エクスポート | enhancement | Sprint 4 |
 
 ## 次セッション推奨アクション
 
-### 即時確認
-1. CIリラン結果確認（`gh run list --limit 1`）
-2. CI失敗が続く場合: `xcodebuild -downloadPlatform iOS` の `continue-on-error: true` 追加を検討
-
-### Sprint 4: #43 Google Docsエクスポート
-
-| Phase | タスク |
-|-------|--------|
-| 1.1 | 既存ブランチ `feature/google-docs-export` 調査（mainとの乖離確認） |
-| 1.2 | Google Docs API 仕様確認（認証フロー、スコープ） |
-| 1.3 | GoogleDocsExportService 実装 |
-| 1.4 | UI（エクスポートボタン + 進捗表示） |
-| 1.5 | テスト + PR |
-
-### 技術的負債
-- SwiftData並列テストクラッシュ: Apple側のバグ修正待ち。現在はUUID一時ファイル + 直列実行 + xcresult判定で回避
-- stale PR (#44, #46): クローズ検討
+1. **審査結果確認**（2026-04-04 までに回答予定）
+2. 審査通過 → TestFlight 配布 → #43 Google Docs エクスポートに着手
+3. 審査不通過 → 指摘内容に対応
+4. #65 Apple ID アカウントリンクは審査通過後に検討
