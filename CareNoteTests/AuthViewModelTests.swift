@@ -1,4 +1,5 @@
 @testable import CareNote
+import Foundation
 import Testing
 
 // MARK: - MockAuthProvider
@@ -20,6 +21,20 @@ final class MockAuthProvider: @unchecked Sendable, AuthProviding {
         if let error = signOutError {
             throw error
         }
+    }
+}
+
+// MARK: - MockEmailAuthProvider
+
+final class MockEmailAuthProvider: @unchecked Sendable, EmailAuthProviding {
+    var signInResult: (userId: String, tenantId: String?, role: UserRole) = ("user-1", "tenant-1", .member)
+    var signInError: Error?
+
+    func signIn(email: String, password: String) async throws -> (userId: String, tenantId: String?, role: UserRole) {
+        if let error = signInError {
+            throw error
+        }
+        return signInResult
     }
 }
 
@@ -116,6 +131,63 @@ struct AuthViewModelTests {
     }
 }
 
+// MARK: - Email Sign-In Tests
+
+@Suite("Email Sign-In Tests")
+struct EmailSignInTests {
+
+    @Test @MainActor
+    func メールサインイン成功時にsignedInになる() async {
+        let mockAuth = MockAuthProvider()
+        let mockEmail = MockEmailAuthProvider()
+        mockEmail.signInResult = (userId: "user-2", tenantId: "tenant-1", role: .member)
+        let vm = AuthViewModel(authProvider: mockAuth, emailAuthProvider: mockEmail)
+
+        await vm.signInWithEmail(email: "test@example.com", password: "password")
+
+        #expect(vm.authState == .signedIn(userId: "user-2", tenantId: "tenant-1", isAdmin: false))
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test @MainActor
+    func メールサインインでadminの場合isAdminがtrue() async {
+        let mockAuth = MockAuthProvider()
+        let mockEmail = MockEmailAuthProvider()
+        mockEmail.signInResult = (userId: "user-2", tenantId: "tenant-1", role: .admin)
+        let vm = AuthViewModel(authProvider: mockAuth, emailAuthProvider: mockEmail)
+
+        await vm.signInWithEmail(email: "admin@example.com", password: "password")
+
+        #expect(vm.authState == .signedIn(userId: "user-2", tenantId: "tenant-1", isAdmin: true))
+    }
+
+    @Test @MainActor
+    func メールサインインでtenantIdがない場合エラー() async {
+        let mockAuth = MockAuthProvider()
+        let mockEmail = MockEmailAuthProvider()
+        mockEmail.signInResult = (userId: "user-2", tenantId: nil, role: .member)
+        let vm = AuthViewModel(authProvider: mockAuth, emailAuthProvider: mockEmail)
+
+        await vm.signInWithEmail(email: "test@example.com", password: "password")
+
+        #expect(vm.authState == .signedOut)
+        #expect(vm.errorMessage?.contains("テナント情報") == true)
+    }
+
+    @Test @MainActor
+    func メールサインイン失敗時にerrorMessageが設定される() async {
+        let mockAuth = MockAuthProvider()
+        let mockEmail = MockEmailAuthProvider()
+        mockEmail.signInError = NSError(domain: "test", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid credentials"])
+        let vm = AuthViewModel(authProvider: mockAuth, emailAuthProvider: mockEmail)
+
+        await vm.signInWithEmail(email: "test@example.com", password: "wrong")
+
+        #expect(vm.authState == .signedOut)
+        #expect(vm.errorMessage?.contains("サインインに失敗しました") == true)
+    }
+}
+
 // MARK: - UserRole Tests
 
 @Suite("UserRole Tests")
@@ -139,5 +211,21 @@ struct UserRoleTests {
 
     @Test func 空文字列はmemberにフォールバック() {
         #expect(UserRole.from(firestoreValue: "") == .member)
+    }
+}
+
+// MARK: - AuthError Tests
+
+@Suite("AuthError Tests")
+struct AuthErrorTests {
+
+    @Test func appleIdTokenMissingが存在する() {
+        let error = AuthError.appleIdTokenMissing
+        #expect(error == .appleIdTokenMissing)
+    }
+
+    @Test func appleSignInCancelledが存在する() {
+        let error = AuthError.appleSignInCancelled
+        #expect(error == .appleSignInCancelled)
     }
 }

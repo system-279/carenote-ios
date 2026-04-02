@@ -1,3 +1,4 @@
+import AuthenticationServices
 @preconcurrency import FirebaseAuth
 import FirebaseCore
 @preconcurrency import GoogleSignIn
@@ -44,6 +45,8 @@ protocol AuthProviding: Sendable {
 enum AuthError: Error, Sendable {
     case viewControllerNotFound
     case googleIdTokenMissing
+    case appleIdTokenMissing
+    case appleSignInCancelled
 }
 
 // MARK: - FirebaseGoogleAuthProvider
@@ -81,6 +84,24 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
     }
 }
 
+// MARK: - EmailAuthProviding Protocol
+
+protocol EmailAuthProviding: Sendable {
+    func signIn(email: String, password: String) async throws -> (userId: String, tenantId: String?, role: UserRole)
+}
+
+// MARK: - FirebaseEmailAuthProvider
+
+final class FirebaseEmailAuthProvider: EmailAuthProviding {
+    func signIn(email: String, password: String) async throws -> (userId: String, tenantId: String?, role: UserRole) {
+        let authResult = try await Auth.auth().signIn(withEmail: email, password: password)
+        let tokenResult = try await authResult.user.getIDTokenResult()
+        let tenantId = tokenResult.claims["tenantId"] as? String
+        let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
+        return (userId: authResult.user.uid, tenantId: tenantId, role: role)
+    }
+}
+
 // MARK: - AuthViewModel
 
 @Observable
@@ -92,11 +113,17 @@ final class AuthViewModel {
     var displayName: String?
 
     private let authProvider: AuthProviding
+    let appleSignInCoordinator = AppleSignInCoordinator()
+    private let emailAuthProvider: EmailAuthProviding
     private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "AuthVM")
 
-    init(authProvider: AuthProviding = FirebaseGoogleAuthProvider()) {
+    init(
+        authProvider: AuthProviding = FirebaseGoogleAuthProvider(),
+        emailAuthProvider: EmailAuthProviding = FirebaseEmailAuthProvider()
+    ) {
         self.authProvider = authProvider
+        self.emailAuthProvider = emailAuthProvider
     }
 
     deinit {
@@ -113,6 +140,52 @@ final class AuthViewModel {
 
         do {
             let result = try await authProvider.signInWithGoogle()
+
+            guard let tenantId = result.tenantId, !tenantId.isEmpty else {
+                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"
+                return
+            }
+
+            let isAdmin = result.role == .admin
+            authState = .signedIn(userId: result.userId, tenantId: tenantId, isAdmin: isAdmin)
+            updateDisplayName()
+        } catch {
+            errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
+        }
+    }
+
+    /// Apple Sign-In の結果を処理し、Firebase Auth と連携する
+    func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let authResult = try await appleSignInCoordinator.handleResult(result)
+
+            guard let tenantId = authResult.tenantId, !tenantId.isEmpty else {
+                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"
+                return
+            }
+
+            let isAdmin = authResult.role == .admin
+            authState = .signedIn(userId: authResult.userId, tenantId: tenantId, isAdmin: isAdmin)
+            updateDisplayName()
+        } catch let error as ASAuthorizationError where error.code == .canceled {
+            // ユーザーキャンセルはエラー表示しない
+        } catch {
+            errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
+        }
+    }
+
+    /// メール/パスワードでサインインする（デモアカウント用）
+    func signInWithEmail(email: String, password: String) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let result = try await emailAuthProvider.signIn(email: email, password: password)
 
             guard let tenantId = result.tenantId, !tenantId.isEmpty else {
                 errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"

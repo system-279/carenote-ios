@@ -31,6 +31,7 @@
 		6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2848993801DEF66A676C25D /* AppEnvironment.swift */; };
 		792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */; };
 		7CA851BF8A07B0D97F3903A3 /* RecordingConfirmViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */; };
+		8234CBC662F2FB30E1866158 /* AppleSignInCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E130263BC2FE596468916F /* AppleSignInCoordinator.swift */; };
 		83167C60FCA3768F00D80442 /* TemplateCreateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECEF75B614C6A2B223AB02F /* TemplateCreateViewModel.swift */; };
 		854789E2D53FE67EB38E7E4D /* ClientRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */; };
 		867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */; };
@@ -134,6 +135,7 @@
 		E7B1618532B76B0B38896644 /* TimeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatting.swift; sourceTree = "<group>"; };
 		E882F166342B21411BFDB30A /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
 		E9B4E2778FEE530A1DC4DF06 /* TemplateListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateListViewModelTests.swift; sourceTree = "<group>"; };
+		E9E130263BC2FE596468916F /* AppleSignInCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInCoordinator.swift; sourceTree = "<group>"; };
 		EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIFAuthService.swift; sourceTree = "<group>"; };
 		ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetTemplates.swift; sourceTree = "<group>"; };
 		ED7A610D0269818D75C76641 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
@@ -272,6 +274,7 @@
 		6EF4D7F9B91C4EC70E35F1A7 /* Auth */ = {
 			isa = PBXGroup;
 			children = (
+				E9E130263BC2FE596468916F /* AppleSignInCoordinator.swift */,
 				036156B4FFB1416DCC51D265 /* AuthViewModel.swift */,
 				ED7A610D0269818D75C76641 /* SignInView.swift */,
 			);
@@ -521,6 +524,7 @@
 			files = (
 				C74386AC37344205E71E5B2B /* AppConfig.swift in Sources */,
 				6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */,
+				8234CBC662F2FB30E1866158 /* AppleSignInCoordinator.swift in Sources */,
 				792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */,
 				A66F72A55AF844FA523B9941 /* AudioRecorderService.swift in Sources */,
 				94DF9E5A0CCD3408F6EC31B7 /* AuthViewModel.swift in Sources */,
