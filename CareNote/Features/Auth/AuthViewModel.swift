@@ -215,6 +215,14 @@ final class AuthViewModel {
     private static func userFacingMessage(for error: Error) -> String {
         let nsError = error as NSError
 
+        // デバッグ: エラー構造の詳細ログ
+        logger.error("""
+        [AuthError] domain=\(nsError.domain) code=\(nsError.code) \
+        desc=\(nsError.localizedDescription) \
+        userInfo=\(nsError.userInfo.keys.map { String(describing: $0) }.joined(separator: ",")) \
+        underlying=\(String(describing: nsError.userInfo[NSUnderlyingErrorKey]))
+        """)
+
         // beforeSignIn blocking function のエラー検知（コード判定 + メッセージ文字列フォールバック）
         if isBlockingFunctionError(nsError) {
             return unregisteredAccountMessage
@@ -263,11 +271,12 @@ final class AuthViewModel {
             }
         }
 
-        // 3. FIRAuthErrorDomain 内のみ文字列フォールバック（他ドメインの誤検知を防止）
-        guard nsError.domain == "FIRAuthErrorDomain" else { return false }
+        // 3. 全ドメインで文字列フォールバック（Apple Sign-Inは非FIRAuthErrorDomainの場合がある）
         let description = nsError.localizedDescription + (nsError.userInfo.description)
         return description.contains("BLOCKING_FUNCTION_ERROR")
             || description.contains("許可されていません")
+            || description.contains("blocking function")
+            || description.contains("PERMISSION_DENIED")
     }
 
     /// サインアウトする
