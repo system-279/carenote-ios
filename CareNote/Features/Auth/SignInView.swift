@@ -13,68 +13,73 @@ struct SignInView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 40) {
-            Spacer()
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 40) {
+                    Spacer()
+                        .frame(height: max(geometry.size.height * 0.15, 60))
 
-            // Logo & Description
-            VStack(spacing: 12) {
-                Text("CareNote")
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    // Logo & Description
+                    VStack(spacing: 12) {
+                        Text("CareNote")
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
 
-                Text("ケアマネジャーのための\n音声記録アプリ")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+                        Text("ケアマネジャーのための\n音声記録アプリ")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
 
-            Spacer()
+                    Spacer()
+                        .frame(height: max(geometry.size.height * 0.1, 40))
 
-            // Error Message
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
+                    // Error Message
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                    }
 
-            // Sign In Buttons
-            if viewModel.isLoading {
-                ProgressView()
-                    .controlSize(.large)
-            } else {
-                VStack(spacing: 16) {
-                    // Sign in with Apple
-                    SignInWithAppleButton(.signIn) { request in
-                        viewModel.appleSignInCoordinator.configureRequest(request)
-                    } onCompletion: { result in
-                        Task {
-                            await viewModel.handleAppleSignInResult(result)
+                    // Sign In Buttons
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .controlSize(.large)
+                    } else {
+                        VStack(spacing: 16) {
+                            // Sign in with Apple
+                            SignInWithAppleButton(.signIn) { request in
+                                viewModel.appleSignInCoordinator.configureRequest(request)
+                            } onCompletion: { result in
+                                Task {
+                                    await viewModel.handleAppleSignInResult(result)
+                                }
+                            }
+                            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                            .frame(height: 50)
+
+                            // Google Sign-In
+                            GoogleSignInButton(scheme: .dark, style: .wide) {
+                                Task {
+                                    await viewModel.signInWithGoogle()
+                                }
+                            }
+                            .frame(height: 50)
+
+                            // Email Login (collapsible)
+                            emailLoginSection
                         }
                     }
-                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                    .frame(height: 50)
-                    .padding(.horizontal, 40)
 
-                    // Google Sign-In
-                    GoogleSignInButton(scheme: .dark, style: .wide) {
-                        Task {
-                            await viewModel.signInWithGoogle()
-                        }
-                    }
-                    .frame(height: 50)
-                    .padding(.horizontal, 40)
-
-                    // Email Login (collapsible)
-                    emailLoginSection
+                    Spacer()
+                        .frame(height: 60)
                 }
+                .frame(maxWidth: 400)
+                .frame(maxWidth: .infinity)
+                .padding()
             }
-
-            Spacer()
-                .frame(height: 60)
         }
-        .padding()
     }
 
     @ViewBuilder
@@ -89,7 +94,7 @@ struct SignInView: View {
                     Rectangle()
                         .fill(Color.secondary.opacity(0.3))
                         .frame(height: 1)
-                    Text("メールでログイン")
+                    Text("メールでログイン / Email Login")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Rectangle()
@@ -97,7 +102,6 @@ struct SignInView: View {
                         .frame(height: 1)
                 }
             }
-            .padding(.horizontal, 40)
 
             if showEmailLogin {
                 VStack(spacing: 10) {
@@ -124,7 +128,6 @@ struct SignInView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(email.isEmpty || password.isEmpty)
                 }
-                .padding(.horizontal, 40)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
