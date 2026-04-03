@@ -9,6 +9,7 @@ struct SignInView: View {
     @State private var showEmailLogin = false
     @State private var email = ""
     @State private var password = ""
+    @State private var showPassword = false
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -112,9 +113,26 @@ struct SignInView: View {
                         .textInputAutocapitalization(.never)
                         .textFieldStyle(.roundedBorder)
 
-                    SecureField("パスワード", text: $password)
+                    HStack {
+                        Group {
+                            if showPassword {
+                                TextField("パスワード", text: $password)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                            } else {
+                                SecureField("パスワード", text: $password)
+                            }
+                        }
                         .textContentType(.password)
                         .textFieldStyle(.roundedBorder)
+
+                        Button {
+                            showPassword.toggle()
+                        } label: {
+                            Image(systemName: showPassword ? "eye.slash" : "eye")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
 
                     Button {
                         Task {
