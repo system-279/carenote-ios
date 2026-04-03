@@ -71,7 +71,7 @@ final class FirebaseGoogleAuthProvider: AuthProviding {
         )
 
         let authResult = try await Auth.auth().signIn(with: credential)
-        let tokenResult = try await authResult.user.getIDTokenResult()
+        let tokenResult = try await authResult.user.getIDTokenResult(forcingRefresh: true)
         let tenantId = tokenResult.claims["tenantId"] as? String
         let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
 
@@ -95,7 +95,7 @@ protocol EmailAuthProviding: Sendable {
 final class FirebaseEmailAuthProvider: EmailAuthProviding {
     func signIn(email: String, password: String) async throws -> (userId: String, tenantId: String?, role: UserRole) {
         let authResult = try await Auth.auth().signIn(withEmail: email, password: password)
-        let tokenResult = try await authResult.user.getIDTokenResult()
+        let tokenResult = try await authResult.user.getIDTokenResult(forcingRefresh: true)
         let tenantId = tokenResult.claims["tenantId"] as? String
         let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
         return (userId: authResult.user.uid, tenantId: tenantId, role: role)
@@ -142,7 +142,7 @@ final class AuthViewModel {
             let result = try await authProvider.signInWithGoogle()
 
             guard let tenantId = result.tenantId, !tenantId.isEmpty else {
-                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"
+                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。\nFailed to retrieve tenant info. Please contact the administrator."
                 return
             }
 
@@ -150,7 +150,7 @@ final class AuthViewModel {
             authState = .signedIn(userId: result.userId, tenantId: tenantId, isAdmin: isAdmin)
             updateDisplayName()
         } catch {
-            errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
+            errorMessage = Self.userFacingMessage(for: error)
         }
     }
 
@@ -164,7 +164,7 @@ final class AuthViewModel {
             let authResult = try await appleSignInCoordinator.handleResult(result)
 
             guard let tenantId = authResult.tenantId, !tenantId.isEmpty else {
-                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"
+                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。\nFailed to retrieve tenant info. Please contact the administrator."
                 return
             }
 
@@ -174,7 +174,7 @@ final class AuthViewModel {
         } catch let error as ASAuthorizationError where error.code == .canceled {
             // ユーザーキャンセルはエラー表示しない
         } catch {
-            errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
+            errorMessage = Self.userFacingMessage(for: error)
         }
     }
 
@@ -188,7 +188,7 @@ final class AuthViewModel {
             let result = try await emailAuthProvider.signIn(email: email, password: password)
 
             guard let tenantId = result.tenantId, !tenantId.isEmpty else {
-                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。"
+                errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。\nFailed to retrieve tenant info. Please contact the administrator."
                 return
             }
 
@@ -196,8 +196,18 @@ final class AuthViewModel {
             authState = .signedIn(userId: result.userId, tenantId: tenantId, isAdmin: isAdmin)
             updateDisplayName()
         } catch {
-            errorMessage = "サインインに失敗しました: \(error.localizedDescription)"
+            errorMessage = Self.userFacingMessage(for: error)
         }
+    }
+
+    /// Firebase Auth エラーをユーザー向けメッセージに変換する
+    private static func userFacingMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == "FIRAuthErrorDomain",
+           AuthErrorCode(rawValue: nsError.code) == .blockingCloudFunctionError {
+            return "このアカウントは登録されていません。\n画面下部の「メールでログイン」からデモアカウントをご利用ください。\n\nThis account is not registered.\nPlease use \"メールでログイン\" (Email Login) below with the demo account."
+        }
+        return "サインインに失敗しました: \(error.localizedDescription)"
     }
 
     /// サインアウトする
@@ -230,7 +240,7 @@ final class AuthViewModel {
                 guard let self else { return }
                 if let user {
                     do {
-                        let tokenResult = try await user.getIDTokenResult()
+                        let tokenResult = try await user.getIDTokenResult(forcingRefresh: true)
                         guard let tenantId = tokenResult.claims["tenantId"] as? String,
                               !tenantId.isEmpty else {
                             self.authState = .signedOut

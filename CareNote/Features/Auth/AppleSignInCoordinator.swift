@@ -45,7 +45,7 @@ final class AppleSignInCoordinator {
         )
 
         let authResult = try await Auth.auth().signIn(with: credential)
-        let tokenResult = try await authResult.user.getIDTokenResult()
+        let tokenResult = try await authResult.user.getIDTokenResult(forcingRefresh: true)
         let tenantId = tokenResult.claims["tenantId"] as? String
         let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
 

@@ -78,11 +78,19 @@ CareNote AIは、ケアマネジャーの記録業務を効率化するアプリ
 
 ## 審査メモ（Review Notes）
 
-本アプリは特定の事業所（テナント）向けに提供する業務用アプリです。Unlisted App Distributionでの配布を希望します。
+本アプリは招待制の業務用アプリです（Unlisted App Distribution）。
+事業所（テナント）単位で利用者を管理しており、管理者が事前に登録したアカウントのみサインインできます。
 
-テスト用アカウント:
-- Google Sign-Inを使用しており、テストアカウントの事前発行が必要です
-- 審査用のテストアカウント情報は別途App Store Connectで入力してください
+### テスト用デモアカウント（Demo Account for Review）
+- メールアドレス / Email: demo-reviewer@carenote.jp
+- パスワード / Password: CareNote2026Review!
+- ログイン方法 / How to sign in:
+  1. サインイン画面下部の「メールでログイン」をタップ / Tap "メールでログイン" (Email Login) at the bottom of the sign-in screen
+  2. 上記メールアドレスとパスワードを入力 / Enter the email and password above
+  3. 「ログイン」ボタンをタップ / Tap the "ログイン" (Login) button
 
-デモ動画:
-- 必要に応じて提供可能です
+### 注意事項（Important Notes）
+- Sign in with Apple / Google Sign-In は事前に招待されたアカウントのみ利用可能です。未登録のアカウントでは「このアカウントは登録されていません」と表示されます。
+- Sign in with Apple / Google Sign-In are available only for pre-registered accounts. Unregistered accounts will see an error message.
+- 全機能のテストにはデモアカウント（メール/パスワード）をご利用ください。
+- Please use the demo account (email/password) to test all features.
