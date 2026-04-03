@@ -253,30 +253,44 @@ final class AuthViewModel {
     /// beforeSignIn blocking function のエラーかどうかを判定する
     ///
     /// 判定優先順位:
-    /// 1. AuthErrorCode.blockingCloudFunctionError（最も信頼性が高い）
-    /// 2. underlyingError の domain/code チェック
-    /// 3. エラーメッセージ内の Cloud Functions 固有キーワード（最終フォールバック、FIRAuthErrorDomain 内のみ）
+    /// 1. AuthErrorCode.blockingCloudFunctionError（domain + code 17105）
+    /// 2. FIRAuthErrorUserInfoNameKey による安定判定
+    /// 3. underlyingError の再帰チェック（1, 2 を再帰適用）
+    /// 4. エラーメッセージ内キーワード（最終フォールバック）
     private static func isBlockingFunctionError(_ nsError: NSError) -> Bool {
-        // 1. 正規のエラーコード判定
+        if checkBlockingError(nsError, depth: 3) {
+            return true
+        }
+
+        // 4. 全ドメインで文字列フォールバック（最終手段）
+        let description = nsError.localizedDescription + (nsError.userInfo.description)
+        return description.contains("BLOCKING_FUNCTION_ERROR")
+            || description.contains("許可されていません")
+            || description.contains("PERMISSION_DENIED")
+    }
+
+    /// NSError を再帰的にチェックして blocking function エラーか判定する
+    private static func checkBlockingError(_ nsError: NSError, depth: Int) -> Bool {
+        guard depth > 0 else { return false }
+
+        // 1. domain + code チェック
         if nsError.domain == "FIRAuthErrorDomain",
            AuthErrorCode(rawValue: nsError.code) == .blockingCloudFunctionError {
             return true
         }
 
-        // 2. underlyingError の再帰チェック（Apple Sign-In 経由で異なるラップがされる場合）
-        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
-            if underlying.domain == "FIRAuthErrorDomain",
-               AuthErrorCode(rawValue: underlying.code) == .blockingCloudFunctionError {
-                return true
-            }
+        // 2. FIRAuthErrorUserInfoNameKey チェック（SDK 内部の安定キー）
+        if let errorName = nsError.userInfo["FIRAuthErrorUserInfoNameKey"] as? String,
+           errorName == "ERROR_BLOCKING_CLOUD_FUNCTION_RETURNED_ERROR" {
+            return true
         }
 
-        // 3. 全ドメインで文字列フォールバック（Apple Sign-Inは非FIRAuthErrorDomainの場合がある）
-        let description = nsError.localizedDescription + (nsError.userInfo.description)
-        return description.contains("BLOCKING_FUNCTION_ERROR")
-            || description.contains("許可されていません")
-            || description.contains("blocking function")
-            || description.contains("PERMISSION_DENIED")
+        // 3. underlyingError を再帰チェック
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return checkBlockingError(underlying, depth: depth - 1)
+        }
+
+        return false
     }
 
     /// サインアウトする
