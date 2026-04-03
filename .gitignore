@@ -57,3 +57,6 @@ generated-images/
 
 # Playwright MCP
 .playwright-mcp/
+
+# Screenshots (ローカル生成物)
+screenshots/
