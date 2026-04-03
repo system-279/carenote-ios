@@ -1,4 +1,5 @@
 const { beforeUserSignedIn } = require("firebase-functions/v2/identity");
+const { HttpsError } = require("firebase-functions/v2/identity");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 
@@ -9,7 +10,7 @@ exports.beforeSignIn = beforeUserSignedIn(
   async (event) => {
     const email = (event.data.email || "").toLowerCase().trim();
     if (!email) {
-      throw new Error("メールアドレスが取得できません。");
+      throw new HttpsError("invalid-argument", "メールアドレスが取得できません。");
     }
 
     const db = getFirestore();
@@ -58,6 +59,6 @@ exports.beforeSignIn = beforeUserSignedIn(
     }
 
     // No match: reject sign-in
-    throw new Error("このアカウントは許可されていません。管理者にお問い合わせください。");
+    throw new HttpsError("permission-denied", "このアカウントは許可されていません。管理者にお問い合わせください。");
   }
 );
