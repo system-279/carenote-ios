@@ -203,11 +203,28 @@ final class AuthViewModel {
     /// Firebase Auth エラーをユーザー向けメッセージに変換する
     private static func userFacingMessage(for error: Error) -> String {
         let nsError = error as NSError
-        if nsError.domain == "FIRAuthErrorDomain",
-           AuthErrorCode(rawValue: nsError.code) == .blockingCloudFunctionError {
-            return "このアカウントは登録されていません。\n画面下部の「メールでログイン」からデモアカウントをご利用ください。\n\nThis account is not registered.\nPlease use \"メールでログイン\" (Email Login) below with the demo account."
+        guard nsError.domain == "FIRAuthErrorDomain" else {
+            return "サインインに失敗しました。通信環境を確認して再度お試しください。"
         }
-        return "サインインに失敗しました: \(error.localizedDescription)"
+
+        switch AuthErrorCode(rawValue: nsError.code) {
+        case .blockingCloudFunctionError:
+            return "このアカウントは登録されていません。\n画面下部の「メールでログイン」からデモアカウントをご利用ください。\n\nThis account is not registered.\nPlease use \"メールでログイン\" (Email Login) below with the demo account."
+        case .wrongPassword, .invalidCredential:
+            return "メールアドレスまたはパスワードが正しくありません。\nIncorrect email or password."
+        case .invalidEmail:
+            return "メールアドレスの形式が正しくありません。\nInvalid email format."
+        case .userNotFound:
+            return "このメールアドレスのアカウントが見つかりません。\nNo account found for this email."
+        case .userDisabled:
+            return "このアカウントは無効化されています。管理者にお問い合わせください。\nThis account has been disabled."
+        case .networkError:
+            return "ネットワークエラーが発生しました。通信環境を確認して再度お試しください。\nNetwork error. Please check your connection."
+        case .tooManyRequests:
+            return "ログイン試行回数が多すぎます。しばらく待ってから再度お試しください。\nToo many attempts. Please try again later."
+        default:
+            return "サインインに失敗しました。再度お試しください。\nSign-in failed. Please try again."
+        }
     }
 
     /// サインアウトする
