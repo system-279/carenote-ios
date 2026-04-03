@@ -267,6 +267,7 @@ final class AuthViewModel {
         guard nsError.domain == "FIRAuthErrorDomain" else { return false }
         let description = nsError.localizedDescription + (nsError.userInfo.description)
         return description.contains("BLOCKING_FUNCTION_ERROR")
+            || description.contains("許可されていません")
     }
 
     /// サインアウトする
