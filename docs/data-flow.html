@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Flow - CareNote Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="js/tab-switcher.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
+</head>
+<body class="audience-general">
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <span class="logo-icon">CN</span>CareNote<span class="logo-sub">Architecture Docs</span>
+      </a>
+    </div>
+  </header>
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-link">Top</a>
+      <a href="architecture.html" class="nav-link">Architecture</a>
+      <a href="auth-security.html" class="nav-link">Auth</a>
+      <a href="data-flow.html" class="nav-link active">Data Flow</a>
+      <a href="multi-tenant.html" class="nav-link">Multi-Tenant</a>
+      <a href="adr.html" class="nav-link">ADR</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <span class="badge badge-primary">Data Flow</span>
+      <h1>データフロー</h1>
+      <p class="subtitle">録音からドキュメント出力までのEnd-to-Endフロー</p>
+    </div>
+
+    <div class="audience-switcher">
+      <button class="audience-btn active" data-tab="general">Overview</button>
+      <button class="audience-btn" data-tab="engineer">Technical</button>
+    </div>
+
+    <!-- ===== General ===== -->
+    <div class="audience-content" data-audience="general">
+      <section class="section">
+        <h2>録音からドキュメントができるまで</h2>
+        <p>ボタンひとつで録音が始まり、AIが自動で文字起こしし、ドキュメントとして出力されます。インターネット接続が不安定でも、接続が回復すれば自動で処理が再開されます。</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <div class="step-content">
+              <h3>録音</h3>
+              <p>高品質なM4A形式で録音。端末内に即座に保存されるので、録音データが失われる心配はありません。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>テンプレート選択</h3>
+              <p>録音後、AI文字起こしの出力形式を選びます。「議事録」「訪問記録」など、用途に合わせたテンプレートが用意されています。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>クラウドへアップロード</h3>
+              <p>インターネットに接続されると、録音ファイルがGoogle Cloudに安全にアップロードされます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>AI文字起こし</h3>
+              <p>Google Gemini 2.5 Flash が音声を分析し、テキストに変換します。介護現場の専門用語にも対応しています。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>結果の保存・表示</h3>
+              <p>文字起こし結果が端末とクラウドの両方に保存され、録音一覧から確認できます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>Google Docs へエクスポート（任意）</h3>
+              <p>文字起こし結果をGoogle Docsに出力。タイトル・メタ情報・本文が自動フォーマットされたドキュメントが作成されます。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section">
+        <h2>オフラインでも安心</h2>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon card-icon-blue">&#128225;</div>
+            <h3>自動キューイング</h3>
+            <p>通信できない場合、処理は自動的にキューに保存されます。手動での再送信操作は不要です。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-green">&#128260;</div>
+            <h3>自動再試行</h3>
+            <p>一時的なエラーが発生しても、最大3回まで自動的に再試行します。間隔を空けて負荷を分散させます。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-amber">&#128246;</div>
+            <h3>ネットワーク監視</h3>
+            <p>通信状態を常に監視し、接続が復帰した瞬間に自動的にアップロードを開始します。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Engineer ===== -->
+    <div class="audience-content" data-audience="engineer">
+      <section class="section">
+        <h2>E2E Recording Pipeline</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">End-to-End Data Flow</div>
+          <div class="mermaid">
+flowchart TB
+    A["RecordingView<br/>startRecording()"] --> B["AudioRecorderService<br/>AVAudioRecorder<br/>Documents/{UUID}.m4a"]
+    B --> C["RecordingConfirmView<br/>Template 選択<br/>RecordingRecord 作成"]
+    C --> D["SwiftData 保存<br/>uploadStatus: pending<br/>transcriptionStatus: pending"]
+    D --> E["OutboxSyncService<br/>enqueue(recordingId)"]
+    E --> F{"NWPathMonitor<br/>Online?"}
+    F -->|No| G["OutboxItem 待機<br/>(SwiftData persist)"]
+    G -->|"接続復帰"| F
+    F -->|Yes| H["WIFAuthService<br/>getAccessToken()"]
+    H --> I["StorageService<br/>POST /upload/storage/v1/b/{bucket}/o<br/>uploadType=media"]
+    I --> J["FirestoreService<br/>createRecording()<br/>tenants/{tenantId}/recordings/{id}"]
+    J --> K["TranscriptionService<br/>Vertex AI Gemini 2.5 Flash<br/>POST :generateContent"]
+    K --> L["FirestoreService<br/>updateTranscription()<br/>transcriptionStatus: done"]
+    L --> M["RecordingRecord 更新<br/>uploadStatus: done<br/>transcription: text"]
+    M --> N["OutboxItem 削除"]
+
+    style A fill:#EFF6FF,stroke:#93C5FD
+    style I fill:#ECFDF5,stroke:#6EE7B7
+    style K fill:#F3E8FF,stroke:#C4B5FD
+    style N fill:#ECFDF5,stroke:#6EE7B7
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Google Docs Export (Optional)</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">Google Docs Export Flow</div>
+          <div class="mermaid">
+flowchart LR
+    A["RecordingListView<br/>exportToGoogleDocs()"] --> B["ensureDocsScopes()"]
+    B --> C["GoogleDocsExportService"]
+    C --> D["POST /v1/documents<br/>Create blank doc"]
+    D --> E["POST :batchUpdate<br/>insertText +<br/>updateParagraphStyle +<br/>updateTextStyle"]
+    E --> F["RecordingRecord<br/>googleDocsUrl = URL"]
+
+    style C fill:#ECFDF5,stroke:#6EE7B7
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>API</th><th>Endpoint</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Create</td><td><code>POST /v1/documents</code></td><td>空ドキュメント作成</td></tr>
+              <tr><td>Format</td><td><code>POST /v1/documents/{id}:batchUpdate</code></td><td>テキスト挿入・スタイル適用</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Required OAuth scopes: <code>documents</code>, <code>drive.file</code></p>
+      </section>
+
+      <section class="section">
+        <h2>Audio Recording Specs</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Setting</th><th>Value</th><th>Rationale (ADR-004)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Format</td><td>M4A / AAC</td><td>WAV比 1/10 のファイルサイズ</td></tr>
+              <tr><td>Sample Rate</td><td>44,100 Hz</td><td>標準CD品質</td></tr>
+              <tr><td>Channels</td><td>Mono</td><td>文字起こし用途に十分</td></tr>
+              <tr><td>Quality</td><td>High (.high)</td><td>発話明瞭度を確保</td></tr>
+              <tr><td>MIME Type</td><td><code>audio/mp4</code></td><td>Gemini / GCS 互換</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Vertex AI Transcription</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Config</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Model</td><td><code>gemini-2.5-flash</code></td></tr>
+              <tr><td>Region</td><td><code>asia-northeast1</code></td></tr>
+              <tr><td>Temperature</td><td>0.0</td></tr>
+              <tr><td>Max Output Tokens</td><td>8,192</td></tr>
+              <tr><td>thinkingBudget</td><td>0（必須）</td></tr>
+              <tr><td>Input</td><td>Audio (gs:// URI) + Text Prompt</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <pre><code>// Request Body
+{
+  "contents": [{
+    "role": "user",
+    "parts": [
+      { "fileData": {
+          "mimeType": "audio/mp4",
+          "fileUri": "gs://bucket/{tenantId}/{recordingId}.m4a"
+      }},
+      { "text": templatePromptSnapshot }
+    ]
+  }],
+  "generationConfig": {
+    "temperature": 0.0,
+    "maxOutputTokens": 8192
+  }
+}</code></pre>
+      </section>
+
+      <section class="section">
+        <h2>Error Handling Strategy</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Error Type</th><th>HTTP Codes</th><th>Strategy</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Transient</td><td>429, 503, timeout</td><td>Exponential backoff (2^n秒), max 3回リトライ</td></tr>
+              <tr><td>Permanent</td><td>400, 404</td><td>RecordingRecord.uploadStatus = "error"</td></tr>
+              <tr><td>Network</td><td>-</td><td>OutboxItem persist → NWPathMonitor で接続復帰時に自動再開</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    CareNote Architecture Docs &mdash; 279 Inc.
+  </footer>
+</body>
+</html>

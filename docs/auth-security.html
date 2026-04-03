@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth &amp; Security - CareNote Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="js/tab-switcher.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
+</head>
+<body class="audience-general">
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <span class="logo-icon">CN</span>CareNote<span class="logo-sub">Architecture Docs</span>
+      </a>
+    </div>
+  </header>
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-link">Top</a>
+      <a href="architecture.html" class="nav-link">Architecture</a>
+      <a href="auth-security.html" class="nav-link active">Auth</a>
+      <a href="data-flow.html" class="nav-link">Data Flow</a>
+      <a href="multi-tenant.html" class="nav-link">Multi-Tenant</a>
+      <a href="adr.html" class="nav-link">ADR</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <span class="badge badge-accent">Security</span>
+      <h1>認証・セキュリティ</h1>
+      <p class="subtitle">WIF認証フロー、ロールベースアクセス制御、Auth Blocking Functionによるホワイトリスト管理</p>
+    </div>
+
+    <div class="audience-switcher">
+      <button class="audience-btn active" data-tab="general">Overview</button>
+      <button class="audience-btn" data-tab="engineer">Technical</button>
+    </div>
+
+    <!-- ===== General ===== -->
+    <div class="audience-content" data-audience="general">
+      <section class="section">
+        <h2>3つのセキュリティ原則</h2>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon card-icon-green">&#128273;</div>
+            <h3>鍵を持ち歩かない</h3>
+            <p>従来のアプリでは「秘密鍵」をアプリに組み込む必要がありましたが、CareNoteでは<strong>WIF（Workload Identity Federation）</strong>を採用。アプリに秘密情報を含めず、毎回一時的な「通行証」を発行する仕組みです。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-blue">&#128230;</div>
+            <h3>招待制アクセス</h3>
+            <p>管理者がメールアドレスを登録した人だけがサインインできます。未登録のメールでサインインしようとすると、<strong>サインイン自体がブロック</strong>されます。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-amber">&#128101;</div>
+            <h3>ロール（役割）管理</h3>
+            <p><strong>管理者（admin）</strong>はメンバー管理や設定変更が可能。<strong>一般ユーザー（user）</strong>は録音と文字起こし機能のみ。役割はサインインのたびに自動更新されます。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>サインインの流れ</h2>
+        <ol class="step-list">
+          <li class="step-item">
+            <div class="step-content">
+              <h3>Google アカウントでサインイン</h3>
+              <p>お使いのGoogleアカウントを選択するだけ。パスワードの管理はGoogleにお任せです。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>ホワイトリスト照合（自動）</h3>
+              <p>サインイン直前に、メールアドレスがホワイトリストに登録されているか自動確認。未登録の場合はサインインが拒否されます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>役割の自動設定</h3>
+              <p>ホワイトリストに登録された役割（管理者 or 一般）が自動的に適用されます。管理者が役割を変更すれば、次回サインイン時に自動反映されます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>安全な通行証の発行</h3>
+              <p>クラウドサービス（録音保存・AI文字起こし）を使うための「一時通行証」が自動発行されます。有効期限は約1時間で、自動更新されます。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+    </div>
+
+    <!-- ===== Engineer ===== -->
+    <div class="audience-content" data-audience="engineer">
+      <section class="section">
+        <h2>WIF Authentication Flow</h2>
+        <p>Firebase ID Token → STS Token Exchange → SA Impersonation の3段階。SAキーをアプリに同梱しないGoogle推奨パターン。</p>
+        <div class="diagram-container">
+          <div class="diagram-title">WIF Authentication Sequence</div>
+          <div class="mermaid">
+sequenceDiagram
+    actor User as User
+    participant App as CareNote App
+    participant Google as Google Sign-In
+    participant FAuth as Firebase Auth
+    participant BF as Blocking Function
+    participant FS as Firestore
+    participant STS as GCP STS
+    participant SA as Service Account
+
+    User->>App: サインインボタン
+    App->>Google: GoogleSignIn.signIn()
+    Google-->>App: Google ID Token + Access Token
+    App->>FAuth: Auth.signIn(credential)
+    FAuth->>BF: beforeUserSignedIn trigger
+    BF->>FS: whitelist コレクション照合
+    FS-->>BF: tenantId + role
+    BF-->>FAuth: custom claims 設定
+    FAuth-->>App: Firebase ID Token (with claims)
+
+    Note over App,SA: GCP リソースアクセス時 (On-Demand)
+
+    App->>STS: POST /v1/token<br/>audience=WIP, subject=ID Token
+    STS-->>App: Federated Token
+    App->>SA: POST :generateAccessToken<br/>lifetime=3600s
+    SA-->>App: GCP Access Token (Bearer)
+
+    Note over App: Token Cache: 55分TTL
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Auth Blocking Function (ADR-005)</h2>
+        <p>Firebase Cloud Functions v2 の <code>beforeUserSignedIn</code> を使用。毎回のサインインで custom claims を動的に設定。</p>
+        <div class="diagram-container">
+          <div class="diagram-title">Blocking Function Logic</div>
+          <div class="mermaid">
+flowchart TD
+    A["beforeUserSignedIn<br/>発火"] --> B["user.email 取得"]
+    B --> C["全テナントの whitelist を検索<br/>collectionGroup('whitelist')"]
+    C --> D{メール一致?}
+    D -->|Yes| E["tenantId + role 取得"]
+    E --> F["custom claims 設定<br/>{tenantId, role}"]
+    F --> G["サインイン許可"]
+    D -->|No| H["HttpsError<br/>'permission-denied'"]
+    H --> I["サインイン拒否"]
+
+    style G fill:#ECFDF5,stroke:#059669,color:#065F46
+    style I fill:#FEF2F2,stroke:#DC2626,color:#991B1B
+          </div>
+        </div>
+        <pre><code>// functions/index.js - 簡略化
+exports.beforeusersignedin = onCall(
+  { ...beforeUserSignedIn },
+  async (event) => {
+    const email = event.data.email;
+    const snapshot = await db.collectionGroup('whitelist')
+      .where('email', '==', email).limit(1).get();
+
+    if (snapshot.empty) {
+      throw new HttpsError('permission-denied', 'Not whitelisted');
+    }
+
+    const { role } = snapshot.docs[0].data();
+    const tenantId = snapshot.docs[0].ref.parent.parent.id;
+
+    return {
+      customClaims: { tenantId, role }
+    };
+  }
+);</code></pre>
+      </section>
+
+      <section class="section">
+        <h2>Firestore Security Rules</h2>
+        <pre><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // テナントメンバー判定
+    function isTenantMember(tenantId) {
+      return request.auth != null
+          && request.auth.token.tenantId == tenantId;
+    }
+
+    // 管理者判定
+    function isAdmin() {
+      return request.auth.token.role == 'admin';
+    }
+
+    match /tenants/{tenantId} {
+      // テナントメンバーのみ読み取り
+      allow read: if isTenantMember(tenantId);
+
+      match /clients/{clientId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantMember(tenantId) && isAdmin();
+      }
+
+      match /recordings/{recordingId} {
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantMember(tenantId);
+        allow update: if isTenantMember(tenantId);
+      }
+
+      match /whitelist/{entryId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, delete, update: if isTenantMember(tenantId) && isAdmin();
+      }
+    }
+  }
+}</code></pre>
+      </section>
+
+      <section class="section">
+        <h2>RBAC (Role-Based Access Control)</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Role</th><th>Source</th><th>Permissions</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>admin</code></td>
+                <td><code>tokenResult.claims["role"]</code></td>
+                <td>録音、文字起こし、設定、クライアント管理、ホワイトリスト管理、テンプレート管理</td>
+              </tr>
+              <tr>
+                <td><code>user</code></td>
+                <td><code>tokenResult.claims["role"]</code></td>
+                <td>録音、文字起こし</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="info-box info-box-green">
+          <span class="icon">&#128260;</span>
+          <div>
+            <strong>ロール変更の即時反映。</strong>Firestoreのwhitelistコレクションが権威ソース。管理者がアプリ内で role を変更 → 次回サインイン時に Blocking Function が custom claims を上書きして反映。
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>WIF Configuration</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Component</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Workload Identity Pool</td><td><code>carenote-pool</code></td></tr>
+              <tr><td>Provider</td><td><code>carenote-firebase-provider</code></td></tr>
+              <tr><td>Service Account</td><td><code>carenote-ios-client@{project}.iam.gserviceaccount.com</code></td></tr>
+              <tr><td>IAM Binding</td><td><code>roles/iam.workloadIdentityUser</code></td></tr>
+              <tr><td>Token TTL</td><td>3600秒（55分でキャッシュ更新）</td></tr>
+              <tr><td>STS Endpoint</td><td><code>https://sts.googleapis.com/v1/token</code></td></tr>
+              <tr><td>SA Impersonation</td><td><code>https://iamcredentials.googleapis.com/v1/...</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    CareNote Architecture Docs &mdash; 279 Inc.
+  </footer>
+</body>
+</html>

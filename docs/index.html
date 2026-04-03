@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CareNote - Architecture Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="js/tab-switcher.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
+  <style>
+    /* Page-specific hero enhancements */
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+      position: relative;
+    }
+    .hero-visual {
+      position: relative;
+      padding: 80px 0 48px;
+      overflow: hidden;
+    }
+    .hero-visual::before {
+      content: '';
+      position: absolute;
+      top: -120px;
+      right: -80px;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .hero-visual::after {
+      content: '';
+      position: absolute;
+      bottom: -60px;
+      left: -40px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hero-eyebrow::before {
+      content: '';
+      width: 24px;
+      height: 2px;
+      background: var(--primary);
+    }
+    .hero h1 {
+      font-size: 52px;
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--primary) 0%, #6366F1 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: left;
+    }
+    .hero .subtitle {
+      text-align: left;
+      margin: 0 0 40px;
+      font-size: 18px;
+      font-weight: 300;
+      color: var(--text-secondary);
+      max-width: 480px;
+      line-height: 1.8;
+    }
+    .hero-stats {
+      justify-content: flex-start;
+      gap: 32px;
+      margin-top: 0;
+    }
+    .hero-stat {
+      text-align: left;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      min-width: 140px;
+    }
+    .hero-stat .number {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      display: block;
+      font-family: var(--font-mono);
+    }
+    .hero-stat .label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-weight: 500;
+    }
+    .nav-pages {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 32px;
+    }
+    .nav-page-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      text-decoration: none;
+      color: var(--text);
+      transition: all var(--transition);
+    }
+    .nav-page-card:hover {
+      border-color: var(--primary);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+      color: var(--primary);
+    }
+    .nav-page-card .nav-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .nav-page-card .nav-text h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .nav-page-card .nav-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 2px 0 0;
+    }
+
+    @media (max-width: 768px) {
+      .hero-visual { padding: 48px 0 32px; }
+      .hero h1 { font-size: 32px; }
+      .hero .subtitle { font-size: 15px; }
+      .hero-stats { flex-wrap: wrap; gap: 12px; }
+      .hero-stat { min-width: 100px; padding: 12px 14px; }
+      .hero-stat .number { font-size: 18px; }
+      .nav-pages { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="audience-general">
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <span class="logo-icon">CN</span>
+        CareNote
+        <span class="logo-sub">Architecture Docs</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-link active">Top</a>
+      <a href="architecture.html" class="nav-link">Architecture</a>
+      <a href="auth-security.html" class="nav-link">Auth</a>
+      <a href="data-flow.html" class="nav-link">Data Flow</a>
+      <a href="multi-tenant.html" class="nav-link">Multi-Tenant</a>
+      <a href="adr.html" class="nav-link">ADR</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Hero -->
+    <div class="hero-visual">
+      <div class="hero-eyebrow">System Architecture Documentation</div>
+      <h1>CareNote</h1>
+      <p class="subtitle">
+        ケアマネジャー向けAI録音・文字起こしアプリ。<br>
+        介護現場の記録業務を、録音からドキュメント出力まで一気通貫で効率化します。
+      </p>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="number">iOS 17+</span>
+          <span class="label">Platform</span>
+        </div>
+        <div class="hero-stat">
+          <span class="number">Swift 6+</span>
+          <span class="label">Language</span>
+        </div>
+        <div class="hero-stat">
+          <span class="number">Gemini 2.5</span>
+          <span class="label">AI Engine</span>
+        </div>
+        <div class="hero-stat">
+          <span class="number">Multi-Tenant</span>
+          <span class="label">Architecture</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audience Switcher -->
+    <div class="audience-switcher">
+      <button class="audience-btn active" data-tab="general">Overview</button>
+      <button class="audience-btn" data-tab="engineer">Technical</button>
+    </div>
+
+    <!-- ===== General Audience ===== -->
+    <div class="audience-content" data-audience="general">
+      <section class="section">
+        <h2>CareNote でできること</h2>
+        <div class="card-grid">
+          <div class="feature-card">
+            <div class="icon">&#127908;</div>
+            <h3>高品質録音</h3>
+            <p>M4A/AAC形式で介護現場の会話を高品質に録音。訪問、会議、電話など場面に合わせた記録が可能です。</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">&#129302;</div>
+            <h3>AI文字起こし</h3>
+            <p>Google Gemini 2.5 Flash が音声を自動でテキストに変換。介護用語にも対応した高精度な文字起こしを実現します。</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">&#128196;</div>
+            <h3>ドキュメント出力</h3>
+            <p>文字起こし結果をGoogle Docsへワンタップでエクスポート。テンプレートに沿った記録文書を自動生成します。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>使い方の流れ</h2>
+        <ol class="step-list">
+          <li class="step-item">
+            <div class="step-content">
+              <h3>クライアント選択</h3>
+              <p>記録対象の利用者を選択します。施設のメンバーリストから素早く検索できます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>場面選択</h3>
+              <p>「訪問」「会議」「電話」など、録音の場面を選びます。テンプレートの出力形式に影響します。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>録音開始</h3>
+              <p>ボタンひとつで録音を開始。録音中はリアルタイムで経過時間を表示します。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>AI文字起こし</h3>
+              <p>録音完了後、AIが自動で音声をテキストに変換。オフラインでもキューに保存され、接続時に自動処理されます。</p>
+            </div>
+          </li>
+          <li class="step-item">
+            <div class="step-content">
+              <h3>ドキュメント出力</h3>
+              <p>文字起こし結果をGoogle Docsへエクスポート。施設の記録フォーマットに合わせたテンプレートで出力可能です。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section">
+        <h2>セキュリティ</h2>
+        <div class="info-box info-box-green">
+          <span class="icon">&#128274;</span>
+          <div>
+            <strong>施設ごとにデータが完全に分離されています。</strong><br>
+            管理者が招待したメンバーのみがサインインでき、他の施設のデータにはアクセスできません。秘密鍵をアプリに組み込まない安全な認証方式（WIF）を採用しています。
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Engineer Audience ===== -->
+    <div class="audience-content" data-audience="engineer">
+      <section class="section">
+        <h2>Tech Stack</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Layer</th><th>Technology</th><th>Details</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>UI</td><td><code>SwiftUI</code></td><td>Declarative UI framework</td></tr>
+              <tr><td>State</td><td><code>@Observable</code></td><td>Macro-based observation (ObservableObject 不使用)</td></tr>
+              <tr><td>Local DB</td><td><code>SwiftData</code></td><td>Repository 層経由、View に @Query 直接使用禁止</td></tr>
+              <tr><td>Auth</td><td><code>Firebase Auth</code> + <code>GoogleSignIn</code></td><td>Custom claims (tenantId, role)</td></tr>
+              <tr><td>Cloud DB</td><td><code>Firestore</code></td><td>マルチテナント: tenants/{tenantId}/...</td></tr>
+              <tr><td>Storage</td><td><code>Cloud Storage</code></td><td>GCS JSON API v1 + WIF Token</td></tr>
+              <tr><td>AI</td><td><code>Vertex AI Gemini 2.5 Flash</code></td><td>asia-northeast1, thinkingBudget=0</td></tr>
+              <tr><td>GCP Auth</td><td><code>Workload Identity Federation</code></td><td>Firebase ID Token &rarr; STS &rarr; SA Impersonation</td></tr>
+              <tr><td>Audio</td><td><code>AVAudioRecorder</code></td><td>M4A/AAC 44.1kHz mono high quality</td></tr>
+              <tr><td>Concurrency</td><td><code>async/await</code> + <code>actor</code></td><td>Swift Concurrency</td></tr>
+              <tr><td>Architecture</td><td>MVVM + Repository</td><td>Outbox パターンでオフライン対応</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Directory Structure</h2>
+        <div class="dir-tree"><span class="folder">CareNote/</span>
+<span class="folder">&#9500;&#9472;&#9472; App/</span>           <span class="comment"># @main CareNoteApp, AppConfig (GCP設定)</span>
+<span class="folder">&#9500;&#9472;&#9472; Features/</span>      <span class="comment"># 画面別モジュール (MVVM)</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; Auth/             # Google Sign-In, AuthViewModel</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; ClientSelect/     # クライアント選択</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; SceneSelect/      # 場面選択 (訪問/会議/電話)</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; Recording/        # 録音画面</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; RecordingConfirm/ # テンプレート選択・保存</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; RecordingList/    # 一覧・ステータス管理</span>
+<span class="comment">&#9474;   &#9492;&#9472;&#9472; Settings/         # 設定・クライアント管理・テンプレート</span>
+<span class="folder">&#9500;&#9472;&#9472; Services/</span>      <span class="comment"># ビジネスロジック</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; AudioRecorderService      # AVAudioRecorder (M4A/AAC)</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; WIFAuthService            # WIF Token Exchange</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; TranscriptionService      # Vertex AI Gemini</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; StorageService            # Cloud Storage Upload</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; FirestoreService          # Firestore CRUD</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; ClientCacheService        # 24h TTL Cache</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; OutboxSyncService         # Offline Queue + Retry</span>
+<span class="comment">&#9474;   &#9492;&#9472;&#9472; GoogleDocsExportService   # Google Docs API</span>
+<span class="folder">&#9500;&#9472;&#9472; Repositories/</span>  <span class="comment"># SwiftData 抽象化層</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; RecordingRepository       # RecordingRecord CRUD</span>
+<span class="comment">&#9474;   &#9492;&#9472;&#9472; ClientRepository          # ClientCache CRUD</span>
+<span class="folder">&#9500;&#9472;&#9472; Models/</span>        <span class="comment"># データモデル</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; SwiftDataModels           # @Model: RecordingRecord, ClientCache, etc.</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; FirestoreModels           # Codable: FirestoreRecording, etc.</span>
+<span class="comment">&#9474;   &#9500;&#9472;&#9472; RecordingScene            # Enum: Scene, UploadStatus, etc.</span>
+<span class="comment">&#9474;   &#9492;&#9472;&#9472; PresetTemplates           # Vertex AI Prompt Templates</span>
+<span class="folder">&#9492;&#9472;&#9472; Infrastructure/</span> <span class="comment"># 環境・ユーティリティ</span>
+<span class="comment">    &#9500;&#9472;&#9472; AppEnvironment            # dev / prod 切替</span>
+<span class="comment">    &#9492;&#9472;&#9472; TimeFormatting            # MM:SS フォーマット</span></div>
+      </section>
+
+      <section class="section">
+        <h2>System Overview</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">Architecture Block Diagram</div>
+          <div class="mermaid">
+graph TB
+    subgraph iOS["iOS App - SwiftUI + SwiftData"]
+        direction TB
+        UI["Features<br/>Views + ViewModels"]
+        SVC["Services<br/>Business Logic"]
+        REPO["Repositories<br/>SwiftData"]
+        UI --> SVC
+        SVC --> REPO
+    end
+
+    subgraph GCP["Google Cloud Platform"]
+        direction TB
+        FA["Firebase Auth<br/>Google Sign-In"]
+        FS["Firestore<br/>Multi-Tenant DB"]
+        CS["Cloud Storage<br/>Audio Files"]
+        VA["Vertex AI<br/>Gemini 2.5 Flash"]
+    end
+
+    SVC -->|"Google Sign-In +<br/>Custom Claims"| FA
+    SVC -->|"CRUD<br/>tenants/{tenantId}"| FS
+    SVC -->|"Upload M4A<br/>GCS JSON API"| CS
+    SVC -->|"Transcribe<br/>Audio → Text"| VA
+    SVC -.->|"WIF Token<br/>STS + SA Impersonation"| GCP
+
+    style iOS fill:#EFF6FF,stroke:#93C5FD,color:#1E40AF
+    style GCP fill:#ECFDF5,stroke:#6EE7B7,color:#065F46
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Key Dependencies (SPM)</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Package</th><th>Version</th><th>Components</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>firebase-ios-sdk</code></td><td>v11.0.0+</td><td>FirebaseAuth, FirebaseFirestore</td></tr>
+              <tr><td><code>GoogleSignIn-iOS</code></td><td>v9.0.0+</td><td>GoogleSignIn, GoogleSignInSwift</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="info-box info-box-blue">
+          <span class="icon">&#9432;</span>
+          <div>
+            <strong>Cloud Storage SDK は不使用。</strong>GCS JSON API v1 に直接アクセスし、WIF で取得した Access Token を Bearer ヘッダーに設定して認証しています。
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Navigation to Other Pages ===== -->
+    <section class="section" data-audience="both">
+      <h2>Documentation</h2>
+      <div class="nav-pages">
+        <a href="architecture.html" class="nav-page-card">
+          <div class="nav-icon card-icon-blue">&#9635;</div>
+          <div class="nav-text">
+            <h4>Architecture</h4>
+            <p>MVVM + Repository, Outbox Pattern</p>
+          </div>
+        </a>
+        <a href="auth-security.html" class="nav-page-card">
+          <div class="nav-icon card-icon-green">&#128274;</div>
+          <div class="nav-text">
+            <h4>Auth &amp; Security</h4>
+            <p>WIF, RBAC, Blocking Function</p>
+          </div>
+        </a>
+        <a href="data-flow.html" class="nav-page-card">
+          <div class="nav-icon card-icon-purple">&#128260;</div>
+          <div class="nav-text">
+            <h4>Data Flow</h4>
+            <p>Recording to Transcription E2E</p>
+          </div>
+        </a>
+        <a href="multi-tenant.html" class="nav-page-card">
+          <div class="nav-icon card-icon-amber">&#127970;</div>
+          <div class="nav-text">
+            <h4>Multi-Tenant</h4>
+            <p>Firestore Tenant Isolation</p>
+          </div>
+        </a>
+        <a href="adr.html" class="nav-page-card">
+          <div class="nav-icon card-icon-blue">&#128221;</div>
+          <div class="nav-text">
+            <h4>ADR</h4>
+            <p>Architecture Decision Records (5)</p>
+          </div>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    CareNote Architecture Docs &mdash; 279 Inc.
+  </footer>
+</body>
+</html>

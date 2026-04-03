@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture - CareNote Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="js/tab-switcher.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
+</head>
+<body class="audience-general">
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <span class="logo-icon">CN</span>
+        CareNote
+        <span class="logo-sub">Architecture Docs</span>
+      </a>
+    </div>
+  </header>
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-link">Top</a>
+      <a href="architecture.html" class="nav-link active">Architecture</a>
+      <a href="auth-security.html" class="nav-link">Auth</a>
+      <a href="data-flow.html" class="nav-link">Data Flow</a>
+      <a href="multi-tenant.html" class="nav-link">Multi-Tenant</a>
+      <a href="adr.html" class="nav-link">ADR</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <span class="badge badge-primary">Architecture</span>
+      <h1>アプリケーション構造</h1>
+      <p class="subtitle">MVVM + Repository パターンとOutboxによるオフライン対応アーキテクチャ</p>
+    </div>
+
+    <div class="audience-switcher">
+      <button class="audience-btn active" data-tab="general">Overview</button>
+      <button class="audience-btn" data-tab="engineer">Technical</button>
+    </div>
+
+    <!-- ===== General ===== -->
+    <div class="audience-content" data-audience="general">
+      <section class="section">
+        <h2>アプリの構造を「ビル」に例えると</h2>
+        <p>CareNoteアプリは4つの「フロア」で構成されています。それぞれのフロアが異なる役割を担い、下のフロアは上のフロアに依存しません。</p>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon card-icon-blue">4F</div>
+            <h3>画面フロア（Features）</h3>
+            <p>ユーザーが直接触れる画面。録音ボタン、一覧表示、設定画面などがここにあります。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-green">3F</div>
+            <h3>業務処理室（Services）</h3>
+            <p>録音の開始・停止、クラウドへのアップロード、AI文字起こしの依頼など、実際の「仕事」を行うフロア。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-purple">2F</div>
+            <h3>データ管理室（Repositories）</h3>
+            <p>端末内のデータベースへのデータの保存・取得を管理。「何をどこに保管するか」を決める窓口です。</p>
+          </div>
+          <div class="card">
+            <div class="card-icon card-icon-amber">1F</div>
+            <h3>データ保管庫（Models）</h3>
+            <p>録音データ、クライアント情報、テンプレートなどのデータ構造の定義。「データの形」を決めています。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>オフライン対応の仕組み</h2>
+        <p>CareNoteは通信が不安定な介護現場でも安心して使えるよう、<strong>Outbox（送信待ちトレイ）パターン</strong>を採用しています。</p>
+        <div class="info-box info-box-blue">
+          <span class="icon">&#128225;</span>
+          <div>
+            録音データはまず端末に保存されます。インターネットに接続されると自動的にクラウドへアップロードされ、AI文字起こしが実行されます。通信が途切れても、接続が回復すれば自動で再開します（最大3回再試行）。
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Engineer ===== -->
+    <div class="audience-content" data-audience="engineer">
+      <section class="section">
+        <h2>Layer Architecture</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">Layer Dependency Diagram</div>
+          <div class="mermaid">
+graph TD
+    subgraph UI["UI Layer (Features/)"]
+        V["Views<br/>SwiftUI"]
+        VM["ViewModels<br/>@Observable"]
+    end
+    subgraph SVC["Service Layer (Services/)"]
+        AS["AudioRecorder"]
+        WIF["WIFAuth"]
+        TS["Transcription"]
+        SS["Storage"]
+        FSS["Firestore"]
+        OBS["OutboxSync<br/>(Orchestrator)"]
+        CCS["ClientCache"]
+        GDE["GoogleDocsExport"]
+    end
+    subgraph REPO["Repository Layer (Repositories/)"]
+        RR["RecordingRepository<br/>(actor)"]
+        CR["ClientRepository<br/>(actor)"]
+    end
+    subgraph DATA["Data Layer (Models/)"]
+        SD["SwiftData @Model<br/>RecordingRecord, ClientCache<br/>OutputTemplate, OutboxItem"]
+        FM["Firestore Codable<br/>FirestoreRecording<br/>FirestoreClient"]
+    end
+
+    V --> VM
+    VM --> SVC
+    OBS --> SS
+    OBS --> TS
+    OBS --> FSS
+    OBS --> WIF
+    VM --> RR
+    VM --> CR
+    CCS --> CR
+    CCS --> FSS
+    RR --> SD
+    CR --> SD
+    FSS --> FM
+
+    style UI fill:#EFF6FF,stroke:#93C5FD,color:#1E40AF
+    style SVC fill:#ECFDF5,stroke:#6EE7B7,color:#065F46
+    style REPO fill:#F3E8FF,stroke:#C4B5FD,color:#6B21A8
+    style DATA fill:#FFFBEB,stroke:#FDE68A,color:#92400E
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>MVVM + Repository Pattern</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Component</th><th>Role</th><th>Convention</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>View</strong></td><td>UI描画・ユーザー操作</td><td>SwiftUI、ロジック不含、<code>@Query</code> 直接使用禁止</td></tr>
+              <tr><td><strong>ViewModel</strong></td><td>画面状態管理・Service呼び出し</td><td><code>@Observable</code> マクロ（<code>ObservableObject</code> 不使用）</td></tr>
+              <tr><td><strong>Service</strong></td><td>ビジネスロジック</td><td><code>actor</code> または <code>struct</code>、<code>async/await</code></td></tr>
+              <tr><td><strong>Repository</strong></td><td>SwiftData CRUD抽象化</td><td><code>actor</code>、ModelContext のスレッド安全性保証</td></tr>
+              <tr><td><strong>Model</strong></td><td>データ構造定義</td><td><code>@Model</code> (SwiftData)、<code>Codable</code> (Firestore)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="info-box info-box-amber">
+          <span class="icon">&#9888;</span>
+          <div>
+            <strong>tenantId のハードコーディング禁止。</strong>すべてのService/RepositoryはパラメータでtenantIdを受け取ります。Firebase Auth custom claimから取得した値をViewModelレイヤーで管理し、下位レイヤーに渡します。
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Outbox Pattern - State Machine</h2>
+        <p><code>OutboxSyncService</code> がE2Eフロー（Upload → Transcription → Firestore Update）をオーケストレーションします。</p>
+        <div class="diagram-container">
+          <div class="diagram-title">OutboxSyncService State Transitions</div>
+          <div class="mermaid">
+stateDiagram-v2
+    [*] --> pending : 録音完了
+    pending --> uploading : Online検知
+    uploading --> transcribing : Upload成功
+    uploading --> failed : Upload失敗
+    transcribing --> completed : 文字起こし成功
+    transcribing --> failed : 文字起こし失敗
+    failed --> pending : Retry
+    failed --> error : maxRetries超過
+    completed --> [*]
+    error --> [*]
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Config</th><th>Value</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>maxRetryCount</code></td><td>3</td><td>最大リトライ回数</td></tr>
+              <tr><td><code>baseRetryDelay</code></td><td>2.0秒</td><td>初回リトライ遅延</td></tr>
+              <tr><td>Backoff</td><td>Exponential</td><td>2, 4, 8秒</td></tr>
+              <tr><td>Connectivity</td><td>NWPathMonitor</td><td>ネットワーク復帰で自動再開</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Data Flow (MVVM)</h2>
+        <div class="diagram-container">
+          <div class="diagram-title">MVVM Data Binding Flow</div>
+          <div class="mermaid">
+flowchart LR
+    A["View<br/>(SwiftUI)"] -->|"User Action"| B["ViewModel<br/>(@Observable)"]
+    B -->|"async call"| C["Service<br/>(actor)"]
+    C -->|"CRUD"| D["Repository<br/>(actor)"]
+    D -->|"persist"| E["SwiftData<br/>(@Model)"]
+    E -.->|"@Observable<br/>auto-update"| A
+
+    style A fill:#EFF6FF,stroke:#93C5FD
+    style B fill:#DBEAFE,stroke:#60A5FA
+    style C fill:#ECFDF5,stroke:#6EE7B7
+    style D fill:#F3E8FF,stroke:#C4B5FD
+    style E fill:#FFFBEB,stroke:#FDE68A
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    CareNote Architecture Docs &mdash; 279 Inc.
+  </footer>
+</body>
+</html>
