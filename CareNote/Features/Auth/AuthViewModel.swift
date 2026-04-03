@@ -142,6 +142,8 @@ final class AuthViewModel {
             let result = try await authProvider.signInWithGoogle()
 
             guard let tenantId = result.tenantId, !tenantId.isEmpty else {
+                // Firebase にはサインイン済みだがテナント未設定 → セッション破棄して半端な状態を防止
+                try? authProvider.signOut()
                 errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。\nFailed to retrieve tenant info. Please contact the administrator."
                 return
             }
@@ -164,6 +166,7 @@ final class AuthViewModel {
             let authResult = try await appleSignInCoordinator.handleResult(result)
 
             guard let tenantId = authResult.tenantId, !tenantId.isEmpty else {
+                try? authProvider.signOut()
                 errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。\nFailed to retrieve tenant info. Please contact the administrator."
                 return
             }
@@ -188,6 +191,7 @@ final class AuthViewModel {
             let result = try await emailAuthProvider.signIn(email: email, password: password)
 
             guard let tenantId = result.tenantId, !tenantId.isEmpty else {
+                try? authProvider.signOut()
                 errorMessage = "テナント情報の取得に失敗しました。管理者にお問い合わせください。\nFailed to retrieve tenant info. Please contact the administrator."
                 return
             }
@@ -239,16 +243,30 @@ final class AuthViewModel {
     }
 
     /// beforeSignIn blocking function のエラーかどうかを判定する
-    /// AuthErrorCode.blockingCloudFunctionError で判定できない場合（Apple Sign-In 経由等）は
-    /// エラーメッセージ文字列にフォールバックする
+    ///
+    /// 判定優先順位:
+    /// 1. AuthErrorCode.blockingCloudFunctionError（最も信頼性が高い）
+    /// 2. underlyingError の domain/code チェック
+    /// 3. エラーメッセージ内の Cloud Functions 固有キーワード（最終フォールバック、FIRAuthErrorDomain 内のみ）
     private static func isBlockingFunctionError(_ nsError: NSError) -> Bool {
+        // 1. 正規のエラーコード判定
         if nsError.domain == "FIRAuthErrorDomain",
            AuthErrorCode(rawValue: nsError.code) == .blockingCloudFunctionError {
             return true
         }
-        // Apple Sign-In 経由では異なるエラーコードで返される場合がある
+
+        // 2. underlyingError の再帰チェック（Apple Sign-In 経由で異なるラップがされる場合）
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            if underlying.domain == "FIRAuthErrorDomain",
+               AuthErrorCode(rawValue: underlying.code) == .blockingCloudFunctionError {
+                return true
+            }
+        }
+
+        // 3. FIRAuthErrorDomain 内のみ文字列フォールバック（他ドメインの誤検知を防止）
+        guard nsError.domain == "FIRAuthErrorDomain" else { return false }
         let description = nsError.localizedDescription + (nsError.userInfo.description)
-        return description.contains("許可されていません") || description.contains("BLOCKING_FUNCTION_ERROR")
+        return description.contains("BLOCKING_FUNCTION_ERROR")
     }
 
     /// サインアウトする
@@ -280,18 +298,33 @@ final class AuthViewModel {
             Task { @MainActor in
                 guard let self else { return }
                 if let user {
+                    // まずキャッシュ済みトークンで暫定状態を試行（オフライン対応）
                     do {
-                        let tokenResult = try await user.getIDTokenResult(forcingRefresh: true)
-                        guard let tenantId = tokenResult.claims["tenantId"] as? String,
+                        let tokenResult = try await user.getIDTokenResult(forcingRefresh: false)
+                        if let tenantId = tokenResult.claims["tenantId"] as? String, !tenantId.isEmpty {
+                            let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
+                            let isAdmin = role == .admin
+                            self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
+                            self.updateDisplayName()
+                        }
+                    } catch {
+                        Self.logger.info("Cached token unavailable: \(error.localizedDescription)")
+                    }
+
+                    // バックグラウンドで最新トークンを取得し状態を更新
+                    do {
+                        let freshToken = try await user.getIDTokenResult(forcingRefresh: true)
+                        guard let tenantId = freshToken.claims["tenantId"] as? String,
                               !tenantId.isEmpty else {
                             self.authState = .signedOut
                             return
                         }
-                        let role = UserRole.from(firestoreValue: tokenResult.claims["role"] as? String)
+                        let role = UserRole.from(firestoreValue: freshToken.claims["role"] as? String)
                         let isAdmin = role == .admin
                         self.authState = .signedIn(userId: user.uid, tenantId: tenantId, isAdmin: isAdmin)
                         self.updateDisplayName()
                     } catch {
+                        // refresh失敗時: キャッシュで暫定状態が設定済みならそれを維持、未設定なら現状維持
                         Self.logger.warning("Token refresh failed (keeping current state): \(error.localizedDescription)")
                     }
                 } else {
