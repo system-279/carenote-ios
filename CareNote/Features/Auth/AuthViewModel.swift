@@ -200,16 +200,27 @@ final class AuthViewModel {
         }
     }
 
+    private static let unregisteredAccountMessage = """
+        このアカウントは登録されていません。\
+        \n画面下部の「メールでログイン」からデモアカウントをご利用ください。\
+        \n\nThis account is not registered.\
+        \nPlease use "メールでログイン" (Email Login) below with the demo account.
+        """
+
     /// Firebase Auth エラーをユーザー向けメッセージに変換する
     private static func userFacingMessage(for error: Error) -> String {
         let nsError = error as NSError
+
+        // beforeSignIn blocking function のエラー検知（コード判定 + メッセージ文字列フォールバック）
+        if isBlockingFunctionError(nsError) {
+            return unregisteredAccountMessage
+        }
+
         guard nsError.domain == "FIRAuthErrorDomain" else {
             return "サインインに失敗しました。通信環境を確認して再度お試しください。"
         }
 
         switch AuthErrorCode(rawValue: nsError.code) {
-        case .blockingCloudFunctionError:
-            return "このアカウントは登録されていません。\n画面下部の「メールでログイン」からデモアカウントをご利用ください。\n\nThis account is not registered.\nPlease use \"メールでログイン\" (Email Login) below with the demo account."
         case .wrongPassword, .invalidCredential:
             return "メールアドレスまたはパスワードが正しくありません。\nIncorrect email or password."
         case .invalidEmail:
@@ -225,6 +236,19 @@ final class AuthViewModel {
         default:
             return "サインインに失敗しました。再度お試しください。\nSign-in failed. Please try again."
         }
+    }
+
+    /// beforeSignIn blocking function のエラーかどうかを判定する
+    /// AuthErrorCode.blockingCloudFunctionError で判定できない場合（Apple Sign-In 経由等）は
+    /// エラーメッセージ文字列にフォールバックする
+    private static func isBlockingFunctionError(_ nsError: NSError) -> Bool {
+        if nsError.domain == "FIRAuthErrorDomain",
+           AuthErrorCode(rawValue: nsError.code) == .blockingCloudFunctionError {
+            return true
+        }
+        // Apple Sign-In 経由では異なるエラーコードで返される場合がある
+        let description = nsError.localizedDescription + (nsError.userInfo.description)
+        return description.contains("許可されていません") || description.contains("BLOCKING_FUNCTION_ERROR")
     }
 
     /// サインアウトする
