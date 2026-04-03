@@ -78,6 +78,10 @@ CareNote AIは、ケアマネジャーの記録業務を効率化するアプリ
 
 ## 審査メモ（Review Notes）
 
+**For App Review: Please use the demo account via "Email Login" on the sign-in screen for the full review.**
+
+This is an invite-only business app distributed as Unlisted. Access is managed per organization (tenant), and only pre-registered accounts can sign in.
+
 本アプリは招待制の業務用アプリです（Unlisted App Distribution）。
 事業所（テナント）単位で利用者を管理しており、管理者が事前に登録したアカウントのみサインインできます。
 
@@ -85,12 +89,13 @@ CareNote AIは、ケアマネジャーの記録業務を効率化するアプリ
 - メールアドレス / Email: demo-reviewer@carenote.jp
 - パスワード / Password: CareNote2026Review!
 - ログイン方法 / How to sign in:
-  1. サインイン画面下部の「メールでログイン」をタップ / Tap "メールでログイン" (Email Login) at the bottom of the sign-in screen
+  1. サインイン画面下部の「メールでログイン / Email Login」をタップ / Tap "メールでログイン / Email Login" at the bottom of the sign-in screen
   2. 上記メールアドレスとパスワードを入力 / Enter the email and password above
   3. 「ログイン」ボタンをタップ / Tap the "ログイン" (Login) button
 
-### 注意事項（Important Notes）
-- Sign in with Apple / Google Sign-In は事前に招待されたアカウントのみ利用可能です。未登録のアカウントでは「このアカウントは登録されていません」と表示されます。
-- Sign in with Apple / Google Sign-In are available only for pre-registered accounts. Unregistered accounts will see an error message.
-- 全機能のテストにはデモアカウント（メール/パスワード）をご利用ください。
-- Please use the demo account (email/password) to test all features.
+### Sign in with Apple / Google Sign-In について
+- これらは事前に招待されたアカウントのみ利用可能です / Available only for pre-registered accounts
+- 未登録の Apple ID や Google アカウントで試した場合、「このアカウントは登録されていません」というメッセージが表示されます。これはエラーではなく、招待制アプリとしての正常な動作です
+- If Sign in with Apple is tested with an unregistered Apple ID, the expected behavior is a non-fatal "This account is not registered" message. This is by design for an invite-only app.
+- 全機能のテストにはデモアカウント（メール/パスワード）をご利用ください
+- Please use the demo account (email/password) above to test all app features
