@@ -215,14 +215,6 @@ final class AuthViewModel {
     private static func userFacingMessage(for error: Error) -> String {
         let nsError = error as NSError
 
-        // デバッグ: エラー構造の詳細ログ
-        logger.error("""
-        [AuthError] domain=\(nsError.domain) code=\(nsError.code) \
-        desc=\(nsError.localizedDescription) \
-        userInfo=\(nsError.userInfo.keys.map { String(describing: $0) }.joined(separator: ",")) \
-        underlying=\(String(describing: nsError.userInfo[NSUnderlyingErrorKey]))
-        """)
-
         // beforeSignIn blocking function のエラー検知（コード判定 + メッセージ文字列フォールバック）
         if isBlockingFunctionError(nsError) {
             return unregisteredAccountMessage
