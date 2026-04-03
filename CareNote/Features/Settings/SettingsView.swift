@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(AuthViewModel.self) private var authViewModel
 
     @State private var templateListViewModel: TemplateListViewModel?
+    @State private var showSignOutConfirmation = false
 
     var body: some View {
         List {
@@ -25,11 +26,19 @@ struct SettingsView: View {
 
             Section("アカウント") {
                 Button(role: .destructive) {
-                    authViewModel.signOut()
+                    showSignOutConfirmation = true
                 } label: {
                     Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
+        }
+        .alert("ログアウト", isPresented: $showSignOutConfirmation) {
+            Button("キャンセル", role: .cancel) {}
+            Button("ログアウト", role: .destructive) {
+                authViewModel.signOut()
+            }
+        } message: {
+            Text("ログアウトしますか？")
         }
         .navigationTitle("設定")
         .task {
