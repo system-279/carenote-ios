@@ -291,10 +291,21 @@ final class AuthViewModel {
         defer { isLoading = false }
 
         let functions = Functions.functions(region: "asia-northeast1")
-        _ = try await functions.httpsCallable("deleteAccount").call()
+        do {
+            _ = try await functions.httpsCallable("deleteAccount").call()
+        } catch {
+            Self.logger.error("deleteAccount callable failed: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
 
-        // Cloud Functions 側で Auth ユーザーが削除されたため、ローカルのセッションをクリア
-        try? Auth.auth().signOut()
+        // Cloud Functions 側で Auth ユーザーが削除されたため、Firebase Auth・Google SDK 双方の
+        // ローカルセッションをクリア。Auth ユーザー削除直後の signOut は失敗しうる（想定内）が、
+        // 状態整合性のため失敗内容はログに残す。
+        do {
+            try Auth.auth().signOut()
+        } catch {
+            Self.logger.info("Post-deletion signOut returned error (expected): \(error.localizedDescription, privacy: .public)")
+        }
         GIDSignIn.sharedInstance.signOut()
         authState = .signedOut
         displayName = nil

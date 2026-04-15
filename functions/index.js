@@ -105,46 +105,85 @@ function parseGsUri(uri) {
 //   3. The Firebase Auth user record
 // Tenant-shared data (clients, tenant-wide templates) is NOT deleted because
 // it is not considered personal data for this user.
+//
+// Auth deletion runs even if Firestore/Storage cleanup partially fails, so the
+// identity is always removed (preferred for App Store compliance). Orphan blobs
+// can be reaped by Storage lifecycle rules.
 exports.deleteAccount = onCall(
-  { region: REGION },
+  { region: REGION, timeoutSeconds: 540 },
   async (request) => {
     const uid = request.auth?.uid;
     const tenantId = request.auth?.token?.tenantId;
     if (!uid) {
       throw new CallableHttpsError("unauthenticated", "ログインが必要です。");
     }
+    if (!tenantId) {
+      console.error("[deleteAccount] missing tenantId claim", { uid });
+      throw new CallableHttpsError(
+        "failed-precondition",
+        "セッション情報が不完全です。一度ログアウトしてから再度お試しください。"
+      );
+    }
 
-    if (tenantId) {
-      const db = getFirestore();
-      const recordingsSnap = await db
-        .collection("tenants")
-        .doc(tenantId)
-        .collection("recordings")
-        .where("createdBy", "==", uid)
-        .get();
+    const db = getFirestore();
+    const recordingsSnap = await db
+      .collection("tenants")
+      .doc(tenantId)
+      .collection("recordings")
+      .where("createdBy", "==", uid)
+      .get();
 
-      const cleanupPromises = [];
-      for (const doc of recordingsSnap.docs) {
-        const data = doc.data() || {};
-        const gs = parseGsUri(data.audioStoragePath);
-        if (gs) {
-          cleanupPromises.push(
-            getStorage().bucket(gs.bucket).file(gs.object).delete({ ignoreNotFound: true })
-          );
-        }
-        cleanupPromises.push(doc.ref.delete());
+    const cleanupPromises = [];
+    for (const doc of recordingsSnap.docs) {
+      const data = doc.data() || {};
+      const gs = parseGsUri(data.audioStoragePath);
+      if (gs) {
+        cleanupPromises.push(
+          getStorage().bucket(gs.bucket).file(gs.object).delete({ ignoreNotFound: true })
+        );
+      } else if (data.audioStoragePath) {
+        console.warn("[deleteAccount] unparseable audioStoragePath", {
+          uid, docId: doc.id, audioStoragePath: data.audioStoragePath,
+        });
       }
-      await Promise.all(cleanupPromises);
+      cleanupPromises.push(doc.ref.delete());
+    }
+    const results = await Promise.allSettled(cleanupPromises);
+    const failures = results.filter((r) => r.status === "rejected");
+    if (failures.length > 0) {
+      console.error("[deleteAccount] partial cleanup failures", {
+        uid, tenantId,
+        failureCount: failures.length,
+        totalCount: results.length,
+        reasons: failures.map((f) => ({
+          code: f.reason?.code,
+          message: f.reason?.message,
+        })),
+      });
+      // Continue: identity removal takes precedence over orphan cleanup.
     }
 
     try {
       await getAuth().deleteUser(uid);
     } catch (err) {
-      // Treat already-deleted user as success to keep the operation idempotent.
+      console.error("[deleteAccount] auth.deleteUser failed", {
+        uid, code: err.code, message: err.message,
+      });
       if (err.code === "auth/user-not-found") {
-        return { success: true };
+        return { success: true, alreadyDeleted: true };
       }
-      throw new CallableHttpsError("internal", "アカウント削除に失敗しました。", err.message);
+      if (err.code === "auth/requires-recent-login") {
+        throw new CallableHttpsError(
+          "failed-precondition",
+          "セキュリティのため再ログインが必要です。一度ログアウトしてから再度お試しください。",
+          { requiresReauth: true }
+        );
+      }
+      throw new CallableHttpsError(
+        "internal",
+        "アカウント削除に失敗しました。時間をおいて再度お試しください。",
+        { phase: "auth-delete" }
+      );
     }
     return { success: true };
   }

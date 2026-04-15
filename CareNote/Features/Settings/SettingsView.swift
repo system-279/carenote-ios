@@ -49,9 +49,14 @@ struct SettingsView: View {
                 .disabled(isDeletingAccount)
 
                 if let message = deleteAccountError {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text("一度ログアウトしてから再度お試しください。\nPlease sign out and try again.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
