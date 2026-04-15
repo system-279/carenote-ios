@@ -46,6 +46,13 @@ enum RecordingScene: String, CaseIterable, Codable, Identifiable, Sendable {
         default: return nil
         }
     }
+
+    /// 保存値（英語rawValue or 旧日本語）から表示名を解決する
+    static func displayName(forStoredValue value: String) -> String {
+        RecordingScene(rawValue: value)?.displayName
+            ?? RecordingScene.fromLegacy(value)?.displayName
+            ?? value
+    }
 }
 
 // MARK: - UploadStatus
@@ -97,5 +104,12 @@ enum OutputType: String, CaseIterable, Codable, Sendable, Identifiable {
         case "カスタム": return .custom
         default: return nil
         }
+    }
+
+    /// 保存値（英語rawValue or 旧日本語）から表示名を解決する
+    static func displayName(forStoredValue value: String) -> String {
+        OutputType(rawValue: value)?.displayName
+            ?? OutputType.fromLegacy(value)?.displayName
+            ?? value
     }
 }

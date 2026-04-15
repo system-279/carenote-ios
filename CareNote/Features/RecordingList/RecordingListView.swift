@@ -79,7 +79,7 @@ private struct RecordingListRow: View {
             }
 
             HStack {
-                Text(recording.scene)
+                Text(RecordingScene.displayName(forStoredValue: recording.scene))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -168,7 +168,7 @@ struct RecordingDetailView: View {
                 // Info Section
                 VStack(alignment: .leading, spacing: 8) {
                     DetailRow(label: "利用者", value: recording.clientName)
-                    DetailRow(label: "シーン", value: recording.scene)
+                    DetailRow(label: "シーン", value: RecordingScene.displayName(forStoredValue: recording.scene))
                     DetailRow(
                         label: "録音日時",
                         value: recording.recordedAt.formatted(
