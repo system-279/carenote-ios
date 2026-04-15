@@ -44,6 +44,13 @@ final class AppleSignInCoordinator {
             fullName: appleIDCredential.fullName
         )
 
+        // App Store Guideline 5.1.1(v) 対応: 退会時に Apple の refresh token を revoke するため、
+        // authorization code を Keychain に保管しておく（TTL は短いが、同一セッション内の削除で有効）
+        if let authCodeData = appleIDCredential.authorizationCode,
+           let authCodeString = String(data: authCodeData, encoding: .utf8) {
+            KeychainHelper.save(authCodeString, forKey: KeychainKey.appleAuthorizationCode)
+        }
+
         let authResult = try await Auth.auth().signIn(with: credential)
         let tokenResult = try await authResult.user.getIDTokenResult(forcingRefresh: true)
         let tenantId = tokenResult.claims["tenantId"] as? String

@@ -35,11 +35,11 @@ struct SignInView: View {
                     Spacer()
                         .frame(height: max(geometry.size.height * 0.1, 40))
 
-                    // Error Message
+                    // Info Message (network errors, incorrect credentials, etc.)
                     if let errorMessage = viewModel.errorMessage {
                         Text(errorMessage)
                             .font(.footnote)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
 

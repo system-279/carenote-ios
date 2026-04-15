@@ -28,7 +28,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.carenote.app
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "32"
+        CURRENT_PROJECT_VERSION: "33"
         INFOPLIST_FILE: CareNote/Info.plist
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: false
@@ -49,6 +49,8 @@ targets:
         product: FirebaseAuth
       - package: firebase-ios-sdk
         product: FirebaseFirestore
+      - package: firebase-ios-sdk
+        product: FirebaseFunctions
       - package: GoogleSignIn-iOS
         product: GoogleSignIn
       - package: GoogleSignIn-iOS

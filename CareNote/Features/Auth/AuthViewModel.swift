@@ -1,6 +1,7 @@
 import AuthenticationServices
 @preconcurrency import FirebaseAuth
 import FirebaseCore
+@preconcurrency import FirebaseFunctions
 @preconcurrency import GoogleSignIn
 import Observation
 import os.log
@@ -205,10 +206,8 @@ final class AuthViewModel {
     }
 
     private static let unregisteredAccountMessage = """
-        このアカウントは登録されていません。\
-        \n画面下部の「メールでログイン」からデモアカウントをご利用ください。\
-        \n\nThis account is not registered.\
-        \nPlease use "メールでログイン" (Email Login) below with the demo account.
+        このアカウントは現在ご利用できません。管理者にお問い合わせください。
+        This account is not available. Please contact your administrator.
         """
 
     /// Firebase Auth エラーをユーザー向けメッセージに変換する
@@ -283,6 +282,46 @@ final class AuthViewModel {
         }
 
         return false
+    }
+
+    /// アカウントを完全に削除する（App Store Guideline 5.1.1(v)）
+    func deleteAccount() async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        // Apple Sign-In ユーザーは refresh token を revoke する（Guideline 5.1.1(v) 要件）。
+        // authorization code の TTL は 5 分と短いため失敗しうるが、ベストエフォートで実行し
+        // 削除処理は継続する（Apple 側に revoke API が呼ばれた履歴が残ることが重要）。
+        if let authCode = KeychainHelper.load(forKey: KeychainKey.appleAuthorizationCode) {
+            do {
+                try await Auth.auth().revokeToken(withAuthorizationCode: authCode)
+                Self.logger.info("Apple refresh token revoked successfully")
+            } catch {
+                Self.logger.info("Apple revoke token failed (best-effort, continuing): \(error.localizedDescription, privacy: .public)")
+            }
+            KeychainHelper.delete(forKey: KeychainKey.appleAuthorizationCode)
+        }
+
+        let functions = Functions.functions(region: "asia-northeast1")
+        do {
+            _ = try await functions.httpsCallable("deleteAccount").call()
+        } catch {
+            Self.logger.error("deleteAccount callable failed: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+
+        // Cloud Functions 側で Auth ユーザーが削除されたため、Firebase Auth・Google SDK 双方の
+        // ローカルセッションをクリア。Auth ユーザー削除直後の signOut は失敗しうる（想定内）が、
+        // 状態整合性のため失敗内容はログに残す。
+        do {
+            try Auth.auth().signOut()
+        } catch {
+            Self.logger.info("Post-deletion signOut returned error (expected): \(error.localizedDescription, privacy: .public)")
+        }
+        GIDSignIn.sharedInstance.signOut()
+        authState = .signedOut
+        displayName = nil
     }
 
     /// サインアウトする

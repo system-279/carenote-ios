@@ -1,50 +1,42 @@
-# Handoff — App Store Review 再リジェクト対応 (2026-04-03)
+# Handoff — App Store Review Build 32 再リジェクト対応 / Build 33 準備 (2026-04-15)
 
 ## セッション成果
 
-### App Store Review 再リジェクト対応 (Build 22 → Build 32)
+### Build 32 リジェクト → Guest Tenant 戦略へ転換
 
-Build 22 が Guideline 2.1(a) で再リジェクト（iPad Air M3 + iPadOS 26.4 で Sign in with Apple / デモメールアカウント両方でエラー）。根本原因は Cloud Functions の `throw new Error()` が iOS SDK に正しく伝播しない問題。`HttpsError` に修正して解決。
+Build 32 が再度 Guideline 2.1(a) で却下（2026-04-07、iPad Air M3 + iPadOS 26.4）。Sign in with Apple で「このアカウントは登録されていません」の赤字メッセージが「エラー」と判定された。
 
-| 対応項目 | PR | 状態 |
-|---------|-----|------|
-| tenantId欠落時のFirebaseセッションロールバック | PR #78 | 完了 |
-| Apple Sign-Inエラー判定復元 + ログアウト確認ダイアログ | PR #79 | 完了 |
-| デバッグログ追加（エラー構造調査） | PR #80 | 完了 |
-| **beforeSignIn HttpsError修正 + iOS側判定堅牢化** | PR #81 | 完了 |
-| デバッグログ削除（クリーンビルド） | PR #82 | 完了 |
-| Review Notes 強化（レビュアー導線明確化） | PR #83 | 完了 |
-| ビルド番号32に同期 | PR #84 | 完了 |
-| Build 32 で審査再提出 | App Store Connect | **審査待ち** |
+| 対応項目 | 状態 |
+|---------|------|
+| Apple Sign-In 未登録 → demo-guest テナント自動プロビジョニング | ✅ Cloud Functions 実装・Dev/Prod デプロイ完了 |
+| ログイン画面の赤字エラー撤廃（`.secondary` グレー化） | ✅ |
+| アカウント削除機能（Guideline 5.1.1(v)） | ✅ Settings画面導線 + Cloud Function `deleteAccount`（recordings + Storage 音声削除）|
+| ADR-007（Guest Tenant 設計） | ✅ |
+| Review Notes 全面改訂 | ✅ Sign in with Apple 自動プロビジョニング経路を明示 |
+| ビルド番号 33 へ更新 | ✅ |
+| Quality Gate（simplify + safe-refactor + Evaluator） | ✅ 全PASS、HIGH指摘は対応済 or ADR既知制約化 |
 
-### 根本原因と修正
+### 設計の核心（ADR-007）
 
-**Cloud Functions (`functions/index.js`)**:
-- `throw new Error(...)` → `throw new HttpsError("permission-denied", ...)` に修正
-- plain Error だと Firebase SDK の identity 処理層で "Unhandled error" として扱われ、iOS に `blockingCloudFunctionError` が正しく返らなかった
-- Prod デプロイ済み（`firebase deploy --only functions:beforeSignIn -P prod`）
+未登録 Apple ID は `tenants/demo-guest` へ自動割り当てし、独立空間で全機能を試用できる。
+Google/Email は招待制を維持。実ユーザーフローへの影響ゼロ。
+UI 文言には「審査用」と書かない（Guideline 2.3 リスク回避）。意図は ADR-007 にのみ記録。
 
-**iOS (`AuthViewModel.swift`)**:
-- `isBlockingFunctionError()` を堅牢化: domain/code → `FIRAuthErrorUserInfoNameKey` → underlyingError再帰（深さ3）→ 文字列フォールバック
-- tenantId欠落時に `Auth.auth().signOut()` でセッション破棄
-- `checkAuthState()` で2段階トークン取得（cached→fresh）でオフライン対応
+### 既知の制約（ADR-007 §制約・懸念）
 
-**UI改善**:
-- パスワード表示/非表示トグル
-- エラーメッセージ日英併記（エラーコード別）
-- ログアウト確認ダイアログ
-
-### 教訓
-
-- Cloud Functions ログ（`firebase functions:log`）を最初に確認すべきだった
-- iOS側の文字列判定を5ビルドにわたり調整して時間を浪費
-- クロスレイヤー問題はサーバー・クライアント両方を疑う
+| # | 内容 | Issue化 |
+|---|------|---------|
+| 1 | demo-guest テナントの TTL/レート制限なし | 要 |
+| 2 | Apple Refresh Token revoke 未実装 | 要 |
+| 3 | 削除後のローカル SwiftData キャッシュ未クリア | 要 |
+| 4 | Guest 利用者向けの「本番ログイン不可」UI なし | 要 |
 
 ## 現在の状態
 
-- **ブランチ**: main
-- **ビルド**: Build 32 (App Store Connect で審査待ち)
-- **Cloud Functions**: HttpsError版が Prod ACTIVE (`beforesignin-00002-qan`)
+- **ブランチ**: main（PR作成予定）
+- **ビルド**: Build 33（TestFlight アップロード未実施）
+- **Cloud Functions**: Dev/Prod ともに `beforeSignIn` v3, `deleteAccount` v1 ACTIVE
+- **Firestore**: `tenants/demo-guest` Dev/Prod 両方に作成済み
 
 ## オープンIssue
 
@@ -55,7 +47,8 @@ Build 22 が Guideline 2.1(a) で再リジェクト（iPad Air M3 + iPadOS 26.4 
 
 ## 次セッション推奨アクション
 
-1. **審査結果確認**（24〜48時間以内）
-2. 審査通過 → TestFlight 配布 → #43 Google Docs エクスポートに着手
-3. 審査不通過 → 指摘内容に対応
-4. #71 entitlements 検証ステップを upload-testflight.sh に追加
+1. **TestFlight アップロード**: `./scripts/upload-testflight.sh`
+2. **App Store Connect で Build 33 を審査提出**
+3. **Build 33 リジェクト時の備え**: ADR-007 既知制約 #2 (Apple revoke) を先回りして実装するか判断
+4. **既知制約4件のIssue化**（Build 33 結果見てから）
+5. #71 entitlements 検証ステップを upload-testflight.sh に追加

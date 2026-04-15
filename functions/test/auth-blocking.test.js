@@ -104,8 +104,8 @@ before(() => {
 });
 
 describe("Auth Blocking Function", () => {
-  // ABF-2: 未登録ユーザー拒否
-  describe("未登録ユーザー", () => {
+  // ABF-2: 未登録ユーザー拒否（non-Apple プロバイダ）
+  describe("未登録ユーザー（non-Apple）", () => {
     it("whitelist/allowedDomains どちらにもマッチしないユーザーを拒否する", async () => {
       setupTenant("279", {
         whitelist: [{ email: "allowed@example.com", role: "member" }],
@@ -113,7 +113,12 @@ describe("Auth Blocking Function", () => {
       });
 
       try {
-        await beforeSignIn({ data: { email: "unknown@other.com" } });
+        await beforeSignIn({
+          data: {
+            email: "unknown@other.com",
+            providerData: [{ providerId: "google.com" }],
+          },
+        });
         assert.fail("Should have thrown");
       } catch (e) {
         assert.ok(e.message.includes("許可されていません"));
@@ -123,7 +128,83 @@ describe("Auth Blocking Function", () => {
     it("テナントが存在しない場合も拒否する", async () => {
       // No tenants set up
       try {
-        await beforeSignIn({ data: { email: "anyone@example.com" } });
+        await beforeSignIn({
+          data: {
+            email: "anyone@example.com",
+            providerData: [{ providerId: "password" }],
+          },
+        });
+        assert.fail("Should have thrown");
+      } catch (e) {
+        assert.ok(e.message.includes("許可されていません"));
+      }
+    });
+  });
+
+  // ABF-Apple: Apple Sign-In の審査対策 — 未登録 Apple ID は demo-guest テナントへ自動プロビジョニング
+  describe("Apple Sign-In 自動プロビジョニング", () => {
+    it("未登録 Apple ID は demo-guest テナントへフォールバックする（providerData経由）", async () => {
+      setupTenant("279", {
+        whitelist: [{ email: "allowed@example.com", role: "member" }],
+        allowedDomains: ["example.com"],
+      });
+
+      const result = await beforeSignIn({
+        data: {
+          email: "abc123@privaterelay.appleid.com",
+          providerData: [{ providerId: "apple.com" }],
+        },
+      });
+      assert.deepStrictEqual(result, {
+        customClaims: { tenantId: "demo-guest", role: "member" },
+      });
+    });
+
+    it("未登録 Apple ID は demo-guest テナントへフォールバックする（credential経由）", async () => {
+      setupTenant("279", {
+        whitelist: [],
+        allowedDomains: [],
+      });
+
+      const result = await beforeSignIn({
+        data: { email: "unknown@appleid.example" },
+        credential: { providerId: "apple.com" },
+      });
+      assert.deepStrictEqual(result, {
+        customClaims: { tenantId: "demo-guest", role: "member" },
+      });
+    });
+
+    it("Apple ID でも whitelist に登録されていれば本番テナントへ割り当てる", async () => {
+      setupTenant("279", {
+        whitelist: [{ email: "real-user@example.com", role: "admin" }],
+        allowedDomains: [],
+      });
+
+      const result = await beforeSignIn({
+        data: {
+          email: "real-user@example.com",
+          providerData: [{ providerId: "apple.com" }],
+        },
+      });
+      assert.deepStrictEqual(result, {
+        customClaims: { tenantId: "279", role: "admin" },
+      });
+    });
+
+    it("demo-guest テナント自体は whitelist/allowedDomains 判定からスキップされる", async () => {
+      setupTenant("demo-guest", {
+        whitelist: [{ email: "anyone@example.com", role: "admin" }],
+        allowedDomains: ["example.com"],
+      });
+
+      try {
+        await beforeSignIn({
+          data: {
+            email: "anyone@example.com",
+            providerData: [{ providerId: "google.com" }],
+          },
+        });
         assert.fail("Should have thrown");
       } catch (e) {
         assert.ok(e.message.includes("許可されていません"));

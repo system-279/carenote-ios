@@ -9,6 +9,9 @@ struct SettingsView: View {
 
     @State private var templateListViewModel: TemplateListViewModel?
     @State private var showSignOutConfirmation = false
+    @State private var showDeleteAccountConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError: String?
 
     var body: some View {
         List {
@@ -30,6 +33,31 @@ struct SettingsView: View {
                 } label: {
                     Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
                 }
+
+                Button(role: .destructive) {
+                    showDeleteAccountConfirmation = true
+                } label: {
+                    if isDeletingAccount {
+                        HStack {
+                            ProgressView()
+                            Text("削除中...")
+                        }
+                    } else {
+                        Label("アカウントを削除", systemImage: "trash")
+                    }
+                }
+                .disabled(isDeletingAccount)
+
+                if let message = deleteAccountError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text("一度ログアウトしてから再度お試しください。\nPlease sign out and try again.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         .alert("ログアウト", isPresented: $showSignOutConfirmation) {
@@ -40,6 +68,16 @@ struct SettingsView: View {
         } message: {
             Text("ログアウトしますか？")
         }
+        .alert("アカウントを削除", isPresented: $showDeleteAccountConfirmation) {
+            Button("キャンセル", role: .cancel) {}
+            Button("削除", role: .destructive) {
+                Task {
+                    await deleteAccount()
+                }
+            }
+        } message: {
+            Text("アカウントを完全に削除します。この操作は取り消せません。\n\nThis will permanently delete your account. This action cannot be undone.")
+        }
         .navigationTitle("設定")
         .task {
             if templateListViewModel == nil {
@@ -49,6 +87,18 @@ struct SettingsView: View {
                     isAdmin: authViewModel.authState.isAdmin
                 )
             }
+        }
+    }
+
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        deleteAccountError = nil
+        defer { isDeletingAccount = false }
+
+        do {
+            try await authViewModel.deleteAccount()
+        } catch {
+            deleteAccountError = "アカウント削除に失敗しました。\nFailed to delete account."
         }
     }
 }

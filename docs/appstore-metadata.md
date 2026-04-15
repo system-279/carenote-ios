@@ -93,9 +93,22 @@ This is an invite-only business app distributed as Unlisted. Access is managed p
   2. 上記メールアドレスとパスワードを入力 / Enter the email and password above
   3. 「ログイン」ボタンをタップ / Tap the "ログイン" (Login) button
 
-### Sign in with Apple / Google Sign-In について
-- これらは事前に招待されたアカウントのみ利用可能です / Available only for pre-registered accounts
-- 未登録の Apple ID や Google アカウントで試した場合、「このアカウントは登録されていません」というメッセージが表示されます。これはエラーではなく、招待制アプリとしての正常な動作です
-- If Sign in with Apple is tested with an unregistered Apple ID, the expected behavior is a non-fatal "This account is not registered" message. This is by design for an invite-only app.
-- 全機能のテストにはデモアカウント（メール/パスワード）をご利用ください
-- Please use the demo account (email/password) above to test all app features
+### Sign in with Apple について（Guest / Trial Mode）
+- Sign in with Apple は誰でも利用可能です。未登録の Apple ID でサインインすると、体験用の独立したテナント（Guest Tenant）に自動的に割り当てられ、全機能を試用できます。
+- Sign in with Apple is available to everyone. When an unregistered Apple ID signs in, the user is automatically assigned to an isolated Guest Tenant where all app features can be tried.
+- この体験モードでは、他の事業所のデータから完全に分離された環境で録音・文字起こし・管理機能が利用できます。
+- In this trial mode, recording, transcription, and management features are available in a completely isolated environment from any other tenant's data.
+
+### Google Sign-In について
+- Google Sign-In は招待制です（事前に管理者に登録されたアカウントのみ利用可能）。
+- Google Sign-In is invite-only (only accounts pre-registered by an administrator can sign in).
+- 未登録の Google アカウントでサインインすると、案内メッセージが表示されます。
+- If an unregistered Google account is used, a non-fatal informational message is displayed.
+
+### 推奨される審査手順 / Recommended Review Steps
+1. Sign in with Apple でレビュアーご自身の Apple ID からサインイン（自動で Guest Tenant へ割り当て）/ Sign in with Apple using your own Apple ID — you will be auto-assigned to the Guest Tenant
+2. または、上記デモアカウント（メール/パスワード）でメールログインから全機能をテスト / Or use the demo account above via Email Login to test all features
+
+### アカウント削除 / Account Deletion
+- 設定画面の「アカウントを削除 / Delete Account」から、アカウント完全削除が可能です（Guideline 5.1.1(v) 準拠）。
+- Account deletion is available under Settings → "アカウントを削除 / Delete Account" (complies with Guideline 5.1.1(v)).
