@@ -192,7 +192,7 @@ private struct TemplateRow: View {
 
                 Spacer()
 
-                Text(template.outputType)
+                Text(OutputType.displayName(forStoredValue: template.outputType))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
