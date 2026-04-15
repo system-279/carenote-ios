@@ -71,13 +71,20 @@ final class RecordingListViewModel {
         let lastSynced = defaults.string(forKey: Self.lastSyncedTenantKey)
         guard lastSynced != currentTenant else { return }
 
+        // 未アップロードの録音を検知して警告（テナント切替時の意図しないデータ喪失を可視化）
+        if let pending = try? recordingRepository.pendingUploads(), !pending.isEmpty {
+            Self.logger.error("Tenant switch (\(lastSynced ?? "nil", privacy: .public) -> \(currentTenant, privacy: .public)) will discard \(pending.count) pending uploads")
+        }
+
         do {
             try recordingRepository.deleteAll()
             Self.logger.info("Cleared local recordings for tenant switch: \(lastSynced ?? "nil", privacy: .public) -> \(currentTenant, privacy: .public)")
+            // 削除成功時のみ UserDefaults を更新（失敗時は次回再試行して越境を防ぐ）
+            defaults.set(currentTenant, forKey: Self.lastSyncedTenantKey)
         } catch {
             Self.logger.error("Failed to clear local recordings on tenant switch: \(error.localizedDescription, privacy: .public)")
+            // UserDefaults を更新しない → 次回 loadRecordings で再試行される
         }
-        defaults.set(currentTenant, forKey: Self.lastSyncedTenantKey)
     }
 
     /// 録音の文字起こしを再試行する
