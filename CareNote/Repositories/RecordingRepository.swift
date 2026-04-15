@@ -93,4 +93,59 @@ final class RecordingRepository: @unchecked Sendable {
         )
         return try modelContext.fetch(descriptor)
     }
+
+    /// 全録音レコードと関連 OutboxItem を削除する（テナント切替時のキャッシュクリア用）
+    func deleteAll() throws {
+        let records = try fetchAll()
+        for record in records {
+            let recordingId = record.id
+            let outboxDescriptor = FetchDescriptor<OutboxItem>(
+                predicate: #Predicate { $0.recordingId == recordingId }
+            )
+            if let items = try? modelContext.fetch(outboxDescriptor) {
+                for item in items { modelContext.delete(item) }
+            }
+            modelContext.delete(record)
+        }
+        try modelContext.save()
+    }
+
+    /// Firestore から取得した録音リストを SwiftData に upsert する
+    /// - firestoreId で既存レコードを検索し、存在すれば更新、なければ新規作成
+    /// - localAudioPath は remote-only レコードでは空文字（再生は不可、メタデータのみ表示）
+    func upsertFromFirestore(_ remoteRecordings: [FirestoreRecording]) throws {
+        for remote in remoteRecordings {
+            guard let remoteId = remote.id else { continue }
+
+            let descriptor = FetchDescriptor<RecordingRecord>(
+                predicate: #Predicate { $0.firestoreId == remoteId }
+            )
+            if let existing = try modelContext.fetch(descriptor).first {
+                existing.clientId = remote.clientId
+                existing.clientName = remote.clientName
+                existing.scene = remote.scene
+                existing.recordedAt = remote.recordedAt
+                existing.durationSeconds = remote.durationSeconds
+                existing.transcription = remote.transcription
+                existing.transcriptionStatus = remote.transcriptionStatus
+                existing.uploadStatus = UploadStatus.done.rawValue
+            } else {
+                let new = RecordingRecord(
+                    id: UUID(),
+                    clientId: remote.clientId,
+                    clientName: remote.clientName,
+                    scene: remote.scene,
+                    recordedAt: remote.recordedAt,
+                    durationSeconds: remote.durationSeconds,
+                    localAudioPath: "",
+                    firestoreId: remoteId,
+                    uploadStatus: UploadStatus.done.rawValue,
+                    transcription: remote.transcription,
+                    transcriptionStatus: remote.transcriptionStatus
+                )
+                modelContext.insert(new)
+            }
+        }
+        try modelContext.save()
+    }
 }
