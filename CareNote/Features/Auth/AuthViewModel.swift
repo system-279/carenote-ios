@@ -1,6 +1,7 @@
 import AuthenticationServices
 @preconcurrency import FirebaseAuth
 import FirebaseCore
+@preconcurrency import FirebaseFunctions
 @preconcurrency import GoogleSignIn
 import Observation
 import os.log
@@ -205,10 +206,8 @@ final class AuthViewModel {
     }
 
     private static let unregisteredAccountMessage = """
-        このアカウントは登録されていません。\
-        \n画面下部の「メールでログイン」からデモアカウントをご利用ください。\
-        \n\nThis account is not registered.\
-        \nPlease use "メールでログイン" (Email Login) below with the demo account.
+        このアカウントは現在ご利用できません。管理者にお問い合わせください。
+        This account is not available. Please contact your administrator.
         """
 
     /// Firebase Auth エラーをユーザー向けメッセージに変換する
@@ -283,6 +282,22 @@ final class AuthViewModel {
         }
 
         return false
+    }
+
+    /// アカウントを完全に削除する（App Store Guideline 5.1.1(v)）
+    func deleteAccount() async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        let functions = Functions.functions(region: "asia-northeast1")
+        _ = try await functions.httpsCallable("deleteAccount").call()
+
+        // Cloud Functions 側で Auth ユーザーが削除されたため、ローカルのセッションをクリア
+        try? Auth.auth().signOut()
+        GIDSignIn.sharedInstance.signOut()
+        authState = .signedOut
+        displayName = nil
     }
 
     /// サインアウトする
