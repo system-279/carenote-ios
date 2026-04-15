@@ -290,6 +290,19 @@ final class AuthViewModel {
         errorMessage = nil
         defer { isLoading = false }
 
+        // Apple Sign-In ユーザーは refresh token を revoke する（Guideline 5.1.1(v) 要件）。
+        // authorization code の TTL は 5 分と短いため失敗しうるが、ベストエフォートで実行し
+        // 削除処理は継続する（Apple 側に revoke API が呼ばれた履歴が残ることが重要）。
+        if let authCode = KeychainHelper.load(forKey: KeychainKey.appleAuthorizationCode) {
+            do {
+                try await Auth.auth().revokeToken(withAuthorizationCode: authCode)
+                Self.logger.info("Apple refresh token revoked successfully")
+            } catch {
+                Self.logger.info("Apple revoke token failed (best-effort, continuing): \(error.localizedDescription, privacy: .public)")
+            }
+            KeychainHelper.delete(forKey: KeychainKey.appleAuthorizationCode)
+        }
+
         let functions = Functions.functions(region: "asia-northeast1")
         do {
             _ = try await functions.httpsCallable("deleteAccount").call()
