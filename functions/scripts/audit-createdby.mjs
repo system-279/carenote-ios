@@ -34,10 +34,21 @@ const BACKOFF_BASE_MS = 1000;
 let cachedToken = null;
 let cachedAt = 0;
 
+function invalidateToken() {
+  cachedToken = null;
+  cachedAt = 0;
+}
+
 function token() {
   const now = Date.now();
   if (cachedToken && now - cachedAt < TOKEN_TTL_MS) return cachedToken;
-  cachedToken = execFileSync("gcloud", ["auth", "print-access-token"]).toString().trim();
+  const fresh = execFileSync("gcloud", ["auth", "print-access-token"]).toString().trim();
+  if (!fresh) {
+    throw new Error(
+      "gcloud auth print-access-token returned empty; run `gcloud auth login` and retry."
+    );
+  }
+  cachedToken = fresh;
   cachedAt = now;
   return cachedToken;
 }
@@ -60,7 +71,7 @@ function httpError(status, url, body) {
   }
   if (status === 429) {
     return new Error(
-      `HTTP 429 for ${url}: Firestore API のレート制限を超過しました (${MAX_RETRIES + 1} 回の retry 後)。\n` +
+      `HTTP 429 for ${url}: Firestore API のレート制限を超過しました (計 ${MAX_RETRIES + 1} 回試行後)。\n` +
         `  → 時間をおいて再試行、または pageSize を下げてください。\n` +
         `  response: ${body}`
     );
@@ -76,13 +87,35 @@ async function getJson(url) {
   let lastStatus = 0;
   let lastBody = "";
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token()}` },
-    });
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+    } catch (err) {
+      // fetch throws on network-level failures (DNS, ECONNRESET, AbortError).
+      // Treat them as transient and retry in the same backoff envelope as 5xx.
+      lastStatus = -1;
+      lastBody = `network error: ${err.message}`;
+      if (attempt === MAX_RETRIES) break;
+      const backoff = BACKOFF_BASE_MS * Math.pow(2, attempt);
+      console.warn(`  retry ${attempt + 1}/${MAX_RETRIES} after ${backoff}ms (${lastBody})`);
+      await sleep(backoff);
+      continue;
+    }
     if (res.ok) return res.json();
 
     lastStatus = res.status;
     lastBody = await res.text();
+
+    // 401 typically means token expired; invalidate the cache and retry once
+    // so long-running audits survive the 55min TTL boundary.
+    if (res.status === 401) {
+      invalidateToken();
+      if (attempt === MAX_RETRIES) break;
+      console.warn(`  retry ${attempt + 1}/${MAX_RETRIES} after token refresh (HTTP 401)`);
+      continue;
+    }
 
     const retryable = res.status === 429 || (res.status >= 500 && res.status < 600);
     if (!retryable || attempt === MAX_RETRIES) break;
@@ -99,7 +132,6 @@ async function getJson(url) {
 async function listAllDocuments(path, pageSize = 300) {
   const docs = [];
   let pageToken = null;
-  let previousToken = null;
   for (let page = 0; page < MAX_PAGES; page++) {
     const url = new URL(`${base}/${path}`);
     url.searchParams.set("pageSize", String(pageSize));
@@ -107,15 +139,13 @@ async function listAllDocuments(path, pageSize = 300) {
     const data = await getJson(url.toString());
     if (data.documents) docs.push(...data.documents);
     if (!data.nextPageToken) return docs;
-    // Guard against a stuck pageToken (API bug / pagination cycle). If the
-    // token did not change after a full round-trip, bail out rather than loop
-    // indefinitely.
-    if (data.nextPageToken === previousToken) {
+    // Guard against a stuck pageToken: if the server returns the same token
+    // we just sent, pagination is not advancing — bail rather than loop.
+    if (data.nextPageToken === pageToken) {
       throw new Error(
         `Firestore pageToken did not advance at page ${page} for ${path}; aborting to avoid infinite loop.`
       );
     }
-    previousToken = pageToken;
     pageToken = data.nextPageToken;
   }
   throw new Error(
