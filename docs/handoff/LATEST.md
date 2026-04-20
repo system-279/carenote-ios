@@ -64,19 +64,21 @@ uid 参照箇所の全棚卸し完了。移行 Function の書換対象が確定
 |---|---|---|
 | Phase -1 | `createdBy` 正常保存 + 監査 + deleteAccount テスト | ✅ PR #101 マージ済 |
 | Phase -1 A3 dev | dev 21 件バックフィル削除 | ✅ PR #112 マージ済 (2026-04-20) |
-| Phase -1 A3 prod | prod 8 件バックフィル削除 | ⏳ ユーザー確認後実施（別 PR） |
+| Phase -1 A3 prod | prod 8 件バックフィル削除 | ✅ 実施済 (2026-04-21, 8/8 成功, audit empty=0) |
 | Phase 0 | uid 参照棚卸し (ADR-008) | ✅ PR #109 マージ済 |
-| Phase 0.5 | Firestore Rules 強化 + `migrationLogs` collection 新設 + rules-unit-testing 拡充 + CI 組込 | 🚧 PR 進行中（feat/phase-0-5-rules-strengthen、dev deploy 前） |
-| Phase 0.9 | `allowedDomains: ["279279.net"]` 有効化 | ⏳ Phase 0.5 完了後 |
-| Phase 1 | `transferOwnership` Callable Function 実装 | ⏳ Phase 0.5 完了後 |
+| Phase 0.5 | Firestore Rules 強化 + `migrationLogs` collection 新設 + rules-unit-testing 拡充 + CI 組込 | ✅ PR #115 マージ済 + dev deploy 完了 (2026-04-21, iOS 実機検証は別途) |
+| Phase 0.9 | `allowedDomains: ["279279.net"]` 有効化 | ⏳ Phase 0.5 prod deploy + iOS 実機検証後 |
+| Phase 1 | `transferOwnership` Callable Function 実装 | ⏳ 並行着手可 |
 | Phase 2 | 本人主導 UI（移行コード方式） | 🔒 スコープ外（頻度低 × コスト高） |
 
 ## オープン Issue（アカウント移行機能関連）
 
 | # | タイトル | ラベル | 優先度 |
 |---|---------|--------|-------|
-| #99 | 録音の `createdBy` が空文字で保存されている | bug, P0 | A3 バックフィル後にクローズ |
-| #100 | Firestore Rules の recordings 権限が過剰 | bug, P0 | Phase 0.5 着手時 |
+| #99 | 録音の `createdBy` が空文字で保存されている | bug, P0 | **A3 prod 完了により本 PR でクローズ** |
+| #100 | Firestore Rules の recordings 権限が過剰 | bug, P0 | **PR #115 マージ済 (dev deploy 完了、prod deploy 残)** |
+| #114 | delete-empty-createdby: 統合テスト・ログ強化 | enhancement, P2 | PR #112 follow-up |
+| #116 | Firestore Rules 追加エッジケーステスト | enhancement, P2 | PR #115 follow-up (Phase 1 前対処) |
 | #102 | deleteAccount テスト拡張（partial failure / auth error codes） | enhancement, P2 | - |
 | #103 | audit-createdby 堅牢性（token cache / pagination 保護） | enhancement, P2 | - |
 | #104 | delete-account test mock の深さ制限 | enhancement, P2 | - |
