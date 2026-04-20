@@ -1,3 +1,4 @@
+@preconcurrency import FirebaseAuth
 import Foundation
 import Observation
 import os.log
@@ -56,7 +57,8 @@ final class RecordingConfirmViewModel {
                 projectId: AppConfig.gcpProject,
                 accessTokenProvider: wifService
             ),
-            tenantId: tenantId
+            tenantId: tenantId,
+            currentUidProvider: { Auth.auth().currentUser?.uid }
         )
     }
 
@@ -162,6 +164,8 @@ final class RecordingConfirmViewModel {
                     detail = "Max retries: \(id)"
                 case .modelContainerNotAvailable:
                     detail = "ModelContainer unavailable"
+                case .userNotAuthenticated:
+                    detail = "ログインが必要です"
                 }
             } else {
                 detail = "\(error)"

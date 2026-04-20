@@ -11,6 +11,7 @@ enum OutboxSyncError: Error, Sendable {
     case maxRetriesExceeded(UUID)
     case uploadFailed(Error)
     case transcriptionFailed(Error)
+    case userNotAuthenticated
 }
 
 // MARK: - OutboxSyncService
@@ -31,6 +32,7 @@ actor OutboxSyncService {
     private let firestoreService: any RecordingStoring
     private let transcriptionService: any Transcribing
     private let tenantId: String
+    private let currentUidProvider: @Sendable () -> String?
 
     private var pathMonitor: NWPathMonitor?
     private var monitorQueue: DispatchQueue?
@@ -46,13 +48,15 @@ actor OutboxSyncService {
         storageService: any AudioUploading,
         firestoreService: any RecordingStoring,
         transcriptionService: any Transcribing,
-        tenantId: String
+        tenantId: String,
+        currentUidProvider: @escaping @Sendable () -> String?
     ) {
         self.modelContainer = modelContainer
         self.storageService = storageService
         self.firestoreService = firestoreService
         self.transcriptionService = transcriptionService
         self.tenantId = tenantId
+        self.currentUidProvider = currentUidProvider
     }
 
     // MARK: - Queue Management
@@ -217,11 +221,9 @@ actor OutboxSyncService {
         // Step 2: Create or update Firestore document
         var firestoreId = recording.firestoreId
         if firestoreId == nil {
-            let recordingData = await buildFirestoreRecording(recordingId: item.recordingId, gcsUri: gcsUri)
-            if let data = recordingData {
-                firestoreId = try await firestoreService.createRecording(tenantId: tenantId, recording: data)
-                await updateFirestoreId(recordingId: item.recordingId, firestoreId: firestoreId!)
-            }
+            let recordingData = try await buildFirestoreRecording(recordingId: item.recordingId, gcsUri: gcsUri)
+            firestoreId = try await firestoreService.createRecording(tenantId: tenantId, recording: recordingData)
+            await updateFirestoreId(recordingId: item.recordingId, firestoreId: firestoreId!)
         }
 
         guard let fid = firestoreId else {
@@ -324,12 +326,17 @@ actor OutboxSyncService {
     }
 
     @MainActor
-    private func buildFirestoreRecording(recordingId: UUID, gcsUri: String) -> FirestoreRecording? {
+    func buildFirestoreRecording(recordingId: UUID, gcsUri: String) throws -> FirestoreRecording {
+        guard let uid = currentUidProvider(), !uid.isEmpty else {
+            throw OutboxSyncError.userNotAuthenticated
+        }
         let context = modelContainer.mainContext
         let descriptor = FetchDescriptor<RecordingRecord>(
             predicate: #Predicate<RecordingRecord> { $0.id == recordingId }
         )
-        guard let record = try? context.fetch(descriptor).first else { return nil }
+        guard let record = try? context.fetch(descriptor).first else {
+            throw OutboxSyncError.recordingNotFound(recordingId)
+        }
 
         return FirestoreRecording(
             clientId: record.clientId,
@@ -340,7 +347,7 @@ actor OutboxSyncService {
             audioStoragePath: gcsUri,
             transcription: nil,
             transcriptionStatus: TranscriptionStatus.processing.rawValue,
-            createdBy: "",
+            createdBy: uid,
             createdAt: record.recordedAt,
             updatedAt: Date()
         )
