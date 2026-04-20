@@ -63,15 +63,20 @@ CareNote/
 
 ## Dev/Prod 分離（厳守）
 dev/prod で同一 GCP アカウントを使用するため、操作ミスで prod を壊さないよう以下を厳守。
+グローバル `~/.claude/rules/env-isolation.md` に加えるプロジェクト固有補足。
 
+### 前提
 - `.envrc` で `carenote-dev` gcloud config が自動 active（project=`carenote-dev-279`）
-- **prod 操作は常にコマンド単位で明示する**:
-  - gcloud: `CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod <cmd>` または `--project=carenote-prod-279`
-  - Firebase: `firebase deploy -P prod`
-- **`carenote-prod-279` / `carenote-prod` をコマンドに含める前に必ずユーザー確認**
-- `gcloud config set project` で active config の project を上書きしない（prod 用は `carenote-prod` config 側に固定済み）
-- `gcloud config configurations activate carenote-prod` を常用シェルで実行しない（一時的に触るときも `<cmd>` の先頭に env 変数で指定）
-- 読み取り（Firestore `documents GET` 等）であっても prod に触る前に確認
+- `carenote-prod` config は `carenote-prod-279` に固定済（明示切替時のみ使用）
+
+### 許可される prod 操作パターン
+- gcloud: `CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod <cmd>` または `<cmd> --project=carenote-prod-279`
+- Firebase: `firebase deploy -P prod`（`.firebaserc` の prod alias で切替）
+
+### 禁止事項
+- **MUST**: `carenote-prod-279` / `carenote-prod` をコマンドに含める前にユーザーへ確認する（読み取り操作・`documents GET` 等を含む）
+- **MUST**: `gcloud config set project` で active config の project を上書きしない
+- **MUST NOT**: `gcloud config configurations activate carenote-prod` を常用シェルで実行する（一時利用でも env 変数での前置に限定）
 
 ## Prohibited
 - `tenantId` ハードコーディング
