@@ -63,9 +63,10 @@ uid 参照箇所の全棚卸し完了。移行 Function の書換対象が確定
 | Phase | 内容 | 状態 |
 |---|---|---|
 | Phase -1 | `createdBy` 正常保存 + 監査 + deleteAccount テスト | ✅ PR #101 マージ済 |
-| Phase -1 A3 | 既存 29 件の `createdBy` バックフィル（別 PR） | ⏳ 未着手、I-Cdx-4/5 注意事項は #99 コメント参照 |
-| Phase 0 | uid 参照棚卸し (ADR-008) | ✅ 本 PR で ADR 草案作成 |
-| Phase 0.5 | Firestore Rules 強化 + `migrationLogs` collection 新設 | ⏳ issue #100 で追跡 |
+| Phase -1 A3 dev | dev 21 件バックフィル削除 | ✅ PR #112 マージ済 (2026-04-20) |
+| Phase -1 A3 prod | prod 8 件バックフィル削除 | ⏳ ユーザー確認後実施（別 PR） |
+| Phase 0 | uid 参照棚卸し (ADR-008) | ✅ PR #109 マージ済 |
+| Phase 0.5 | Firestore Rules 強化 + `migrationLogs` collection 新設 + rules-unit-testing 拡充 + CI 組込 | 🚧 PR 進行中（feat/phase-0-5-rules-strengthen、dev deploy 前） |
 | Phase 0.9 | `allowedDomains: ["279279.net"]` 有効化 | ⏳ Phase 0.5 完了後 |
 | Phase 1 | `transferOwnership` Callable Function 実装 | ⏳ Phase 0.5 完了後 |
 | Phase 2 | 本人主導 UI（移行コード方式） | 🔒 スコープ外（頻度低 × コスト高） |
