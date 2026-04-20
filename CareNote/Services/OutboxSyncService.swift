@@ -11,6 +11,11 @@ enum OutboxSyncError: Error, Sendable {
     case maxRetriesExceeded(UUID)
     case uploadFailed(Error)
     case transcriptionFailed(Error)
+    /// `currentUidProvider` が nil または空文字を返した状態。
+    /// 既存 retry ラダー（3回 exponential backoff）に乗せて扱う: アプリ cold-start 直後に
+    /// outbox item が enqueue された際、FirebaseAuth のセッション復元と競合して一時的に
+    /// uid 未取得になるケースを吸収するため。恒久的な未ログインは 3 回後に
+    /// `.maxRetriesExceeded` として `uploadStatus = error` で終端する。
     case userNotAuthenticated
 }
 
@@ -219,16 +224,14 @@ actor OutboxSyncService {
         }
 
         // Step 2: Create or update Firestore document
-        var firestoreId = recording.firestoreId
-        if firestoreId == nil {
+        let fid: String
+        if let existing = recording.firestoreId {
+            fid = existing
+        } else {
             let recordingData = try await buildFirestoreRecording(recordingId: item.recordingId, gcsUri: gcsUri)
-            firestoreId = try await firestoreService.createRecording(tenantId: tenantId, recording: recordingData)
-            await updateFirestoreId(recordingId: item.recordingId, firestoreId: firestoreId!)
-        }
-
-        guard let fid = firestoreId else {
-            Self.logger.error("firestoreId is nil after Step 2 for recording \(item.recordingId) — skipping transcription")
-            return
+            let newId = try await firestoreService.createRecording(tenantId: tenantId, recording: recordingData)
+            await updateFirestoreId(recordingId: item.recordingId, firestoreId: newId)
+            fid = newId
         }
 
         try? await firestoreService.updateTranscription(
@@ -325,8 +328,14 @@ actor OutboxSyncService {
         }
     }
 
+    /// internal 可視性は OutboxSyncServiceTests から直接呼ぶためのテストシーム。
+    /// 本番コードパスでは `processItem` からのみ呼び出すこと。
     @MainActor
     func buildFirestoreRecording(recordingId: UUID, gcsUri: String) throws -> FirestoreRecording {
+        // issue #99 の二段防御: currentUidProvider は `String?` だが、Firebase Auth が
+        // token refresh 境界等で非 nil の空文字を返す可能性を排除できない。
+        // 空文字で createdBy を保存すると deleteAccount の
+        // `where createdBy == uid` クエリで永遠に孤立化するため、nil 同等に拒否する。
         guard let uid = currentUidProvider(), !uid.isEmpty else {
             throw OutboxSyncError.userNotAuthenticated
         }
@@ -334,7 +343,14 @@ actor OutboxSyncService {
         let descriptor = FetchDescriptor<RecordingRecord>(
             predicate: #Predicate<RecordingRecord> { $0.id == recordingId }
         )
-        guard let record = try? context.fetch(descriptor).first else {
+        let records: [RecordingRecord]
+        do {
+            records = try context.fetch(descriptor)
+        } catch {
+            Self.logger.error("SwiftData fetch failed for \(recordingId): \(error.localizedDescription)")
+            throw error
+        }
+        guard let record = records.first else {
             throw OutboxSyncError.recordingNotFound(recordingId)
         }
 

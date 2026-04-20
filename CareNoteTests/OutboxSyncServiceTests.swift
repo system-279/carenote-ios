@@ -188,6 +188,36 @@ struct OutboxSyncServiceTests {
     }
 
     @Test @MainActor
+    func buildFirestoreRecordingでuidが空文字の場合もuserNotAuthenticatedエラー() async throws {
+        // issue #99 二段防御の境界値テスト: nil と空文字を独立にカバー。
+        // `currentUidProvider` が non-nil な空文字を返しても createdBy は保存されない。
+        let container = try Self.makeContainer()
+        let context = container.mainContext
+        let service = Self.makeService(
+            container: container,
+            currentUidProvider: { "" }
+        )
+
+        let recordingId = UUID()
+        let recording = RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: "/tmp/test.m4a"
+        )
+        context.insert(recording)
+        try context.save()
+
+        await #expect(throws: OutboxSyncError.self) {
+            _ = try await service.buildFirestoreRecording(
+                recordingId: recordingId,
+                gcsUri: "gs://test-bucket/test.m4a"
+            )
+        }
+    }
+
+    @Test @MainActor
     func buildFirestoreRecordingで更新対象外フィールドは既存値を保持する() async throws {
         let container = try Self.makeContainer()
         let context = container.mainContext
