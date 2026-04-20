@@ -163,11 +163,11 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 
 ## 既知の警告
 
-### Cloud Functions Node.js 20 deprecation
+### Cloud Functions Node.js 22 runtime（Issue #124 で対応）
 
-- dev deploy 時に警告: 「Runtime Node.js 20 will be deprecated on 2026-04-30 and will be decommissioned on 2026-10-30」
-- Issue #108 に firebase.json runtime 重複解消とあわせて記載。`nodejs20` → `nodejs22` へ upgrade 必要
-- firebase-functions パッケージも outdated 警告
+- 以前の deprecation 警告（Node.js 20 decommission 2026-10-30）は Issue #124 で解消予定
+- firebase.json の `functions` 重複キーも同 PR で統合（Issue #108 も同時解決）
+- firebase-functions 7.2.5 / firebase-admin 13.8.0 に更新
 
 ### CI Workflow
 
