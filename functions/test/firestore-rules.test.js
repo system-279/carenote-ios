@@ -10,8 +10,8 @@ const PROJECT_ID = "carenote-test";
 const TENANT_ID = "tenant-a";
 const TENANT_ID_B = "tenant-b";
 
-// `firebase emulators:exec` が FIRESTORE_EMULATOR_HOST を自動設定する。
-// ローカルで別ポートを使う場合 (port 8080 競合時) に備えて env を優先する。
+// CI と local で `firebase emulators:exec` が FIRESTORE_EMULATOR_HOST を注入するため、
+// ハードコード値よりも env を優先する（ローカルでポート変更した場合の可搬性も確保）。
 const EMULATOR_HOST_RAW = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
 const [EMULATOR_HOST, EMULATOR_PORT] = EMULATOR_HOST_RAW.split(":");
 

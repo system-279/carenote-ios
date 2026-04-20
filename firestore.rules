@@ -9,7 +9,8 @@ service cloud.firestore {
     }
 
     // admin ロール判定
-    // 前提: role は Firebase Auth の custom claim (Admin SDK でのみ設定可、JWT 署名で改ざん不可)
+    // 前提: role は Firebase custom claim (サーバー特権経路でのみ設定可、
+    //       JWT 署名検証により client からは改ざん不可)
     function isAdmin(tenantId) {
       return isTenantMember(tenantId)
         && request.auth.token.role == 'admin';
@@ -44,7 +45,7 @@ service cloud.firestore {
       //   create : 自分を createdBy にしたものだけ（他人のなりすまし作成防止）
       //   update : 作成者本人または admin（transcription 編集・admin 補正のため）
       //            + createdBy 不変制約（client からオーナーシップを書き換え不可。
-      //              Phase 1 transferOwnership は admin SDK で rules を bypass する）
+      //              所有権移管は Admin SDK 経由で実施し rules を bypass して createdBy を書換）
       //   delete : 作成者本人または admin（現状 iOS は delete しないが、将来拡張に備えて対称化）
       match /recordings/{recordingId} {
         allow read: if isTenantMember(tenantId);
