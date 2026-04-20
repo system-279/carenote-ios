@@ -11,6 +11,12 @@ enum OutboxSyncError: Error, Sendable {
     case maxRetriesExceeded(UUID)
     case uploadFailed(Error)
     case transcriptionFailed(Error)
+    /// `currentUidProvider` が nil または空文字を返した状態。
+    /// 既存 retry ラダー（3回 exponential backoff）に乗せて扱う: アプリ cold-start 直後に
+    /// outbox item が enqueue された際、FirebaseAuth のセッション復元と競合して一時的に
+    /// uid 未取得になるケースを吸収するため。恒久的な未ログインは 3 回後に
+    /// `.maxRetriesExceeded` として `uploadStatus = error` で終端する。
+    case userNotAuthenticated
 }
 
 // MARK: - OutboxSyncService
@@ -31,6 +37,7 @@ actor OutboxSyncService {
     private let firestoreService: any RecordingStoring
     private let transcriptionService: any Transcribing
     private let tenantId: String
+    private let currentUidProvider: @Sendable () -> String?
 
     private var pathMonitor: NWPathMonitor?
     private var monitorQueue: DispatchQueue?
@@ -46,13 +53,15 @@ actor OutboxSyncService {
         storageService: any AudioUploading,
         firestoreService: any RecordingStoring,
         transcriptionService: any Transcribing,
-        tenantId: String
+        tenantId: String,
+        currentUidProvider: @escaping @Sendable () -> String?
     ) {
         self.modelContainer = modelContainer
         self.storageService = storageService
         self.firestoreService = firestoreService
         self.transcriptionService = transcriptionService
         self.tenantId = tenantId
+        self.currentUidProvider = currentUidProvider
     }
 
     // MARK: - Queue Management
@@ -201,6 +210,18 @@ actor OutboxSyncService {
             throw OutboxSyncError.recordingNotFound(item.recordingId)
         }
 
+        // Pre-flight auth check for new recordings: avoid uploading audio to
+        // Cloud Storage when Firestore document creation will fail at uid
+        // validation anyway. Prevents medical audio orphaning in Storage during
+        // auth cold-start edge cases (uid nil/empty). `buildFirestoreRecording`
+        // re-validates as a defense-in-depth for existing firestoreId paths.
+        if recording.firestoreId == nil {
+            guard let uid = currentUidProvider(), !uid.isEmpty else {
+                throw OutboxSyncError.userNotAuthenticated
+            }
+            _ = uid
+        }
+
         // Step 1: Upload audio to Cloud Storage
         let localURL = URL(fileURLWithPath: recording.localAudioPath)
         let gcsUri: String
@@ -215,18 +236,14 @@ actor OutboxSyncService {
         }
 
         // Step 2: Create or update Firestore document
-        var firestoreId = recording.firestoreId
-        if firestoreId == nil {
-            let recordingData = await buildFirestoreRecording(recordingId: item.recordingId, gcsUri: gcsUri)
-            if let data = recordingData {
-                firestoreId = try await firestoreService.createRecording(tenantId: tenantId, recording: data)
-                await updateFirestoreId(recordingId: item.recordingId, firestoreId: firestoreId!)
-            }
-        }
-
-        guard let fid = firestoreId else {
-            Self.logger.error("firestoreId is nil after Step 2 for recording \(item.recordingId) — skipping transcription")
-            return
+        let fid: String
+        if let existing = recording.firestoreId {
+            fid = existing
+        } else {
+            let recordingData = try await buildFirestoreRecording(recordingId: item.recordingId, gcsUri: gcsUri)
+            let newId = try await firestoreService.createRecording(tenantId: tenantId, recording: recordingData)
+            await updateFirestoreId(recordingId: item.recordingId, firestoreId: newId)
+            fid = newId
         }
 
         try? await firestoreService.updateTranscription(
@@ -323,13 +340,31 @@ actor OutboxSyncService {
         }
     }
 
+    /// internal 可視性は OutboxSyncServiceTests から直接呼ぶためのテストシーム。
+    /// 本番コードパスでは `processItem` からのみ呼び出すこと。
     @MainActor
-    private func buildFirestoreRecording(recordingId: UUID, gcsUri: String) -> FirestoreRecording? {
+    func buildFirestoreRecording(recordingId: UUID, gcsUri: String) throws -> FirestoreRecording {
+        // issue #99 の二段防御: currentUidProvider は `String?` だが、Firebase Auth が
+        // token refresh 境界等で非 nil の空文字を返す可能性を排除できない。
+        // 空文字で createdBy を保存すると deleteAccount の
+        // `where createdBy == uid` クエリで永遠に孤立化するため、nil 同等に拒否する。
+        guard let uid = currentUidProvider(), !uid.isEmpty else {
+            throw OutboxSyncError.userNotAuthenticated
+        }
         let context = modelContainer.mainContext
         let descriptor = FetchDescriptor<RecordingRecord>(
             predicate: #Predicate<RecordingRecord> { $0.id == recordingId }
         )
-        guard let record = try? context.fetch(descriptor).first else { return nil }
+        let records: [RecordingRecord]
+        do {
+            records = try context.fetch(descriptor)
+        } catch {
+            Self.logger.error("SwiftData fetch failed for \(recordingId): \(error.localizedDescription)")
+            throw error
+        }
+        guard let record = records.first else {
+            throw OutboxSyncError.recordingNotFound(recordingId)
+        }
 
         return FirestoreRecording(
             clientId: record.clientId,
@@ -340,7 +375,7 @@ actor OutboxSyncService {
             audioStoragePath: gcsUri,
             transcription: nil,
             transcriptionStatus: TranscriptionStatus.processing.rawValue,
-            createdBy: "",
+            createdBy: uid,
             createdAt: record.recordedAt,
             updatedAt: Date()
         )
