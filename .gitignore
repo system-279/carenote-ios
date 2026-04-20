@@ -54,6 +54,11 @@ generated-images/
 
 # Firebase
 .firebase/
+firebase-debug.log
+firestore-debug.log
+functions/firebase-debug.log
+functions/firestore-debug.log
+functions/node_modules/
 
 # Playwright MCP
 .playwright-mcp/

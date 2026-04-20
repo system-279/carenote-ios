@@ -9,6 +9,7 @@ service cloud.firestore {
     }
 
     // admin ロール判定
+    // 前提: role は Firebase Auth の custom claim (Admin SDK でのみ設定可、JWT 署名で改ざん不可)
     function isAdmin(tenantId) {
       return isTenantMember(tenantId)
         && request.auth.token.role == 'admin';
@@ -39,8 +40,29 @@ service cloud.firestore {
       }
 
       // 録音
+      //   read   : 業務上、同一テナント内の member 間で閲覧共有（既存 UI 仕様）
+      //   create : 自分を createdBy にしたものだけ（他人のなりすまし作成防止）
+      //   update : 作成者本人または admin（transcription 編集・admin 補正のため）
+      //            + createdBy 不変制約（client からオーナーシップを書き換え不可。
+      //              Phase 1 transferOwnership は admin SDK で rules を bypass する）
+      //   delete : 作成者本人または admin（現状 iOS は delete しないが、将来拡張に備えて対称化）
       match /recordings/{recordingId} {
-        allow read, write: if isTenantMember(tenantId);
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantMember(tenantId)
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if (isAdmin(tenantId)
+            || (isTenantMember(tenantId) && resource.data.createdBy == request.auth.uid))
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if isAdmin(tenantId)
+          || (isTenantMember(tenantId) && resource.data.createdBy == request.auth.uid);
+      }
+
+      // 移行ログ（Phase 1 transferOwnership の監査用。admin SDK 経由でのみ書込）
+      //   read   : admin のみ（旧メール等のセンシティブ情報を含むため）
+      //   write  : クライアントからは一切不可（Cloud Function が admin SDK で直書き）
+      match /migrationLogs/{logId} {
+        allow read: if isAdmin(tenantId);
+        allow write: if false;
       }
     }
   }
