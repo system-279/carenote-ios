@@ -124,8 +124,12 @@ async function runDryRun({ db, tenantId, fromUid, toUid }) {
  * completed/failed) and is eligible for retry. This is the recovery path for
  * the 540s Cloud Function timeout case where no catch block ever fires.
  */
-async function acquireRunningLock(db, stateRef, now = Date.now()) {
+async function acquireRunningLock(db, stateRef) {
   return db.runTransaction(async (tx) => {
+    // Capture the wall-clock time INSIDE the transaction callback so each
+    // retry re-evaluates staleness against a fresh timestamp. A parameter
+    // captured once at call-time would drift across tx retries.
+    const now = Date.now();
     const snap = await tx.get(stateRef);
     if (!snap.exists) {
       throw new HttpsError("not-found", "dryRunId not found (expired or never existed)");
@@ -193,13 +197,19 @@ async function runCollectionUpdate({
     for (const doc of snap.docs) {
       batch.update(doc.ref, { [field]: toUid });
     }
-    await batch.commit();
-    updated += snap.size;
-    lastDocId = snap.docs[snap.docs.length - 1].id;
-    await stateRef.update({
-      [`checkpoint.${collection}`]: lastDocId,
+    const lastDocIdInBatch = snap.docs[snap.docs.length - 1].id;
+    // Commit checkpoint together with the data writes in one atomic batch.
+    // If we split (batch.commit → stateRef.update), a post-commit crash loses
+    // the checkpoint and the `updated.{collection}` counter, under-counting
+    // the audit log. BATCH_SIZE=400 + 1 state write is well within the 500
+    // Firestore batch limit.
+    batch.update(stateRef, {
+      [`checkpoint.${collection}`]: lastDocIdInBatch,
       [`updated.${collection}`]: FieldValue.increment(snap.size),
     });
+    await batch.commit();
+    updated += snap.size;
+    lastDocId = lastDocIdInBatch;
     if (snap.size < BATCH_SIZE) {
       break;
     }
