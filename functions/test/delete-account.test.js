@@ -31,8 +31,17 @@ before(() => {
       doc: (id) => createDocRef(`${path}/${id}`),
       where: (field, _op, value) => ({
         get: async () => {
+          const prefix = path + "/";
           const docs = Object.entries(mockFirestoreData)
-            .filter(([key, data]) => key.startsWith(path + "/") && data[field] === value)
+            .filter(([key, data]) => {
+              if (!key.startsWith(prefix)) return false;
+              const rel = key.slice(prefix.length);
+              // Only direct children: reject deeper subcollection paths
+              // (e.g. "recordings/r1/comments/c1" must not match a query on
+              // "tenants/279/recordings"). See Issue #104.
+              if (rel.includes("/")) return false;
+              return data[field] === value;
+            })
             .map(([key, data]) => ({
               id: key.split("/").pop(),
               data: () => data,
@@ -165,6 +174,41 @@ describe("deleteAccount Callable Function", () => {
     assert.deepStrictEqual(result, { success: true });
     assert.deepStrictEqual(deletedDocs, ["tenants/279/recordings/r1"], "Firestore 削除は実行される");
     assert.deepStrictEqual(deletedStorageFiles, [], "parseできない gs URI は Storage 削除されない");
+    assert.deepStrictEqual(deletedUids, ["alice"]);
+  });
+
+  it("サブコレクション配下のドキュメントは recordings クエリで拾われない (Issue #104 regression)", async () => {
+    mockFirestoreData["tenants/279/recordings/r1"] = {
+      createdBy: "alice",
+      audioStoragePath: "gs://audio-bucket/279/r1.m4a",
+    };
+    // 深いサブコレクションに alice の createdBy を持つ別ドキュメント。
+    // 直下 recordings のクエリで拾ってはならない。
+    mockFirestoreData["tenants/279/recordings/r1/comments/c1"] = {
+      createdBy: "alice",
+      audioStoragePath: "gs://audio-bucket/279/r1-c1.m4a",
+    };
+
+    const result = await deleteAccount({
+      auth: { uid: "alice", token: { tenantId: "279" } },
+      data: {},
+    });
+
+    assert.deepStrictEqual(result, { success: true });
+    assert.deepStrictEqual(
+      deletedDocs,
+      ["tenants/279/recordings/r1"],
+      "直下の r1 のみ削除。サブコレクション配下の c1 は対象外"
+    );
+    assert.deepStrictEqual(
+      deletedStorageFiles,
+      ["audio-bucket/279/r1.m4a"],
+      "Storage も直下 r1 の audio のみ削除"
+    );
+    assert.ok(
+      "tenants/279/recordings/r1/comments/c1" in mockFirestoreData,
+      "サブコレクション配下のドキュメントは残存"
+    );
     assert.deepStrictEqual(deletedUids, ["alice"]);
   });
 
