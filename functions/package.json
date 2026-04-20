@@ -4,7 +4,7 @@
   "description": "CareNote Cloud Functions & Firestore Rules Tests",
   "main": "index.js",
   "scripts": {
-    "test": "mocha --timeout 10000 --exit test/**/*.test.js",
+    "test": "mocha --timeout 10000 --exit \"test/**/*.test.{js,mjs}\"",
     "test:rules": "mocha --timeout 10000 --exit test/firestore-rules.test.js",
     "test:auth": "mocha --timeout 10000 --exit test/auth-blocking.test.js"
   },
