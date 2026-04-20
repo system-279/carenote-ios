@@ -37,12 +37,18 @@
 
 ### 2. ID token の発行
 
+**token は必ず shell 変数経由で受け取る**（terminal に裸表示させると scrollback / copy-paste で漏洩する）。ログ用途で stderr を保存したい場合は `2>/tmp/get-token.log` を付加（stderr を `/dev/null` に捨てると user 作成・claims 設定の診断情報が消えるので非推奨）。
+
 ```bash
-node functions/scripts/get-admin-id-token.mjs \
+ID_TOKEN=$(node functions/scripts/get-admin-id-token.mjs \
   --project carenote-dev-279 \
   --uid transferOp-yh-20260421 \
   --tenant-id 279 \
-  --role admin
+  --role admin \
+  2>/tmp/get-token.log)
+
+# 確認: JWT の構造 (xxx.yyy.zzz) を持つこと
+echo "${ID_TOKEN:0:20}..."  # 先頭 20 文字だけ確認（全体を echo しない）
 ```
 
 処理内容:
@@ -56,12 +62,6 @@ stdout に ID token（JWT）のみが出力される。stderr には診断情報
 ### 3. Callable 呼出
 
 ```bash
-# 1 行で使う場合
-ID_TOKEN=$(node functions/scripts/get-admin-id-token.mjs \
-  --project carenote-dev-279 \
-  --uid transferOp-yh-20260421 \
-  --tenant-id 279 --role admin)
-
 node functions/scripts/call-transfer-ownership.mjs \
   --project carenote-dev-279 \
   --from-uid <old-uid> --to-uid <new-uid> \
@@ -99,27 +99,25 @@ node /tmp/cleanup-admin-uid.mjs
 - `migrationLogs` / `migrationState` 書込許可のある Rules が deploy 済（Phase 0.5 PR #115 prod 反映後）
 - low-traffic 時間帯
 
-### 2. ID token 発行
+### 2. ID token 発行（shell 変数経由で取得、terminal に裸表示させない）
+
+**重要**: `CONFIRM_PROD` の値は project id を指定する。`CONFIRM_PROD=yes` ではない。これは `export CONFIRM_PROD=yes` を一度した shell で後続コマンドが全て無警告で prod に流れるリスクを避けるため。helper script は `CONFIRM_PROD === args.project` を厳密チェックする。
+
+さらに `export` ではなく **invocation scoped な前置き** (`CONFIRM_PROD=... CLOUDSDK_... node ...`) を必ず使う。
 
 ```bash
-CONFIRM_PROD=yes \
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+ID_TOKEN=$(CONFIRM_PROD=carenote-prod-279 \
+  CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
   node functions/scripts/get-admin-id-token.mjs \
     --project carenote-prod-279 \
     --uid transferOp-yh-20260421 \
-    --tenant-id 279 --role admin
+    --tenant-id 279 --role admin \
+    2>/tmp/get-token-prod.log)
 ```
-
-`CONFIRM_PROD=yes` が無いと helper script が exit 2 で即拒否する。
 
 ### 3. transferOwnership 呼出
 
 ```bash
-ID_TOKEN=$(CONFIRM_PROD=yes CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
-  node functions/scripts/get-admin-id-token.mjs \
-    --project carenote-prod-279 --uid transferOp-yh-20260421 \
-    --tenant-id 279 --role admin)
-
 CONFIRM_PROD=yes \
   node functions/scripts/call-transfer-ownership.mjs \
     --project carenote-prod-279 \
@@ -135,6 +133,8 @@ CONFIRM_PROD=yes \
     --id-token "$ID_TOKEN"
 ```
 
+**NOTE**: `call-transfer-ownership.mjs` 側の `CONFIRM_PROD` は現状 `=yes` 固定（#120 part 2 で本 helper と同じ nonce 方式に揃える予定）。
+
 ### 4. 一時 uid の削除（必ず実施）
 
 dev 手順 A § 4 の cleanup スクリプトを `projectId: "carenote-prod-279"` と `CONFIRM_PROD=yes` + `CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod` で実行。
@@ -148,8 +148,10 @@ dev 手順 A § 4 の cleanup スクリプトを `projectId: "carenote-prod-279"
 | 項目 | 対応 |
 |---|---|
 | API_KEY の扱い | 公開 identifier（iOS バイナリに埋込済）なので helper script への引数 / ログ出力は許容 |
-| ID token の扱い | **機密**。shell history に残さないよう `ID_TOKEN=$(...)` で変数経由、`--id-token "$ID_TOKEN"` で渡す |
+| ID token の扱い | **機密**。`ID_TOKEN=$(...)` で変数経由、`--id-token "$ID_TOKEN"` で渡す。echo する場合は `${ID_TOKEN:0:20}...` で先頭のみ |
+| shell history | `node ... --uid transferOp-yh-20260421` の `--uid` 引数は history に残る。機密情報ではないが、一時 uid であることを命名で明示する理由にもなる |
 | 一時 admin uid | 作業終了後に必ず delete。放置すると永続的 admin 権限が残る |
+| prod ガード | `CONFIRM_PROD=<project-id>` を **invocation 前置き**で指定（`export` 非推奨）。helper は値を project id と厳密比較 |
 | prod 実行履歴 | `migrationLogs/<dryRunId>` に caller uid + 操作内容が自動記録される |
 | GOOGLE_APPLICATION_CREDENTIALS | **使わない**。`gcloud auth application-default login` の ADC を利用 |
 

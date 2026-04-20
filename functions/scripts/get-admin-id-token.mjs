@@ -39,6 +39,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+// Explicit allowlist beats substring matching for the prod guard.
+// A substring check like `includes("prod")` would miss future prod names
+// that don't contain "prod" (e.g. "carenote-live-279") and falsely flag
+// pre-prod sandboxes (e.g. "carenote-preprod-test").
+const PROD_PROJECTS = new Set(["carenote-prod-279"]);
+const DEV_PROJECTS = new Set(["carenote-dev-279"]);
+
+function isProdProject(project) {
+  return PROD_PROJECTS.has(project);
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i++) {
@@ -75,11 +86,23 @@ function validate(args) {
     console.error("Error: --project, --uid, --tenant-id are required");
     usageAndExit(1);
   }
-  if (args.project.includes("prod") && process.env.CONFIRM_PROD !== "yes") {
+  if (isProdProject(args.project)) {
+    // Require the project id as the confirmation value to prevent
+    // accidental `export CONFIRM_PROD=yes` in a long-lived shell from
+    // bypassing every subsequent prod-targeted invocation.
+    if (process.env.CONFIRM_PROD !== args.project) {
+      console.error(
+        `Error: prod project ${args.project} targeted. Set CONFIRM_PROD=${args.project} ` +
+          `for the invocation (not via persistent \`export\`).`
+      );
+      process.exit(2);
+    }
+  } else if (!DEV_PROJECTS.has(args.project)) {
     console.error(
-      "Error: prod project targeted but CONFIRM_PROD=yes not set. Refusing."
+      `Error: project "${args.project}" is neither dev nor prod allowlisted. ` +
+        `If this is a new project, update PROD_PROJECTS / DEV_PROJECTS in this script.`
     );
-    process.exit(2);
+    process.exit(1);
   }
   args.role = args.role || "admin";
 }
@@ -88,7 +111,7 @@ function resolveApiKey(args) {
   if (args.apiKey) return args.apiKey;
   // Auto-resolve from the appropriate GoogleService-Info.plist by project id.
   // Dev and prod plists live under CareNote/Firebase/{Dev,Prod}.
-  const env = args.project.includes("prod") ? "Prod" : "Dev";
+  const env = isProdProject(args.project) ? "Prod" : "Dev";
   const plistPath = path.resolve(
     process.cwd(),
     `CareNote/Firebase/${env}/GoogleService-Info.plist`
@@ -149,17 +172,35 @@ async function mintIdToken(args) {
     }
   );
   const text = await res.text();
+  // Never echo raw response bodies into error messages — on 200 the body
+  // carries the live idToken, and even partial/truncated bodies may contain
+  // JWT fragments. Only surface structured error codes/messages.
   if (!res.ok) {
-    throw new Error(`signInWithCustomToken HTTP ${res.status}: ${text}`);
+    let code = "";
+    let message = "";
+    try {
+      const parsed = JSON.parse(text);
+      code = parsed?.error?.status || parsed?.error?.code || "";
+      message = parsed?.error?.message || "";
+    } catch {
+      // body was not JSON; do not echo it (could still contain secrets)
+    }
+    const safeSuffix = code || message
+      ? `${code}${code && message ? ": " : ""}${message}`
+      : "(response body withheld)";
+    throw new Error(`signInWithCustomToken HTTP ${res.status}: ${safeSuffix}`);
   }
   let json;
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Error(`signInWithCustomToken returned non-JSON: ${text.slice(0, 200)}`);
+    // Do not include any portion of the body; on 200 it contains the idToken.
+    throw new Error("signInWithCustomToken returned non-JSON on 200 status");
   }
   if (!json.idToken) {
-    throw new Error(`signInWithCustomToken response missing idToken: ${text.slice(0, 200)}`);
+    // Only surface structure, never raw payload.
+    const keys = Object.keys(json || {}).join(",");
+    throw new Error(`signInWithCustomToken response missing idToken (keys: ${keys})`);
   }
   return json.idToken;
 }
@@ -173,8 +214,12 @@ async function main() {
     // without producing warnings.
     process.stdout.write(idToken + "\n");
   } catch (err) {
+    // Deliberately do NOT print err.stack — firebase-admin error messages
+    // and stack traces have historically surfaced custom tokens, and this
+    // script is the one place that generates credentials. Users needing
+    // deeper traces should modify the script locally rather than enable a
+    // DEBUG env flag that could leak secrets into terminals/CI logs.
     console.error(`Error: ${err.message}`);
-    if (err.stack && process.env.DEBUG) console.error(err.stack);
     process.exit(3);
   }
 }
