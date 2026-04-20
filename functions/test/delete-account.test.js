@@ -188,4 +188,38 @@ describe("deleteAccount Callable Function", () => {
       assert.ok(e.message.includes("セッション情報が不完全"), `unexpected: ${e.message}`);
     }
   });
+
+  it("recordings query が失敗しても Auth user 削除は走る (C-Cdx-3)", async () => {
+    // Monkey-patch: where().get() を reject させる
+    const adminFirestore = require("firebase-admin/firestore");
+    const originalGetFirestore = adminFirestore.getFirestore;
+    adminFirestore.getFirestore = () => ({
+      collection: () => ({
+        doc: () => ({
+          collection: () => ({
+            where: () => ({
+              get: async () => {
+                const err = new Error("PERMISSION_DENIED");
+                err.code = 7;
+                throw err;
+              },
+            }),
+          }),
+        }),
+      }),
+    });
+
+    try {
+      const result = await deleteAccount({
+        auth: { uid: "alice", token: { tenantId: "279" } },
+        data: {},
+      });
+      assert.deepStrictEqual(result, { success: true });
+      assert.deepStrictEqual(deletedDocs, [], "query 失敗時は削除対象ゼロ扱い");
+      assert.deepStrictEqual(deletedStorageFiles, []);
+      assert.deepStrictEqual(deletedUids, ["alice"], "Auth user は削除される (App Store 5.1.1(v))");
+    } finally {
+      adminFirestore.getFirestore = originalGetFirestore;
+    }
+  });
 });

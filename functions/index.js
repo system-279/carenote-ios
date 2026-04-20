@@ -126,12 +126,24 @@ exports.deleteAccount = onCall(
     }
 
     const db = getFirestore();
-    const recordingsSnap = await db
-      .collection("tenants")
-      .doc(tenantId)
-      .collection("recordings")
-      .where("createdBy", "==", uid)
-      .get();
+    let recordingsSnap;
+    try {
+      recordingsSnap = await db
+        .collection("tenants")
+        .doc(tenantId)
+        .collection("recordings")
+        .where("createdBy", "==", uid)
+        .get();
+    } catch (err) {
+      // Query failure (permissions, transient, missing index) must not block
+      // Auth user deletion. App Store 5.1.1(v) requires identity removal even
+      // when data cleanup fails; orphan recordings can be reaped by support
+      // tooling. Proceed with empty snapshot.
+      console.error("[deleteAccount] recordings query failed, proceeding to auth-delete", {
+        uid, tenantId, code: err.code, message: err.message,
+      });
+      recordingsSnap = { docs: [] };
+    }
 
     const cleanupPromises = [];
     for (const doc of recordingsSnap.docs) {

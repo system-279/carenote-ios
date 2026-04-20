@@ -210,6 +210,18 @@ actor OutboxSyncService {
             throw OutboxSyncError.recordingNotFound(item.recordingId)
         }
 
+        // Pre-flight auth check for new recordings: avoid uploading audio to
+        // Cloud Storage when Firestore document creation will fail at uid
+        // validation anyway. Prevents medical audio orphaning in Storage during
+        // auth cold-start edge cases (uid nil/empty). `buildFirestoreRecording`
+        // re-validates as a defense-in-depth for existing firestoreId paths.
+        if recording.firestoreId == nil {
+            guard let uid = currentUidProvider(), !uid.isEmpty else {
+                throw OutboxSyncError.userNotAuthenticated
+            }
+            _ = uid
+        }
+
         // Step 1: Upload audio to Cloud Storage
         let localURL = URL(fileURLWithPath: recording.localAudioPath)
         let gcsUri: String
