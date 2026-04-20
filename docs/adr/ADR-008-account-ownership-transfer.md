@@ -194,6 +194,27 @@ stateDiagram-v2
 
 rules で `write: false` のため admin SDK 経由でのみ書込可。read は同テナント admin のみ。
 
+### 入力検証（Defense in Depth）
+
+admin SDK で rules を bypass する設計のため、Callable 側で次を明示検証する:
+
+- `toUid` が Firebase Auth に存在し、`customClaims.tenantId` が caller の tenantId と一致
+  - 非存在 / 別 tenant / customClaims なし → `invalid-argument`
+  - typo で存在しない uid に全 recordings/templates/whitelist を書換えると以後の `deleteAccount` が機能しなくなるため
+- `fromUid` は検証しない（削除済み旧アカウントへの対応が主用途）
+- 同一 `fromUid` に対する並行 migration（別 dryRunId からの同時 confirm）を transaction 内でブロック
+  - `migrationState` を `where("fromUid", "==", X)` で走査し、active (`prepared` or `running`) でかつ fresh (STALE_RUNNING_MS 以内) のものがあれば `already-exists`
+  - 完了 (`completed` / `failed`) は無視、stale prepared/running も無視（再利用可能）
+
+### dryRun counts と confirm 実更新数の関係（仕様）
+
+`dryRun` で返される `counts` は **参考値**。`confirm` は実行時点の live query (`where(createdBy == fromUid)`) をそのまま走査するため、dryRun と confirm の間に:
+
+- 新規レコードが `fromUid` で作成された場合 → その分も移行される（counts より多い）
+- 他オペレーションで owner が変わった場合 → counts より少ない
+
+UI (Phase 2) では「counts は即値ではなく参考値」として扱うこと。厳密な "what you see is what you migrate" 契約が必要なら、confirm 時に expectedCounts を渡してサーバ側で比較する拡張が必要（本 Phase 1 スコープ外）。
+
 ### Partial Update 不変性（CLAUDE.md MUST 準拠）
 
 - `recordings.createdBy`、`templates.createdBy`、`whitelist.addedBy` **のみ** を update

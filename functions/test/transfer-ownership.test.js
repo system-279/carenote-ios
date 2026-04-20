@@ -3,11 +3,12 @@
 const assert = require("assert");
 const admin = require("firebase-admin");
 
-// IMPORTANT: capture real firebase-admin/firestore bindings at module load time,
-// BEFORE auth-blocking.test.js's before() hook monkey-patches getFirestore to an
-// offline mock. Mocha runs all test-file module code first (captures at this
-// point), then root before() hooks in registration order.
+// IMPORTANT: capture real firebase-admin/firestore + auth bindings at module
+// load time, BEFORE auth-blocking.test.js's before() hook monkey-patches
+// getFirestore to an offline mock. Mocha runs all test-file module code first
+// (captures at this point), then root before() hooks in registration order.
 const { getFirestore: realGetFirestore } = require("firebase-admin/firestore");
+const { getAuth: realGetAuth } = require("firebase-admin/auth");
 
 // Load SUT at module time so its `getFirestore` destructure is bound to the
 // real (unpatched) export, not the later offline mock.
@@ -25,12 +26,27 @@ const TO_UID = "uid-new";
 const OTHER_UID = "uid-unrelated";
 
 let db;
+let auth;
 
-before(() => {
+async function seedAuthUser(uid, tenantId, role = "member") {
+  try {
+    await auth.deleteUser(uid);
+  } catch (_) { /* not present */ }
+  await auth.createUser({ uid });
+  await auth.setCustomUserClaims(uid, { tenantId, role });
+}
+
+before(async () => {
   if (!admin.apps.length) {
     admin.initializeApp();
   }
   db = realGetFirestore();
+  auth = realGetAuth();
+  // Seed common Auth users used across tests. TO_UID must exist in TENANT_ID
+  // so that validateToUidBelongsToTenant passes; non-tenant/non-existent
+  // variants are seeded on-demand in specific tests.
+  await seedAuthUser(TO_UID, TENANT_ID, "member");
+  await seedAuthUser(ADMIN_UID, TENANT_ID, "admin");
 });
 
 function adminAuth(tenantId = TENANT_ID, uid = ADMIN_UID) {
@@ -134,6 +150,119 @@ describe("transferOwnership: 認可 / 引数検証", () => {
     await assert.rejects(
       () => callTransfer({ data: { dryRun: true, toUid: "b" }, auth: adminAuth() }),
       (err) => err.code === "invalid-argument"
+    );
+  });
+});
+
+// ===== toUid 検証 (codex critical #2) =====
+
+describe("transferOwnership: toUid 検証", () => {
+  it("toUid が Firebase Auth に存在しない → invalid-argument", async () => {
+    await assert.rejects(
+      () =>
+        callTransfer({
+          data: { dryRun: true, fromUid: FROM_UID, toUid: "does-not-exist-uid" },
+          auth: adminAuth(),
+        }),
+      (err) => err.code === "invalid-argument" && /not found/i.test(err.message)
+    );
+  });
+
+  it("toUid が別 tenant 所属 → invalid-argument", async () => {
+    await seedAuthUser("uid-cross-tenant", TENANT_ID_B, "member");
+    await assert.rejects(
+      () =>
+        callTransfer({
+          data: { dryRun: true, fromUid: FROM_UID, toUid: "uid-cross-tenant" },
+          auth: adminAuth(),
+        }),
+      (err) => err.code === "invalid-argument" && /tenant/i.test(err.message)
+    );
+  });
+
+  it("toUid に customClaims がない (未ログイン直後のユーザー等) → invalid-argument", async () => {
+    // createUser のみで setCustomUserClaims を呼ばない
+    try { await auth.deleteUser("uid-no-claims"); } catch (_) {}
+    await auth.createUser({ uid: "uid-no-claims" });
+    await assert.rejects(
+      () =>
+        callTransfer({
+          data: { dryRun: true, fromUid: FROM_UID, toUid: "uid-no-claims" },
+          auth: adminAuth(),
+        }),
+      (err) => err.code === "invalid-argument"
+    );
+  });
+});
+
+// ===== 同一 fromUid の並行 migration 防止 (codex critical #1) =====
+
+describe("transferOwnership: 並行 migration 検出", () => {
+  it("同じ fromUid に対する 2 つ目の dryRun → already-exists", async () => {
+    await callTransfer({
+      data: { dryRun: true, fromUid: FROM_UID, toUid: TO_UID },
+      auth: adminAuth(),
+    });
+    // 2 つ目の dryRun を同じ fromUid で (toUid 違い) → 拒否
+    await seedAuthUser("uid-another-target", TENANT_ID, "member");
+    await assert.rejects(
+      () =>
+        callTransfer({
+          data: { dryRun: true, fromUid: FROM_UID, toUid: "uid-another-target" },
+          auth: adminAuth(),
+        }),
+      (err) => err.code === "already-exists"
+    );
+  });
+
+  it("完了済 migration の fromUid で新 dryRun → 成功 (lock 解放確認)", async () => {
+    const { dryRunId } = await callTransfer({
+      data: { dryRun: true, fromUid: FROM_UID, toUid: TO_UID },
+      auth: adminAuth(),
+    });
+    await callTransfer({ data: { dryRunId }, auth: adminAuth() });
+    // completed 後は同じ fromUid で新 dryRun 可能
+    const second = await callTransfer({
+      data: { dryRun: true, fromUid: FROM_UID, toUid: TO_UID },
+      auth: adminAuth(),
+    });
+    assert.ok(second.dryRunId);
+  });
+
+  it("confirm 実行中に同じ fromUid で別 dryRun から confirm → already-exists", async () => {
+    // 2 つの dryRun を時間差で作る (最初のは stale 化、2 つ目は fresh)
+    const { dryRunId: dryRun1 } = await callTransfer({
+      data: { dryRun: true, fromUid: FROM_UID, toUid: TO_UID },
+      auth: adminAuth(),
+    });
+    // 最初の dryRun を prepared → completed に意図的に進めて「非 active」にする
+    await callTransfer({ data: { dryRunId: dryRun1 }, auth: adminAuth() });
+
+    // 2 つ目の dryRun (toUid 違い)
+    await seedAuthUser("uid-target-2", TENANT_ID, "member");
+    const { dryRunId: dryRun2 } = await callTransfer({
+      data: { dryRun: true, fromUid: FROM_UID, toUid: "uid-target-2" },
+      auth: adminAuth(),
+    });
+
+    // 2 つ目を running 化
+    const state2Ref = db
+      .collection("tenants").doc(TENANT_ID)
+      .collection("migrationState").doc(dryRun2);
+    await state2Ref.update({
+      status: "running",
+      runningAt: admin.firestore.Timestamp.fromMillis(Date.now() - 1000),
+    });
+
+    // 3 つ目の dryRun を作る (再度 fromUid 同じ) → 2 つ目が running 中なので拒否
+    await seedAuthUser("uid-target-3", TENANT_ID, "member");
+    await assert.rejects(
+      () =>
+        callTransfer({
+          data: { dryRun: true, fromUid: FROM_UID, toUid: "uid-target-3" },
+          auth: adminAuth(),
+        }),
+      (err) => err.code === "already-exists"
     );
   });
 });
@@ -348,12 +477,20 @@ describe("transferOwnership: 大量データ (AC-4)", () => {
 // ===== deleteOldAuthUser がスコープ外 (AC-9) =====
 
 describe("transferOwnership: スコープ制約 (AC-9)", () => {
-  it("AC-9: SUT ファイルに deleteOldAuthUser / auth.deleteUser を含まない", () => {
+  it("AC-9: SUT ファイルに deleteOldAuthUser / auth.deleteUser 呼出を含まない", () => {
     const fs = require("fs");
     const src = fs.readFileSync(require.resolve("../src/transferOwnership"), "utf8");
-    assert.ok(!/deleteOldAuthUser/.test(src), "deleteOldAuthUser 未実装であること");
-    assert.ok(!/\bauth\(\)\.deleteUser\b/.test(src), "admin Auth deleteUser 呼出なし");
-    assert.ok(!/getAuth\(\)/.test(src), "Auth SDK 参照なし");
+    // getAuth / getUser は validateToUidBelongsToTenant で使用するため許可
+    // (read-only 検証)。削除系 API のみを禁止する
+    assert.ok(
+      !/\bdeleteOldAuthUser\b\s*\(/.test(src),
+      "deleteOldAuthUser 関数の実装・呼出は本 PR スコープ外"
+    );
+    assert.ok(
+      !/\bdeleteUser\s*\(/.test(src),
+      "admin Auth deleteUser 呼出なし (destructive operation はスコープ外)"
+    );
+    assert.ok(!/\brevokeRefreshTokens\s*\(/.test(src), "Auth 破壊的操作なし");
   });
 });
 

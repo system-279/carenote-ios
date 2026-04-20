@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 
 // Region is pinned to asia-northeast1 to match the rest of the functions module.
 const REGION = "asia-northeast1";
@@ -83,6 +84,70 @@ function authorizeCaller(request) {
   return { callerUid: uid, tenantId };
 }
 
+/**
+ * Verify that toUid exists in Firebase Auth and belongs to the target tenant
+ * via custom claims. Since the Callable runs with admin SDK (bypassing rules),
+ * Callable-level validation is the only guard against a typo rewriting
+ * documents to an orphan / cross-tenant / non-existent uid.
+ *
+ * fromUid is intentionally NOT validated: it may be a deleted legacy account,
+ * which is a primary use case (the old identity is gone and we are
+ * transferring its orphaned documents to the new one).
+ */
+async function validateToUidBelongsToTenant(tenantId, toUid) {
+  let user;
+  try {
+    user = await getAuth().getUser(toUid);
+  } catch (err) {
+    if (err.code === "auth/user-not-found") {
+      throw new HttpsError(
+        "invalid-argument",
+        `toUid not found in Firebase Auth (likely typo)`
+      );
+    }
+    throw new HttpsError("internal", `Failed to verify toUid: ${err.message}`);
+  }
+  const claimTenant = user.customClaims?.tenantId;
+  if (claimTenant !== tenantId) {
+    throw new HttpsError(
+      "invalid-argument",
+      `toUid belongs to tenant "${claimTenant || "<none>"}", expected "${tenantId}"`
+    );
+  }
+}
+
+/**
+ * Reject new dryRun / confirm when another fresh (non-stale) migration for the
+ * same fromUid is already active (prepared-within-TTL or running-within-TTL).
+ * Prevents two different dryRunId's from racing writes against the same data.
+ *
+ * Called from both runDryRun (before creating state) and acquireRunningLock
+ * (inside tx, before transitioning to running). Emulator tests cover both.
+ */
+async function assertNoConcurrentMigration(db, tenantId, fromUid, excludeDryRunId, now = Date.now()) {
+  const snap = await db
+    .collection("tenants").doc(tenantId)
+    .collection("migrationState")
+    .where("fromUid", "==", fromUid)
+    .get();
+  for (const doc of snap.docs) {
+    if (doc.id === excludeDryRunId) continue;
+    const d = doc.data();
+    if (d.status === "completed" || d.status === "failed") continue;
+    // prepared / running: check whether it is still fresh (within TTL).
+    // runningAt drives running TTL; createdAt drives prepared TTL.
+    const ra = d.runningAt?.toMillis?.() || 0;
+    const ca = d.createdAt?.toMillis?.() || 0;
+    const lastActivity = Math.max(ra, ca);
+    if (lastActivity && now - lastActivity < STALE_RUNNING_MS) {
+      throw new HttpsError(
+        "already-exists",
+        `Another active migration for fromUid "${fromUid}" (dryRunId=${doc.id}, status=${d.status})`
+      );
+    }
+  }
+}
+
 async function countMatchingDocs(db, tenantId, collection, field, uid) {
   const snap = await db
     .collection("tenants").doc(tenantId).collection(collection)
@@ -97,6 +162,19 @@ async function countMatchingDocs(db, tenantId, collection, field, uid) {
  * a migrationState doc in status=prepared. Returns dryRunId + counts.
  */
 async function runDryRun({ db, tenantId, fromUid, toUid }) {
+  // Defense in depth: verify toUid is a real user in this tenant before we
+  // persist any state. fromUid is allowed to be missing (deleted account use
+  // case). Cross-tenant write is already structurally impossible (tenantId
+  // comes from caller claim), but a typo in toUid would silently orphan data
+  // since admin SDK bypasses rules.
+  await validateToUidBelongsToTenant(tenantId, toUid);
+
+  // Block concurrent/overlapping migrations for the same fromUid. Two
+  // different dryRunIds both transitioning to running would race on the same
+  // `where(createdBy == fromUid)` result set and split ownership
+  // non-deterministically.
+  await assertNoConcurrentMigration(db, tenantId, fromUid, null);
+
   const counts = {};
   for (const { name, field } of COLLECTIONS) {
     counts[name] = await countMatchingDocs(db, tenantId, name, field, fromUid);
@@ -124,11 +202,10 @@ async function runDryRun({ db, tenantId, fromUid, toUid }) {
  * completed/failed) and is eligible for retry. This is the recovery path for
  * the 540s Cloud Function timeout case where no catch block ever fires.
  */
-async function acquireRunningLock(db, stateRef) {
+async function acquireRunningLock(db, tenantId, stateRef) {
   return db.runTransaction(async (tx) => {
     // Capture the wall-clock time INSIDE the transaction callback so each
-    // retry re-evaluates staleness against a fresh timestamp. A parameter
-    // captured once at call-time would drift across tx retries.
+    // retry re-evaluates staleness against a fresh timestamp.
     const now = Date.now();
     const snap = await tx.get(stateRef);
     if (!snap.exists) {
@@ -151,6 +228,10 @@ async function acquireRunningLock(db, stateRef) {
         `Unexpected migrationState.status: ${data.status}`
       );
     }
+    // Must be done inside tx (before writes) to read consistent state.
+    // Firestore transactions disallow post-write reads, so this query runs
+    // before tx.update below.
+    await assertNoConcurrentMigration(db, tenantId, data.fromUid, stateRef.id, now);
     tx.update(stateRef, {
       status: "running",
       startedAt: data.startedAt || FieldValue.serverTimestamp(),
@@ -229,7 +310,7 @@ async function runConfirm({ db, tenantId, dryRunId }) {
     .collection("tenants").doc(tenantId)
     .collection("migrationLogs").doc();
 
-  const stateBefore = await acquireRunningLock(db, stateRef);
+  const stateBefore = await acquireRunningLock(db, tenantId, stateRef);
   const { fromUid, toUid } = stateBefore;
   const previousCheckpoint = stateBefore.checkpoint || {};
   const previousUpdated = stateBefore.updated || {};
@@ -249,11 +330,13 @@ async function runConfirm({ db, tenantId, dryRunId }) {
       });
       updated[name] = (previousUpdated[name] || 0) + delta;
     }
-    // Write the audit log BEFORE flipping migrationState to completed so that
-    // a process death between these two writes leaves the state as `running`
-    // (recoverable via STALE_RUNNING_MS stale detection) rather than
-    // `completed` with no audit record.
-    await logsRef.set({
+    // Commit the audit log AND the completed state transition in one atomic
+    // batch. Separate writes would leave a window where `migrationLogs` has a
+    // completed record while `migrationState.status` is still `running`, or
+    // (worse, on retry) where state is already `completed` but logs are
+    // missing. Both are violations of AC-5.
+    const completionBatch = db.batch();
+    completionBatch.set(logsRef, {
       dryRunId,
       status: "completed",
       fromUid,
@@ -265,10 +348,11 @@ async function runConfirm({ db, tenantId, dryRunId }) {
       startedAt: stateBefore.startedAt || FieldValue.serverTimestamp(),
       completedAt: FieldValue.serverTimestamp(),
     });
-    await stateRef.update({
+    completionBatch.update(stateRef, {
       status: "completed",
       completedAt: FieldValue.serverTimestamp(),
     });
+    await completionBatch.commit();
     return { ok: true, updated };
   } catch (err) {
     const failurePayload = {
@@ -332,9 +416,12 @@ exports.transferOwnership = onCall(
 exports._internals = Object.freeze({
   REGION,
   BATCH_SIZE,
+  STALE_RUNNING_MS,
   COLLECTIONS,
   validateArgs,
   authorizeCaller,
+  validateToUidBelongsToTenant,
+  assertNoConcurrentMigration,
   runDryRun,
   runConfirm,
   runCollectionUpdate,

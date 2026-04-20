@@ -52,10 +52,10 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Run all functions tests (with Firestore emulator for rules tests)
+      - name: Run all functions tests (with Firestore + Auth emulators)
         working-directory: functions
         run: |
           firebase emulators:exec \
-            --only firestore \
+            --only firestore,auth \
             --project carenote-test \
             "npm test"
