@@ -161,7 +161,7 @@ _Issue #99 / #100 / #110 は本セッションで全て解決_
 
 Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Function として残してあるため、将来独立 Issue 化して実装する（ロールバック余地を Phase 1 完了後に評価）。
 
-## Aliyah / 既知の警告
+## 既知の警告
 
 ### Cloud Functions Node.js 20 deprecation
 
