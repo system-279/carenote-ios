@@ -3,7 +3,16 @@
 **ステータス**: 準備完了 / prod 実行待ち
 **対象 Issue**: #111
 **前提**: Phase 0.5 (PR #115) prod Rules deploy 完了 / Phase 1 (PR #119) prod Function deploy 完了
-**関連**: ADR-007 Guest Tenant、`functions/index.js` `beforeSignIn`
+**関連**: ADR-007 Guest Tenant、`functions/index.js` の `beforeSignIn` allowedDomains 評価ブロック
+
+## 完了条件チェックリスト
+
+本 RUNBOOK は以下が全て埋まった時点で完了とする。未達のまま Issue #111 をクローズしない。
+
+- [ ] 事前確認セクションで既存 whitelist ドメインを確認
+- [ ] dev 先行検証結果記録欄を全て埋める
+- [ ] prod 実施記録欄を全て埋める
+- [ ] prod 実施後動作確認 3 項目すべて PASS
 
 ---
 
@@ -14,6 +23,8 @@ prod tenant `279` の `allowedDomains` を `["279279.net"]` に設定し、`@279
 許可外ドメインの挙動は変更なし:
 - Apple Sign-In → Guest Tenant (`demo-guest`) 振り分け（ADR-007 既存動作）
 - Google / Email → `permission-denied`（既存動作）
+
+実装詳細は `functions/index.js` の `beforeSignIn` 関数内、whitelist match の後に続く `allowedDomains` 評価ブロック (`// 2. Allowed domains: domain match` コメント直下) を参照。
 
 ## 影響範囲
 
@@ -29,31 +40,53 @@ prod tenant `279` の `allowedDomains` を `["279279.net"]` に設定し、`@279
 
 ### 1. 既存メンバーのドメイン把握
 
-```bash
-# dev 側で実行（prod 確認は gcloud config 切替時に実施）
-firebase firestore:get "tenants/279/whitelist" --project carenote-dev-279 \
-  --format=json | jq '.[] | .email' | awk -F'@' '{print $2}' | sort -u
-```
+**Firebase Console 経由** (簡易):
+1. Firebase Console → dev プロジェクト → Firestore → `tenants/279/whitelist`
+2. 各ドキュメントの `email` フィールドを一覧
+3. `@279279.net` 以外のドメインが含まれていても、whitelist match が allowedDomains より優先されるため影響なし
 
-- 既存 whitelist に `279279.net` 以外のドメインがあっても、whitelist match が優先されるため影響なし
-- 目的は「`279279.net` ドメイン全員を member にする意図と、既存 whitelist 設計が矛盾していないか」の最終確認
+**admin SDK スクリプト経由** (自動化):
+```bash
+# dev 側で ADC 認証済であることを確認
+gcloud auth application-default login
+
+cat > /tmp/audit-whitelist-domains.mjs <<'EOF'
+import admin from "firebase-admin";
+admin.initializeApp({ projectId: "carenote-dev-279" });
+const db = admin.firestore();
+const snap = await db.collection("tenants/279/whitelist").get();
+const domains = new Set();
+snap.docs.forEach(d => {
+  const email = d.data().email || "";
+  const domain = email.split("@")[1] || "";
+  if (domain) domains.add(domain);
+});
+console.log([...domains].sort());
+process.exit(0);
+EOF
+
+node /tmp/audit-whitelist-domains.mjs
+```
 
 ### 2. Guest Tenant への誤振り分け再発防止確認
 
-`functions/index.js:59-75` で `allowedDomains` match は whitelist match の**後**、Guest Tenant 振り分けの**前**。コード変更は不要、Firestore データ更新のみ。
+`functions/index.js` の `beforeSignIn` で `allowedDomains` match は whitelist match の**後**、Guest Tenant 振り分けの**前**。Phase 0.9 はコード変更を伴わず、Firestore データ更新のみ。
 
 ### 3. Phase 0.5 / Phase 1 prod deploy 完了の確認
 
-```bash
-# prod Rules が Phase 0.5 のものか確認
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud firestore databases describe \
-  --database='(default)' --format='value(updateTime)'
-# → prod Rules deploy 時刻と整合していること
+**Rules deploy 確認** (Firebase Console):
+1. Firebase Console → prod プロジェクト → Firestore → Rules タブ
+2. 最新の「公開日時」が Phase 0.5 PR #115 マージ後であること
+3. Rules 本文が Phase 0.5 版（`isTenantMember()` 関数＋ `migrationLogs` 参照あり）であること
 
-# prod transferOwnership Function が ACTIVE か確認
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud functions list --v2 \
-  --regions=asia-northeast1 --filter='name~transferOwnership' \
-  --format='table(name,state)'
+**transferOwnership Function 確認**:
+```bash
+CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+  gcloud functions list --v2 --regions=asia-northeast1 \
+    --filter='name~transferOwnership' \
+    --format='table(name,state)' \
+    --project=carenote-prod-279
+# → transferOwnership  ACTIVE であること
 ```
 
 どちらも未完了なら Phase 0.9 へ進まず、先に smoke test → prod deploy を完了させる。
@@ -64,14 +97,26 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud functions list --v2 \
 
 ### 手順
 
-```bash
-# 1. dev tenant `279` に allowedDomains を設定
-firebase firestore:write "tenants/279" \
-  --data '{"allowedDomains":["279279.net"]}' \
-  --merge \
-  --project carenote-dev-279
+**Firebase Console 経由** (推奨・最少手数):
+1. Firebase Console → dev プロジェクト → Firestore → `tenants/279` ドキュメントを開く
+2. 「フィールドを追加」→ フィールド: `allowedDomains`、型: `array`、値: `["279279.net"]`
+3. 保存
 
-# ※ Firestore CLI が merge 未対応の場合は Firebase Console → Firestore → tenants/279 で allowedDomains 配列を手動追加
+**admin SDK スクリプト経由** (自動化):
+```bash
+cat > /tmp/set-allowed-domains-dev.mjs <<'EOF'
+import admin from "firebase-admin";
+admin.initializeApp({ projectId: "carenote-dev-279" });
+const db = admin.firestore();
+await db.doc("tenants/279").set(
+  { allowedDomains: ["279279.net"] },
+  { merge: true }
+);
+console.log("dev allowedDomains set");
+process.exit(0);
+EOF
+
+node /tmp/set-allowed-domains-dev.mjs
 ```
 
 ### 動作確認
@@ -104,22 +149,28 @@ firebase firestore:write "tenants/279" \
 - 低トラフィック時間帯（推奨: 平日夜間 22:00 以降 / 休日）
 - `@279279.net` ユーザーが新規登録する可能性が低い時刻帯
 
-### 実施コマンド
+### 実施方法A: Firebase Console (推奨)
+
+1. Firebase Console → **prod** プロジェクト → Firestore → `tenants/279` ドキュメント
+2. フィールド `allowedDomains`（型: `array`）を追加、値: `["279279.net"]`
+3. 保存
+
+prod 環境であることを URL の project id (`carenote-prod-279`) で必ず確認。
+
+### 実施方法B: REST API + 二重ロック
+
+`gcloud` には document 単位 patch がないため、Firestore REST API 経由で実施する。`CONFIRM_PROD=yes` は運用上の二重ロック（手順書読み飛ばし防止）として使用する。
 
 ```bash
-# CONFIRM_PROD で二重ロックをかける運用
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
-CONFIRM_PROD=yes \
-gcloud firestore documents patch "tenants/279" \
-  --update-mask="allowedDomains" \
-  --data='{"fields":{"allowedDomains":{"arrayValue":{"values":[{"stringValue":"279279.net"}]}}}}' \
-  --project=carenote-prod-279
-```
+test "$CONFIRM_PROD" = "yes" || { echo "CONFIRM_PROD=yes not set"; exit 2; }
 
-または Firebase Console (prod) → Firestore → tenants/279 → フィールド追加:
-- フィールド: `allowedDomains`
-- 型: `array`
-- 値: `["279279.net"]`
+CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+  curl -X PATCH \
+    "https://firestore.googleapis.com/v1/projects/carenote-prod-279/databases/(default)/documents/tenants/279?updateMask.fieldPaths=allowedDomains" \
+    -H "Authorization: Bearer $(CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud auth print-access-token)" \
+    -H "Content-Type: application/json" \
+    -d '{"fields":{"allowedDomains":{"arrayValue":{"values":[{"stringValue":"279279.net"}]}}}}'
+```
 
 ### 実施直後の動作確認
 
@@ -143,16 +194,23 @@ gcloud firestore documents patch "tenants/279" \
 
 `allowedDomains` を空配列に戻せば即時に Phase 0.5 以前の挙動に戻る（`@279279.net` 新規登録は以後 `permission-denied`、既存メンバーは影響なし）。
 
-```bash
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
-CONFIRM_PROD=yes \
-gcloud firestore documents patch "tenants/279" \
-  --update-mask="allowedDomains" \
-  --data='{"fields":{"allowedDomains":{"arrayValue":{"values":[]}}}}' \
-  --project=carenote-prod-279
-```
+### Rollback 方法A: Firebase Console (推奨)
 
-または Console で `allowedDomains` を `[]` に更新。
+1. Firebase Console → prod → Firestore → `tenants/279`
+2. `allowedDomains` フィールドを `[]` に編集、または削除して保存
+
+### Rollback 方法B: REST API
+
+```bash
+test "$CONFIRM_PROD" = "yes" || { echo "CONFIRM_PROD=yes not set"; exit 2; }
+
+CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+  curl -X PATCH \
+    "https://firestore.googleapis.com/v1/projects/carenote-prod-279/databases/(default)/documents/tenants/279?updateMask.fieldPaths=allowedDomains" \
+    -H "Authorization: Bearer $(CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud auth print-access-token)" \
+    -H "Content-Type: application/json" \
+    -d '{"fields":{"allowedDomains":{"arrayValue":{"values":[]}}}}'
+```
 
 ### Rollback の判断基準
 
