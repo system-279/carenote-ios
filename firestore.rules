@@ -65,6 +65,14 @@ service cloud.firestore {
         allow read: if isAdmin(tenantId);
         allow write: if false;
       }
+
+      // 移行状態（Phase 1 transferOwnership の進行状況。admin SDK 経由でのみ書込）
+      //   read   : admin のみ（将来の admin UI で in-flight 状態を表示する想定）
+      //   write  : クライアントからは一切不可（Cloud Function が admin SDK で直書き）
+      match /migrationState/{dryRunId} {
+        allow read: if isAdmin(tenantId);
+        allow write: if false;
+      }
     }
   }
 }

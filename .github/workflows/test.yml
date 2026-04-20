@@ -9,6 +9,10 @@ on:
       - 'scripts/**'
       - '**.md'
       - '.github/**'
+      - 'firestore.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - '.firebaserc'
   push:
     branches: [main]
     paths-ignore:
@@ -17,6 +21,10 @@ on:
       - 'scripts/**'
       - '**.md'
       - '.github/**'
+      - 'firestore.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - '.firebaserc'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
