@@ -3,8 +3,20 @@ name: iOS Tests
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'functions/**'
+      - 'docs/**'
+      - 'scripts/**'
+      - '**.md'
+      - '.github/**'
   push:
     branches: [main]
+    paths-ignore:
+      - 'functions/**'
+      - 'docs/**'
+      - 'scripts/**'
+      - '**.md'
+      - '.github/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
