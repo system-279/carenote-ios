@@ -200,3 +200,8 @@ exports.deleteAccount = onCall(
     return { success: true };
   }
 );
+
+// Phase 1 transferOwnership (Issue #110): admin が旧 uid → 新 uid にテナント内
+// recordings / templates / whitelist を書換える Callable Function。
+// 詳細は functions/src/transferOwnership.js および ADR-008 参照。
+exports.transferOwnership = require("./src/transferOwnership").transferOwnership;

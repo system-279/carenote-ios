@@ -68,7 +68,7 @@ uid 参照箇所の全棚卸し完了。移行 Function の書換対象が確定
 | Phase 0 | uid 参照棚卸し (ADR-008) | ✅ PR #109 マージ済 |
 | Phase 0.5 | Firestore Rules 強化 + `migrationLogs` collection 新設 + rules-unit-testing 拡充 + CI 組込 | ✅ PR #115 マージ済 + dev deploy 完了 (2026-04-21, iOS 実機検証は別途) |
 | Phase 0.9 | `allowedDomains: ["279279.net"]` 有効化 | ⏳ Phase 0.5 prod deploy + iOS 実機検証後 |
-| Phase 1 | `transferOwnership` Callable Function 実装 | ⏳ 並行着手可 |
+| Phase 1 | `transferOwnership` Callable Function 実装 | 🚧 PR 進行中（feat/phase-1-transfer-ownership、dev deploy 前） |
 | Phase 2 | 本人主導 UI（移行コード方式） | 🔒 スコープ外（頻度低 × コスト高） |
 
 ## オープン Issue（アカウント移行機能関連）
