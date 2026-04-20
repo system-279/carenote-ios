@@ -8,23 +8,19 @@
       "**/*.md"
     ]
   },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs22"
-  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs22"
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules"
   },
   "storage": {
     "rules": "storage.rules"
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "runtime": "nodejs20"
-    }
-  ],
   "hosting": {
     "public": "hosting/public",
     "ignore": [
