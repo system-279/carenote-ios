@@ -134,7 +134,17 @@ async function runCli() {
 
     console.log("\nExecuting deletion...\n");
     for (const t of targets) {
-      const fresh = await rest.get(`https://firestore.googleapis.com/v1/${t.docName}`);
+      let fresh;
+      try {
+        fresh = await rest.get(`https://firestore.googleapis.com/v1/${t.docName}`);
+      } catch (e) {
+        if (e.status === 404) {
+          console.warn(`  skip (TOCTOU 404): ${t.docName} no longer exists`);
+          counters.toctouSkipped++;
+          continue;
+        }
+        throw e;
+      }
       if (!isEmptyCreatedBy(fresh.fields || {})) {
         console.warn(`  skip (TOCTOU): ${t.docName} no longer has empty createdBy`);
         counters.toctouSkipped++;
@@ -236,7 +246,11 @@ function makeRestClient(token) {
 
   async function get(url) {
     const res = await fetch(url, { headers: authHeader });
-    if (!res.ok) throw new Error(`GET ${url} -> ${res.status}: ${await res.text()}`);
+    if (!res.ok) {
+      const err = new Error(`GET ${url} -> ${res.status}: ${await res.text()}`);
+      err.status = res.status;
+      throw err;
+    }
     return res.json();
   }
 
