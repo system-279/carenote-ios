@@ -32,7 +32,12 @@ before(() => {
       where: (field, _op, value) => ({
         get: async () => {
           const docs = Object.entries(mockFirestoreData)
-            .filter(([key, data]) => key.startsWith(path + "/") && data[field] === value)
+            .filter(([key, data]) => {
+              if (!key.startsWith(path + "/")) return false;
+              const rel = key.slice(path.length + 1);
+              if (rel.includes("/")) return false;
+              return data[field] === value;
+            })
             .map(([key, data]) => ({
               id: key.split("/").pop(),
               data: () => data,
@@ -166,6 +171,41 @@ describe("deleteAccount Callable Function", () => {
     assert.deepStrictEqual(deletedDocs, ["tenants/279/recordings/r1"], "Firestore 削除は実行される");
     assert.deepStrictEqual(deletedStorageFiles, [], "parseできない gs URI は Storage 削除されない");
     assert.deepStrictEqual(deletedUids, ["alice"]);
+  });
+
+  it("深いサブコレクションを where でヒットさせない（issue #104 regression）", async () => {
+    mockFirestoreData["tenants/279/recordings/r1"] = {
+      createdBy: "alice",
+      audioStoragePath: "gs://audio-bucket/279/r1.m4a",
+    };
+    mockFirestoreData["tenants/279/recordings/r1/comments/c1"] = {
+      createdBy: "alice",
+      text: "nested doc — must NOT be returned by where()",
+    };
+    mockFirestoreData["tenants/279/recordings/r1/attachments/a1"] = {
+      createdBy: "alice",
+      url: "gs://audio-bucket/279/r1/a1.txt",
+    };
+
+    const result = await deleteAccount({
+      auth: { uid: "alice", token: { tenantId: "279" } },
+      data: {},
+    });
+
+    assert.deepStrictEqual(result, { success: true });
+    assert.deepStrictEqual(
+      deletedDocs,
+      ["tenants/279/recordings/r1"],
+      "直下 recording のみ削除対象（サブコレクションは where 結果に含めない）"
+    );
+    assert.ok(
+      "tenants/279/recordings/r1/comments/c1" in mockFirestoreData,
+      "サブコレクション docs は削除対象に含まれない"
+    );
+    assert.ok(
+      "tenants/279/recordings/r1/attachments/a1" in mockFirestoreData,
+      "サブコレクション docs は削除対象に含まれない"
+    );
   });
 
   it("未認証で呼び出されると unauthenticated エラー", async () => {
