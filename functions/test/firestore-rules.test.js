@@ -1019,6 +1019,173 @@ describe("エッジケース (Issue #116 follow-up)", () => {
     });
   });
 
+  // #135-1: role 値バリエーション (rating 7)
+  // 現状 rules は `role == 'admin'` 厳密一致で isAdmin を判定するが、
+  // 将来 `role in ['admin']` や `role != 'member'` 等への書換 regression を予防する。
+  describe("role 値バリエーション (issue #135-1)", () => {
+    function roleToken(tenantId, role) {
+      return { tenantId, role };
+    }
+
+    it("role='' では isAdmin 不成立（migrationLogs read 拒否）", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context
+          .firestore()
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("migrationLogs")
+          .doc("log-empty-role")
+          .set({ actor: "admin-sdk" });
+      });
+      const db = testEnv.authenticatedContext(
+        "empty-role-a",
+        roleToken(TENANT_ID, "")
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("migrationLogs")
+          .doc("log-empty-role")
+          .get()
+      );
+    });
+
+    it("role='Admin' (大文字始まり) では isAdmin 不成立（他人の録音 update 拒否）", async () => {
+      await seedRecording(TENANT_ID, "r-titlecase-role", "member-b");
+      const db = testEnv.authenticatedContext(
+        "titlecase-role-a",
+        roleToken(TENANT_ID, "Admin")
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-titlecase-role")
+          .update({ transcription: "大文字ロール試行" })
+      );
+    });
+
+    it("role=0 (数値) では isAdmin 不成立（他人の録音 delete 拒否）", async () => {
+      await seedRecording(TENANT_ID, "r-numeric-role", "member-b");
+      const db = testEnv.authenticatedContext(
+        "numeric-role-a",
+        roleToken(TENANT_ID, 0)
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-numeric-role")
+          .delete()
+      );
+    });
+
+    it("role=null では isAdmin 不成立（whitelist create 拒否）", async () => {
+      const db = testEnv.authenticatedContext(
+        "null-role-a",
+        roleToken(TENANT_ID, null)
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("whitelist")
+          .doc("w-nullrole")
+          .set({ email: "x@example.com", role: "member" })
+      );
+    });
+  });
+
+  // #135-2: createdBy 書換防止の明示 (rating 7)
+  // update の不変制約 `request.resource.data.createdBy == resource.data.createdBy` が
+  // 所有権移管シナリオの各境界で機能することを明示する。
+  describe("createdBy 書換防止の境界 (issue #135-2)", () => {
+    it("admin が自分の uid に createdBy を書き換える update は拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-admin-self-rewrite", "member-a");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-admin-self-rewrite")
+          .update({ createdBy: "admin-a" })
+      );
+    });
+
+    it("member が他人の uid から別の他人の uid へ createdBy を書き換える update は拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-third-party-rewrite", "member-b");
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-third-party-rewrite")
+          .update({ createdBy: "member-c" })
+      );
+    });
+  });
+
+  // #135-3: createdBy 非 string 型 (rating 6)
+  // クライアント SDK の型崩れ regression を拾う。現状 rules は
+  // `request.resource.data.createdBy == request.auth.uid` (string) との比較で拒否する。
+  describe("createdBy 非 string 型 create (issue #135-3)", () => {
+    it("createdBy={} の create は拒否される", async () => {
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-obj-createdby")
+          .set({ scene: "visit", clientName: "山田太郎", createdBy: {} })
+      );
+    });
+
+    it("createdBy=123 (数値) の create は拒否される", async () => {
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-num-createdby")
+          .set({ scene: "visit", clientName: "山田太郎", createdBy: 123 })
+      );
+    });
+
+    it("createdBy=[] (配列) の create は拒否される", async () => {
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-arr-createdby")
+          .set({ scene: "visit", clientName: "山田太郎", createdBy: [] })
+      );
+    });
+  });
+
   // #116-5: admin 間の相互干渉シナリオの明示
   describe("admin 間の recordings 操作", () => {
     it("admin-1 は admin-2 の録音を update できる", async () => {
