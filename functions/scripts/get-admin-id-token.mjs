@@ -22,19 +22,24 @@
 //     CareNote/Firebase/<env>/GoogleService-Info.plist.
 //
 // Safety:
-//   - On prod projects, CONFIRM_PROD=yes is required (guardrail against
-//     accidental prod-targeted token issuance).
+//   - On prod projects, CONFIRM_PROD=<project-id> is required (guardrail
+//     against accidental prod-targeted token issuance; the nonce prevents a
+//     persistent `export CONFIRM_PROD=...` in one shell from authing every
+//     subsequent prod call). --cleanup-uid also consumes this same guard —
+//     destructive delete requires the same invocation-scoped confirmation.
 //   - Ephemeral admin uid pattern is encouraged: pass a uid like
 //     "transferOp-<initials>-<YYYYMMDD>" and delete it after the op.
 //
 // Exit codes:
-//   0 — idToken printed on stdout
-//   1 — argument / config error
-//   2 — prod target without CONFIRM_PROD=yes
+//   0 — idToken printed on stdout (mint mode) / uid deleted (cleanup mode)
+//   1 — argument / config error (or project not allowlisted)
+//   2 — prod target without CONFIRM_PROD=<project-id>
 //   3 — Admin SDK or Identity Toolkit call failed
+//   4 — --cleanup-uid target not found (likely typo; real uid may still exist)
 
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -60,6 +65,7 @@ function parseArgs(argv) {
       case "--tenant-id": args.tenantId = argv[++i]; break;
       case "--role": args.role = argv[++i]; break;
       case "--api-key": args.apiKey = argv[++i]; break;
+      case "--cleanup-uid": args.cleanupUid = argv[++i]; break;
       case "--help":
       case "-h": args.help = true; break;
       default: throw new Error(`Unknown argument: ${a}`);
@@ -70,11 +76,14 @@ function parseArgs(argv) {
 
 function usageAndExit(code) {
   console.error(
-    "Usage: node get-admin-id-token.mjs \\\n" +
-      "         --project <id> --uid <admin-uid> --tenant-id <tenantId> \\\n" +
-      "         [--role admin] [--api-key <public-api-key>]\n\n" +
+    "Usage (mint ID token):\n" +
+      "  node get-admin-id-token.mjs \\\n" +
+      "    --project <id> --uid <admin-uid> --tenant-id <tenantId> \\\n" +
+      "    [--role admin] [--api-key <public-api-key>]\n\n" +
+      "Usage (cleanup one-time admin uid):\n" +
+      "  node get-admin-id-token.mjs --project <id> --cleanup-uid <admin-uid>\n\n" +
       "Env:\n" +
-      "  CONFIRM_PROD=yes  required when --project matches 'prod'\n" +
+      "  CONFIRM_PROD=<project-id>       required when --project is a prod project\n" +
       "  GOOGLE_APPLICATION_CREDENTIALS  optional; ADC preferred"
   );
   process.exit(code);
@@ -82,8 +91,8 @@ function usageAndExit(code) {
 
 function validate(args) {
   if (args.help) usageAndExit(0);
-  if (!args.project || !args.uid || !args.tenantId) {
-    console.error("Error: --project, --uid, --tenant-id are required");
+  if (!args.project) {
+    console.error("Error: --project is required");
     usageAndExit(1);
   }
   if (isProdProject(args.project)) {
@@ -104,7 +113,59 @@ function validate(args) {
     );
     process.exit(1);
   }
+  if (args.cleanupUid) {
+    return;
+  }
+  if (!args.uid || !args.tenantId) {
+    console.error(
+      "Error: --uid and --tenant-id are required (or use --cleanup-uid to delete an admin uid)"
+    );
+    usageAndExit(1);
+  }
   args.role = args.role || "admin";
+}
+
+function checkAdcProjectAlignment(args) {
+  try {
+    const gcloudProject = execFileSync(
+      "gcloud",
+      ["config", "get-value", "project"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    ).trim();
+    if (gcloudProject && gcloudProject !== args.project) {
+      console.error(
+        `  warning: gcloud active project is "${gcloudProject}" but --project is ` +
+          `"${args.project}". ADC may be scoped to the former; confirm the ADC ` +
+          `principal has Firebase Auth permissions on ${args.project}.`
+      );
+    }
+  } catch (err) {
+    // ENOENT: gcloud not installed — advisory check, silent skip (ADC may still work).
+    // Anything else (EACCES, gcloud exit 1, etc.) gets a one-line notice so the
+    // operator knows the mismatch check did not run.
+    if (err?.code !== "ENOENT") {
+      console.error(
+        `  note: ADC project alignment check skipped (gcloud: ${err?.code || err?.message || "unknown error"})`
+      );
+    }
+  }
+}
+
+function classifyAuthError(err, op, uid, project) {
+  switch (err.code) {
+    case "auth/invalid-uid":
+      return new Error(
+        `${op}: uid "${uid}" violates Firebase Auth format rules ` +
+          `(1-128 chars, alphanumeric + \`-\` \`_\`)`
+      );
+    case "auth/insufficient-permission":
+      return new Error(
+        `${op}: ADC lacks Firebase Auth permissions on ${project}. ` +
+          `Grant roles/firebaseauth.admin to the ADC principal.`
+      );
+    default:
+      return err;
+  }
 }
 
 function resolveApiKey(args) {
@@ -134,20 +195,54 @@ function resolveApiKey(args) {
   return match[1];
 }
 
+async function ensureAuthUser(auth, uid, project) {
+  try {
+    await auth.getUser(uid);
+    return;
+  } catch (err) {
+    if (err.code === "auth/user-not-found") {
+      console.error(`  creating Auth user: ${uid}`);
+      try {
+        await auth.createUser({ uid });
+        return;
+      } catch (createErr) {
+        throw classifyAuthError(createErr, "createUser", uid, project);
+      }
+    }
+    throw classifyAuthError(err, "getUser", uid, project);
+  }
+}
+
+async function signInWithCustomTokenWithRetry(apiKey, customToken) {
+  // This is an operator-invoked CLI, not a background job. We retry exactly
+  // once on 429/5xx with a fixed 1s delay: transient hiccups in Identity
+  // Toolkit are almost always resolved by then, and a persistent second
+  // failure indicates an infra problem (rate-limit exhaustion / outage) that
+  // needs operator attention — exponential backoff would only delay the
+  // signal. `Retry-After` is not honored here; revisit if operators see
+  // 503s with long Retry-After values.
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`;
+  const options = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+  };
+  let res = await fetch(url, options);
+  if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+    console.error(
+      `  Identity Toolkit returned ${res.status}; retrying once after 1s`
+    );
+    await new Promise((r) => setTimeout(r, 1000));
+    res = await fetch(url, options);
+  }
+  return res;
+}
+
 async function mintIdToken(args) {
   initializeApp({ credential: applicationDefault(), projectId: args.project });
   const auth = getAuth();
 
-  try {
-    await auth.getUser(args.uid);
-  } catch (err) {
-    if (err.code === "auth/user-not-found") {
-      console.error(`  creating Auth user: ${args.uid}`);
-      await auth.createUser({ uid: args.uid });
-    } else {
-      throw err;
-    }
-  }
+  await ensureAuthUser(auth, args.uid, args.project);
 
   await auth.setCustomUserClaims(args.uid, {
     tenantId: args.tenantId,
@@ -163,14 +258,7 @@ async function mintIdToken(args) {
   });
 
   const apiKey = resolveApiKey(args);
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: customToken, returnSecureToken: true }),
-    }
-  );
+  const res = await signInWithCustomTokenWithRetry(apiKey, customToken);
   const text = await res.text();
   // Never echo raw response bodies into error messages — on 200 the body
   // carries the live idToken, and even partial/truncated bodies may contain
@@ -205,10 +293,38 @@ async function mintIdToken(args) {
   return json.idToken;
 }
 
+async function cleanupAdminUid(args) {
+  initializeApp({ credential: applicationDefault(), projectId: args.project });
+  const auth = getAuth();
+  try {
+    await auth.deleteUser(args.cleanupUid);
+    console.error(`  deleted Auth user: ${args.cleanupUid}`);
+  } catch (err) {
+    if (err.code === "auth/user-not-found") {
+      // Distinct exit (4) so a typo in --cleanup-uid does not look like success.
+      // The operator likely intended to delete a real uid; if that uid still
+      // exists with admin claims, treating a "not found" as success could
+      // leave a live privileged uid unnoticed.
+      console.error(
+        `  warning: user "${args.cleanupUid}" not found on ${args.project}. ` +
+          `No delete occurred. Verify the uid is correct; the intended admin ` +
+          `uid may still exist.`
+      );
+      process.exit(4);
+    }
+    throw classifyAuthError(err, "deleteUser", args.cleanupUid, args.project);
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   validate(args);
+  checkAdcProjectAlignment(args);
   try {
+    if (args.cleanupUid) {
+      await cleanupAdminUid(args);
+      return;
+    }
     const idToken = await mintIdToken(args);
     // Write a trailing newline so `$(...)` substitution in shells works
     // without producing warnings.

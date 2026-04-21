@@ -15,7 +15,8 @@
 //     --confirm
 //   # → executes the migration
 //
-// Usage (prod): additionally set CONFIRM_PROD=yes environment variable.
+// Usage (prod): additionally set CONFIRM_PROD=<project-id> (invocation-scoped
+// prefix, not a persistent `export`) to confirm the prod target.
 //
 // The caller must be an admin of the target tenant. The tenantId is taken from
 // the caller's custom claim; we do NOT pass tenantId as an argument (mirroring
@@ -39,6 +40,15 @@
 
 import { execFileSync } from "node:child_process";
 import process from "node:process";
+
+// Explicit allowlist, mirroring get-admin-id-token.mjs, to prevent
+// `includes("prod")` from misclassifying new prod/sandbox names.
+const PROD_PROJECTS = new Set(["carenote-prod-279"]);
+const DEV_PROJECTS = new Set(["carenote-dev-279"]);
+
+function isProdProject(project) {
+  return PROD_PROJECTS.has(project);
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -96,11 +106,22 @@ function validate(args) {
     console.error("Error: --project is required");
     usageAndExit(1);
   }
-  if (args.project.includes("prod") && process.env.CONFIRM_PROD !== "yes") {
+  if (isProdProject(args.project)) {
+    // Require the project id (not `yes`) so a persistent `export CONFIRM_PROD=...`
+    // in one shell cannot silently auth every subsequent prod-targeted call.
+    if (process.env.CONFIRM_PROD !== args.project) {
+      console.error(
+        `Error: prod project ${args.project} targeted. Set CONFIRM_PROD=${args.project} ` +
+          `for the invocation (not via persistent \`export\`).`
+      );
+      process.exit(2);
+    }
+  } else if (!DEV_PROJECTS.has(args.project)) {
     console.error(
-      "Error: prod project targeted but CONFIRM_PROD=yes not set. Refusing."
+      `Error: project "${args.project}" is neither dev nor prod allowlisted. ` +
+        `If this is a new project, update PROD_PROJECTS / DEV_PROJECTS in this script.`
     );
-    process.exit(2);
+    process.exit(1);
   }
   const isDryRun = args.dryRun === true;
   const isConfirm = args.confirm === true;
