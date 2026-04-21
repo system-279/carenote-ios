@@ -167,7 +167,13 @@ CONFIRM_PROD=carenote-prod-279 \
 ### `Error: permission-denied: 管理者のみ実行可能です`
 
 - `transferOwnership` は `request.auth.token.role === "admin"` を要求
-- helper script が set した claims が ID token に反映されているか確認: ID token を [jwt.io](https://jwt.io) にペースト → payload に `role: "admin"` が入っていること
+- helper script が set した claims が ID token に反映されているか確認（**jwt.io 等の外部サイトへの貼り付けは禁止 — ID token は機密**）:
+
+  ```bash
+  # ローカルで JWT payload を decode（base64url → JSON）
+  echo "$ID_TOKEN" | cut -d. -f2 | base64 --decode 2>/dev/null | python3 -m json.tool
+  # → "role": "admin" が含まれていること
+  ```
 - helper script 内で claims を set してから custom token を発行しているので、通常ここで失敗しない。失敗した場合は helper script の logs (stderr) を確認
 
 ### `--id-token is required` (call-transfer-ownership.mjs)

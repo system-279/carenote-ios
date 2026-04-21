@@ -15,7 +15,8 @@
 //     --confirm
 //   # → executes the migration
 //
-// Usage (prod): additionally set CONFIRM_PROD=yes environment variable.
+// Usage (prod): additionally set CONFIRM_PROD=<project-id> (invocation-scoped
+// prefix, not a persistent `export`) to confirm the prod target.
 //
 // The caller must be an admin of the target tenant. The tenantId is taken from
 // the caller's custom claim; we do NOT pass tenantId as an argument (mirroring

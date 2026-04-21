@@ -22,16 +22,20 @@
 //     CareNote/Firebase/<env>/GoogleService-Info.plist.
 //
 // Safety:
-//   - On prod projects, CONFIRM_PROD=yes is required (guardrail against
-//     accidental prod-targeted token issuance).
+//   - On prod projects, CONFIRM_PROD=<project-id> is required (guardrail
+//     against accidental prod-targeted token issuance; the nonce prevents a
+//     persistent `export CONFIRM_PROD=...` in one shell from authing every
+//     subsequent prod call). --cleanup-uid also consumes this same guard —
+//     destructive delete requires the same invocation-scoped confirmation.
 //   - Ephemeral admin uid pattern is encouraged: pass a uid like
 //     "transferOp-<initials>-<YYYYMMDD>" and delete it after the op.
 //
 // Exit codes:
-//   0 — idToken printed on stdout
-//   1 — argument / config error
-//   2 — prod target without CONFIRM_PROD=yes
+//   0 — idToken printed on stdout (mint mode) / uid deleted (cleanup mode)
+//   1 — argument / config error (or project not allowlisted)
+//   2 — prod target without CONFIRM_PROD=<project-id>
 //   3 — Admin SDK or Identity Toolkit call failed
+//   4 — --cleanup-uid target not found (likely typo; real uid may still exist)
 
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -135,8 +139,15 @@ function checkAdcProjectAlignment(args) {
           `principal has Firebase Auth permissions on ${args.project}.`
       );
     }
-  } catch {
-    // gcloud not installed or not logged in — silent skip (ADC may still work).
+  } catch (err) {
+    // ENOENT: gcloud not installed — advisory check, silent skip (ADC may still work).
+    // Anything else (EACCES, gcloud exit 1, etc.) gets a one-line notice so the
+    // operator knows the mismatch check did not run.
+    if (err?.code !== "ENOENT") {
+      console.error(
+        `  note: ADC project alignment check skipped (gcloud: ${err?.code || err?.message || "unknown error"})`
+      );
+    }
   }
 }
 
@@ -290,8 +301,16 @@ async function cleanupAdminUid(args) {
     console.error(`  deleted Auth user: ${args.cleanupUid}`);
   } catch (err) {
     if (err.code === "auth/user-not-found") {
-      console.error(`  user ${args.cleanupUid} not found — no-op`);
-      return;
+      // Distinct exit (4) so a typo in --cleanup-uid does not look like success.
+      // The operator likely intended to delete a real uid; if that uid still
+      // exists with admin claims, treating a "not found" as success could
+      // leave a live privileged uid unnoticed.
+      console.error(
+        `  warning: user "${args.cleanupUid}" not found on ${args.project}. ` +
+          `No delete occurred. Verify the uid is correct; the intended admin ` +
+          `uid may still exist.`
+      );
+      process.exit(4);
     }
     throw classifyAuthError(err, "deleteUser", args.cleanupUid, args.project);
   }
