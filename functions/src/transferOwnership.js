@@ -2,6 +2,7 @@
 
 const crypto = require("node:crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 
@@ -146,6 +147,29 @@ async function assertNoConcurrentMigration(db, tenantId, fromUid, excludeDryRunI
       );
     }
   }
+}
+
+/**
+ * Build a structured error context that correlates Cloud Logging entries with
+ * the HttpsError surfaced to the caller. `errorId` is a fresh UUID per call;
+ * admins can grep Cloud Logging by `jsonPayload.errorId` once they receive the
+ * id through the CLI stderr / migrationState.lastFailure / migrationLogs.error.
+ * Safe against nullish, non-Error, and missing-code values so no catch branch
+ * can silently swallow the id.
+ */
+function buildErrorContext(err) {
+  const errorId = crypto.randomUUID();
+  const code = (err && typeof err.code === "string" && err.code) || "internal";
+  let message;
+  if (err && typeof err.message === "string" && err.message.length > 0) {
+    message = err.message;
+  } else if (err === null || err === undefined) {
+    message = "<unknown error>";
+  } else {
+    message = String(err);
+  }
+  const stack = err && typeof err.stack === "string" ? err.stack : null;
+  return { errorId, code, message, stack };
 }
 
 async function countMatchingDocs(db, tenantId, collection, field, uid) {
@@ -355,10 +379,25 @@ async function runConfirm({ db, tenantId, dryRunId }) {
     await completionBatch.commit();
     return { ok: true, updated };
   } catch (err) {
+    const errCtx = buildErrorContext(err);
+    // Persist only the fields Firestore can serialize safely. `stack` goes to
+    // Cloud Logging (via logger.error below); copying it into Firestore would
+    // bloat the doc without aiding forensics, since the errorId correlates both.
     const failurePayload = {
-      code: err.code || "internal",
-      message: err.message || String(err),
+      errorId: errCtx.errorId,
+      code: errCtx.code,
+      message: errCtx.message,
     };
+    // Structured log so Cloud Logging can be queried by jsonPayload.errorId.
+    // stack is attached here (and only here) so we keep one source of truth.
+    logger.error("[transferOwnership] confirm failed", {
+      errorId: errCtx.errorId,
+      dryRunId,
+      tenantId,
+      code: errCtx.code,
+      message: errCtx.message,
+      stack: errCtx.stack,
+    });
     // Best-effort state transition; do not mask the original error even if
     // status write fails (orphaned running state is recoverable by re-run).
     try {
@@ -368,10 +407,13 @@ async function runConfirm({ db, tenantId, dryRunId }) {
         failedAt: FieldValue.serverTimestamp(),
       });
     } catch (stateErr) {
-      console.error("[transferOwnership] failed to persist failed status", {
+      logger.error("[transferOwnership] failed to persist failed status", {
+        errorId: errCtx.errorId,
         dryRunId,
         tenantId,
-        stateErr: stateErr.message,
+        stateErrCode: stateErr?.code,
+        stateErrMessage: stateErr?.message,
+        stateErrStack: stateErr?.stack,
       });
     }
     try {
@@ -386,14 +428,24 @@ async function runConfirm({ db, tenantId, dryRunId }) {
         failedAt: FieldValue.serverTimestamp(),
       });
     } catch (logErr) {
-      console.error("[transferOwnership] failed to persist failed log", {
+      logger.error("[transferOwnership] failed to persist failed log", {
+        errorId: errCtx.errorId,
         dryRunId,
         tenantId,
-        logErr: logErr.message,
+        logErrCode: logErr?.code,
+        logErrMessage: logErr?.message,
+        logErrStack: logErr?.stack,
       });
     }
+    // Enrich both outgoing error shapes with errorId so callers (CLI / client)
+    // can quote it back when filing a ticket. Preserve the original HttpsError
+    // code/message so failed-precondition vs internal semantics are not lost.
     if (err instanceof HttpsError) {
-      throw err;
+      const enrichedDetails = {
+        ...(err.details && typeof err.details === "object" ? err.details : {}),
+        errorId: errCtx.errorId,
+      };
+      throw new HttpsError(err.code, err.message, enrichedDetails);
     }
     throw new HttpsError("internal", "transferOwnership failed", failurePayload);
   }
@@ -426,4 +478,5 @@ exports._internals = Object.freeze({
   runConfirm,
   runCollectionUpdate,
   acquireRunningLock,
+  buildErrorContext,
 });
