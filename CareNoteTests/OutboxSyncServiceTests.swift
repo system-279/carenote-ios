@@ -11,6 +11,53 @@ private actor StubAccessTokenProvider: AccessTokenProviding {
     }
 }
 
+// MARK: - Mocks for processItem 主経路テスト (issue #107 / I-Cdx-3)
+
+/// 呼び出し履歴を記録する AudioUploading stub。
+private actor StubAudioUploader: AudioUploading {
+    private(set) var uploadCalls: [(localURL: URL, tenantId: String, recordingId: String)] = []
+    var gcsUriToReturn: String = "gs://test-bucket/default.m4a"
+
+    func uploadAudio(localURL: URL, tenantId: String, recordingId: String) async throws -> String {
+        uploadCalls.append((localURL, tenantId, recordingId))
+        return gcsUriToReturn
+    }
+
+    func setGcsUri(_ uri: String) { gcsUriToReturn = uri }
+}
+
+/// 呼び出し履歴を記録する RecordingStoring stub。
+private actor StubRecordingStore: RecordingStoring {
+    private(set) var createCalls: [FirestoreRecording] = []
+    private(set) var updateTranscriptionCalls: [(recordingId: String, status: TranscriptionStatus)] = []
+    var firestoreIdToReturn: String = "firestore-id-stub"
+
+    func createRecording(tenantId: String, recording: FirestoreRecording) async throws -> String {
+        createCalls.append(recording)
+        return firestoreIdToReturn
+    }
+
+    func updateTranscription(
+        tenantId: String,
+        recordingId: String,
+        transcription: String,
+        status: TranscriptionStatus
+    ) async throws {
+        updateTranscriptionCalls.append((recordingId, status))
+    }
+}
+
+/// 呼び出し履歴を記録する Transcribing stub。
+private actor StubTranscriber: Transcribing {
+    private(set) var transcribeCalls: [(audioGCSUri: String, templatePrompt: String?)] = []
+    var transcriptionToReturn: String = "mock-transcription"
+
+    func transcribe(audioGCSUri: String, templatePrompt: String?) async throws -> String {
+        transcribeCalls.append((audioGCSUri, templatePrompt))
+        return transcriptionToReturn
+    }
+}
+
 @Suite("OutboxSyncService incrementRetryCount Tests")
 struct OutboxSyncServiceTests {
 
@@ -252,5 +299,157 @@ struct OutboxSyncServiceTests {
         #expect(result.durationSeconds == 123.45)
         #expect(result.audioStoragePath == "gs://test-bucket/test.m4a")
         #expect(result.createdBy == "uid-xyz")
+    }
+
+    // MARK: - processItem 主経路テスト (issue #107 / I-Cdx-3)
+    //
+    // buildFirestoreRecording 直叩きテストは uid 変換ロジック単体を検証する。
+    // 主経路テストは processQueueImmediately 経由で以下を検証する:
+    //   - createRecording が呼ばれ createdBy が uid と一致 (AC1 主経路固定)
+    //   - uid == nil/"" で uploadAudio が呼ばれない (C-Cdx-1 GCS orphan 防止の回帰)
+    //   - Step 順序 (upload → create → transcribe → updateTranscription)
+
+    /// 主経路: uid が取得できる場合に createRecording に createdBy=uid が渡る
+    @Test @MainActor
+    func processQueueImmediately_主経路_createRecordingに正しいuidが渡る_I_Cdx_3() async throws {
+        let (container, audioPath) = try Self.setupContainerWithAudioFile()
+        defer { try? FileManager.default.removeItem(atPath: audioPath) }
+
+        let stubUploader = StubAudioUploader()
+        await stubUploader.setGcsUri("gs://test-bucket/expected.m4a")
+        let stubStore = StubRecordingStore()
+        let stubTranscriber = StubTranscriber()
+
+        let service = OutboxSyncService(
+            modelContainer: container,
+            storageService: stubUploader,
+            firestoreService: stubStore,
+            transcriptionService: stubTranscriber,
+            tenantId: "test-tenant",
+            currentUidProvider: { "test-uid-alpha" }
+        )
+
+        let recordingId = UUID()
+        let context = container.mainContext
+        context.insert(RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: audioPath
+        ))
+        context.insert(OutboxItem(recordingId: recordingId))
+        try context.save()
+
+        try await service.processQueueImmediately()
+
+        let uploadCalls = await stubUploader.uploadCalls
+        let createCalls = await stubStore.createCalls
+        let transcribeCalls = await stubTranscriber.transcribeCalls
+
+        #expect(uploadCalls.count == 1)
+        #expect(uploadCalls.first?.recordingId == recordingId.uuidString)
+        #expect(createCalls.count == 1)
+        #expect(createCalls.first?.createdBy == "test-uid-alpha")
+        #expect(transcribeCalls.count == 1)
+        #expect(transcribeCalls.first?.audioGCSUri == "gs://test-bucket/expected.m4a")
+    }
+
+    /// 回帰防止 (C-Cdx-1): uid==nil なら pre-flight check で早期 throw し、uploadAudio が呼ばれない
+    @Test @MainActor
+    func processQueueImmediately_uidNilでuploadAudioが呼ばれない_orphan防止_I_Cdx_3() async throws {
+        let (container, audioPath) = try Self.setupContainerWithAudioFile()
+        defer { try? FileManager.default.removeItem(atPath: audioPath) }
+
+        let stubUploader = StubAudioUploader()
+        let stubStore = StubRecordingStore()
+        let stubTranscriber = StubTranscriber()
+
+        let service = OutboxSyncService(
+            modelContainer: container,
+            storageService: stubUploader,
+            firestoreService: stubStore,
+            transcriptionService: stubTranscriber,
+            tenantId: "test-tenant",
+            currentUidProvider: { nil }
+        )
+
+        let recordingId = UUID()
+        let context = container.mainContext
+        context.insert(RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: audioPath
+        ))
+        context.insert(OutboxItem(recordingId: recordingId))
+        try context.save()
+
+        await #expect(throws: OutboxSyncError.self) {
+            try await service.processQueueImmediately()
+        }
+
+        let uploadCalls = await stubUploader.uploadCalls
+        let createCalls = await stubStore.createCalls
+        #expect(uploadCalls.isEmpty, "uid==nil 時は pre-flight check で throw され uploadAudio は呼ばれない (GCS orphan 回避)")
+        #expect(createCalls.isEmpty)
+    }
+
+    /// 回帰防止 (C-Cdx-1): uid=="" でも pre-flight check で早期 throw し、uploadAudio が呼ばれない
+    @Test @MainActor
+    func processQueueImmediately_uid空文字でuploadAudioが呼ばれない_orphan防止_I_Cdx_3() async throws {
+        let (container, audioPath) = try Self.setupContainerWithAudioFile()
+        defer { try? FileManager.default.removeItem(atPath: audioPath) }
+
+        let stubUploader = StubAudioUploader()
+        let stubStore = StubRecordingStore()
+        let stubTranscriber = StubTranscriber()
+
+        let service = OutboxSyncService(
+            modelContainer: container,
+            storageService: stubUploader,
+            firestoreService: stubStore,
+            transcriptionService: stubTranscriber,
+            tenantId: "test-tenant",
+            currentUidProvider: { "" }
+        )
+
+        let recordingId = UUID()
+        let context = container.mainContext
+        context.insert(RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: audioPath
+        ))
+        context.insert(OutboxItem(recordingId: recordingId))
+        try context.save()
+
+        await #expect(throws: OutboxSyncError.self) {
+            try await service.processQueueImmediately()
+        }
+
+        let uploadCalls = await stubUploader.uploadCalls
+        let createCalls = await stubStore.createCalls
+        #expect(uploadCalls.isEmpty, "uid=='' 時も pre-flight check で throw され uploadAudio は呼ばれない")
+        #expect(createCalls.isEmpty)
+    }
+
+    // MARK: - Helpers for processItem 主経路テスト
+
+    /// processQueueImmediately 経由テストのセットアップヘルパ。
+    /// ダミー音声ファイルを作成し ModelContainer と pair で返す。
+    /// - Note: ダミーファイルは OutboxSyncService.processQueueImmediately の
+    ///   `FileManager.default.fileExists(atPath:)` ガード（stale item 除外）を
+    ///   通過させるために必要。呼出側は `defer { try? FileManager.default.removeItem(atPath:) }`
+    ///   でクリーンアップする。
+    private static func setupContainerWithAudioFile() throws -> (ModelContainer, String) {
+        let container = try makeContainer()
+        let audioPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-audio-\(UUID().uuidString).m4a").path
+        try Data().write(to: URL(fileURLWithPath: audioPath))
+        return (container, audioPath)
     }
 }
