@@ -52,28 +52,44 @@
 
 ### 1. 現状確認
 
-```bash
-# dev tenants/279 の allowedDomains を確認（空配列 or 未設定が想定）
-firebase firestore:get tenants/279 --project=carenote-dev-279
-```
+Firestore Console（目視確認可）:
+https://console.firebase.google.com/project/carenote-dev-279/firestore/data/~2Ftenants~2F279
 
 期待値: `allowedDomains` フィールドなし、または `[]`。
 
-### 2. dev 設定
+CLI 代替（Admin SDK ワンライナー、`functions/` 配下で実行）:
 
 ```bash
-# Firestore Console（推奨、目視確認可）
-# https://console.firebase.google.com/project/carenote-dev-279/firestore/data/~2Ftenants~2F279
-# → allowedDomains フィールドを追加 → type: array → value: ["279279.net"] → Update
-
-# または gcloud CLI
-gcloud firestore documents patch tenants/279 \
-  --project=carenote-dev-279 \
-  --update-mask=allowedDomains \
-  --data='{"allowedDomains":["279279.net"]}'
+(cd functions && node -e '
+const admin = require("firebase-admin");
+admin.initializeApp({credential: admin.credential.applicationDefault(), projectId: "carenote-dev-279"});
+admin.firestore().doc("tenants/279").get()
+  .then(d => { console.log(JSON.stringify(d.data()?.allowedDomains ?? null, null, 2)); process.exit(0); })
+  .catch(e => { console.error(e.message); process.exit(1); });')
 ```
 
-**注意**: `allowedDomains` の値は **lowercase** で記載する（`beforeSignIn` は `d.toLowerCase().trim()` で比較）。
+> **Note**: `gcloud firestore` / `firebase firestore:*` には document 単体の read/patch サブコマンドが存在しない。Admin SDK 経由（Node.js）または Firestore Console が唯一の手段。
+
+### 2. dev 設定
+
+**Firestore Console（推奨、目視確認可）:**
+
+1. https://console.firebase.google.com/project/carenote-dev-279/firestore/data/~2Ftenants~2F279 を開く
+2. 「フィールドを追加」→ field: `allowedDomains`、type: `array`、要素 1 つ `279279.net`（**lowercase**）
+3. 「更新」クリック
+
+**CLI 代替**（Admin SDK ワンライナー）:
+
+```bash
+(cd functions && node -e '
+const admin = require("firebase-admin");
+admin.initializeApp({credential: admin.credential.applicationDefault(), projectId: "carenote-dev-279"});
+admin.firestore().doc("tenants/279").update({allowedDomains: ["279279.net"]})
+  .then(() => { console.log("updated"); process.exit(0); })
+  .catch(e => { console.error(e.message); process.exit(1); });')
+```
+
+**注意**: `allowedDomains` の値は **lowercase** で登録する（`beforeSignIn` は `d.toLowerCase().trim()` で比較するが、保存時も lowercase に揃える運用規範）。
 
 ### 3. 動作確認
 
@@ -96,12 +112,17 @@ echo "$ID_TOKEN" | cut -d. -f2 | base64 --decode 2>/dev/null | python3 -m json.t
 
 ### 4. dev rollback（必要な場合）
 
+**Firestore Console:** tenants/279 の `allowedDomains` フィールドを削除、または値を空配列 `[]` に変更
+
+**CLI 代替:**
+
 ```bash
-# Firestore Console で allowedDomains フィールドを削除、または gcloud で空配列に
-gcloud firestore documents patch tenants/279 \
-  --project=carenote-dev-279 \
-  --update-mask=allowedDomains \
-  --data='{"allowedDomains":[]}'
+(cd functions && node -e '
+const admin = require("firebase-admin");
+admin.initializeApp({credential: admin.credential.applicationDefault(), projectId: "carenote-dev-279"});
+admin.firestore().doc("tenants/279").update({allowedDomains: []})
+  .then(() => { console.log("rolled back"); process.exit(0); })
+  .catch(e => { console.error(e.message); process.exit(1); });')
 ```
 
 ---
@@ -129,15 +150,18 @@ gcloud firestore documents patch tenants/279 \
 3. 「フィールドを追加」→ field: `allowedDomains`、type: `array`、value: 要素 1 つ `279279.net`（**lowercase**）
 4. 更新
 
-**gcloud 代替**（コンソールにアクセスできない場合のみ）:
+**CLI 代替**（Admin SDK、コンソールにアクセスできない場合のみ）:
 
 ```bash
-# 必ず invocation 前置きで CONFIRM_PROD + gcloud named config を指定
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
-  gcloud firestore documents patch tenants/279 \
-    --project=carenote-prod-279 \
-    --update-mask=allowedDomains \
-    --data='{"allowedDomains":["279279.net"]}'
+# 必ず invocation 前置きで CLOUDSDK_ACTIVE_CONFIG_NAME を指定
+# Admin SDK はコード内で projectId を明示しているため ADC が prod 用にスコープ
+# されているか gcloud named config で担保する
+(cd functions && CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod node -e '
+const admin = require("firebase-admin");
+admin.initializeApp({credential: admin.credential.applicationDefault(), projectId: "carenote-prod-279"});
+admin.firestore().doc("tenants/279").update({allowedDomains: ["279279.net"]})
+  .then(() => { console.log("updated prod"); process.exit(0); })
+  .catch(e => { console.error(e.message); process.exit(1); });')
 ```
 
 ### 3. 動作確認（prod）
@@ -156,16 +180,18 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
 **Firestore Console:**
 1. tenants/279 の `allowedDomains` フィールドを削除、または値を空配列 `[]` に変更
 
-**gcloud:**
+**CLI 代替:**
+
 ```bash
-CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
-  gcloud firestore documents patch tenants/279 \
-    --project=carenote-prod-279 \
-    --update-mask=allowedDomains \
-    --data='{"allowedDomains":[]}'
+(cd functions && CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod node -e '
+const admin = require("firebase-admin");
+admin.initializeApp({credential: admin.credential.applicationDefault(), projectId: "carenote-prod-279"});
+admin.firestore().doc("tenants/279").update({allowedDomains: []})
+  .then(() => { console.log("rolled back prod"); process.exit(0); })
+  .catch(e => { console.error(e.message); process.exit(1); });')
 ```
 
-rollback 後、`beforeSignIn` の次回実行から `allowedDomains` 分岐が無効化される（Firestore 読み取りは都度）。
+rollback 後、`beforeSignIn` は次回実行時に Firestore を都度読み取るため `allowedDomains` 分岐が無効化される。Firestore の read-after-write 一貫性は同一 region 内では強整合のため、rollback は実用上即時反映だが、別 region からの読み取りや CDN キャッシュ経由の場合は伝播に数秒〜十数秒を要する可能性がある。
 
 ### 5. 実施記録
 
