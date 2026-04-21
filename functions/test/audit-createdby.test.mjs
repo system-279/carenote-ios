@@ -139,4 +139,60 @@ describe("audit-createdby: auditCreatedBy", () => {
       /listDocuments/
     );
   });
+
+  it("dedups createdBy uids within a tenant and counts each uid once across tenants", async () => {
+    const store = {
+      tenants: [tenantDoc("t1"), tenantDoc("t2")],
+      "tenants/t1/recordings": [
+        recordingDoc({ createdBy: { stringValue: "uid-a" } }),
+        recordingDoc({ createdBy: { stringValue: "uid-a" } }),
+        recordingDoc({ createdBy: { stringValue: "uid-b" } }),
+      ],
+      "tenants/t2/recordings": [
+        recordingDoc({ createdBy: { stringValue: "uid-a" } }),
+        recordingDoc({ createdBy: { stringValue: "uid-c" } }),
+      ],
+    };
+    const result = await auditCreatedBy({
+      listDocuments: async (path) => store[path] || [],
+      log: silent,
+      warn: silent,
+    });
+
+    const t1 = result.perTenant.find((p) => p.tenantId === "t1");
+    const t2 = result.perTenant.find((p) => p.tenantId === "t2");
+    // Per-tenant dedup: t1 has 3 recordings / 2 unique uids; t2 has 2 / 2.
+    assert.equal(t1.nonEmpty, 3);
+    assert.equal(t1.uniqueUidCount, 2);
+    assert.equal(t2.nonEmpty, 2);
+    assert.equal(t2.uniqueUidCount, 2);
+    // Cross-tenant dedup: uid-a appears in both tenants; overall unique = {a,b,c} = 3.
+    assert.equal(result.overall.nonEmpty, 5);
+    assert.equal(result.overall.uniqueUidCount, 3);
+  });
+
+  it("reports both failedTenants>0 and needsBackfill>0 simultaneously so CLI can prioritize exit 1 over 2", async () => {
+    // Regression guard for the exit-code priority contract: a partial audit
+    // that also contains empty createdBy rows must surface BOTH signals so the
+    // CLI can choose exit 1 (incomplete) over exit 2 (actionable).
+    const store = {
+      tenants: [tenantDoc("t-ok"), tenantDoc("t-fail")],
+      "tenants/t-ok/recordings": [recordingDoc({ createdBy: { stringValue: "" } })],
+    };
+    const listDocuments = async (path) => {
+      if (path === "tenants/t-fail/recordings") throw new Error("HTTP 500 simulated");
+      return store[path] || [];
+    };
+
+    const result = await auditCreatedBy({ listDocuments, log: silent, warn: silent });
+
+    assert.equal(result.failedTenants.length, 1);
+    assert.equal(result.needsBackfill, 1);
+    // Priority is decided by the CLI wrapper; assert that both materials are
+    // available for that decision.
+    assert.ok(
+      result.failedTenants.length > 0 && result.needsBackfill > 0,
+      "both signals must co-exist for the CLI to prefer exit 1"
+    );
+  });
 });
