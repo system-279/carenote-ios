@@ -79,6 +79,8 @@ git revert <commit of PR #130> && firebase deploy --only functions --project car
 # Firestore Console → Rules → リビジョンから復元
 ```
 
+> **注意**: 以下の prod deploy コマンドはすべて `firebase` CLI で `--project=carenote-prod-279` を明示する。`firebase` CLI は `gcloud` と別系統のため `CLOUDSDK_ACTIVE_CONFIG_NAME` は不要。ただし同じターミナルで `gcloud` を使う場合は `CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod` の invocation 前置きを使うこと（CLAUDE.md 規範）。
+
 ### 2. Phase 0.5 Rules prod deploy（smoke test 通過後）
 
 ```
@@ -117,8 +119,8 @@ firebase deploy --only functions --project carenote-prod-279
 
 ## Open Issue（優先度順）
 
-### P0
-_解消済み: #99 / #100 / #110 / #116 / #124 / #108 / #129_
+### 本セッションで解消済み
+_#116 / #124 / #108 / #129（いずれも元の優先度は P1-P2）。先行セッションで #99 / #100 / #110 が解消。_
 
 ### P1
 
@@ -183,7 +185,7 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 ### CI Workflow
 
 - `.github/workflows/test.yml` (iOS Tests) は paths-ignore で `firestore.rules` / `functions/**` / `docs/**` / `.github/**` 等を除外
-- `.github/workflows/functions-test.yml` (Functions & Rules Tests) が Firestore + Auth emulator で全テストスイート（`npm test` = 5 ファイル合計 120 tests、うち rules-only は 55）を実行（Node 22、エッジケーステスト 11 件追加後）
+- `.github/workflows/functions-test.yml` (Functions & Rules Tests) が Firestore + Auth emulator で全テストスイート（`npm test` = 5 ファイル合計）を実行（Node 22）。各ファイルの件数は実行時ログで確認可能（目安: rules-only 55 件、その他 4 ファイル計 65 件程度、本セッション時点 120 件）。正確な件数は CI ログまたは `npm test` ローカル実行で検証。
 
 ## ADR
 
