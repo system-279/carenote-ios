@@ -37,7 +37,10 @@ actor OutboxSyncService {
     private let firestoreService: any RecordingStoring
     private let transcriptionService: any Transcribing
     private let tenantId: String
-    private let currentUidProvider: @Sendable () -> String?
+    // `@MainActor` 境界越えを型で表明。Firebase Auth singleton は MainActor 前提で
+    // アクセスし、actor 内からは `await` で呼ぶことで data race 可能性を排除する
+    // (issue #106)。
+    private let currentUidProvider: @Sendable @MainActor () -> String?
 
     private var pathMonitor: NWPathMonitor?
     private var monitorQueue: DispatchQueue?
@@ -54,7 +57,7 @@ actor OutboxSyncService {
         firestoreService: any RecordingStoring,
         transcriptionService: any Transcribing,
         tenantId: String,
-        currentUidProvider: @escaping @Sendable () -> String?
+        currentUidProvider: @escaping @Sendable @MainActor () -> String?
     ) {
         self.modelContainer = modelContainer
         self.storageService = storageService
@@ -216,7 +219,7 @@ actor OutboxSyncService {
         // auth cold-start edge cases (uid nil/empty). `buildFirestoreRecording`
         // re-validates as a defense-in-depth for existing firestoreId paths.
         if recording.firestoreId == nil {
-            guard let uid = currentUidProvider(), !uid.isEmpty else {
+            guard let uid = await currentUidProvider(), !uid.isEmpty else {
                 throw OutboxSyncError.userNotAuthenticated
             }
             _ = uid
