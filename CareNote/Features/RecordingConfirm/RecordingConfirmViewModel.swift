@@ -1,4 +1,4 @@
-@preconcurrency import FirebaseAuth
+import FirebaseAuth
 import Foundation
 import Observation
 import os.log
@@ -58,7 +58,7 @@ final class RecordingConfirmViewModel {
                 accessTokenProvider: wifService
             ),
             tenantId: tenantId,
-            currentUidProvider: { Auth.auth().currentUser?.uid }
+            currentUidProvider: { @MainActor in Auth.auth().currentUser?.uid }
         )
     }
 
