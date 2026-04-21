@@ -54,12 +54,20 @@ describe("transferOwnership: buildErrorContext", () => {
     }
   });
 
-  it("treats empty-string message as unknown (avoids silent empty logs)", () => {
-    const err = new Error("");
-    const ctx = buildErrorContext(err);
-    // Empty Error.message falls back to String(err) which is "Error".
-    // What we guard against is a completely blank message making the log
-    // entry useless — "Error" is at least parseable.
-    assert.ok(ctx.message.length > 0, "message must never be empty");
+  it("falls back to '<unknown error>' for Error with empty message", () => {
+    // Empty Error.message + String(err)==="Error" would give a log line with
+    // only the word "Error" — useless. buildErrorContext must collapse this
+    // to the explicit sentinel so operators can tell "unknown" from a real
+    // framework error literally named "Error".
+    const ctx = buildErrorContext(new Error(""));
+    assert.equal(ctx.message, "<unknown error>");
+  });
+
+  it("falls back to '<unknown error>' for an object that stringifies to [object Object]", () => {
+    // String({}) === "[object Object]" — technically non-empty but not useful.
+    // We accept it (not "Error") because at least it is traceable as "caller
+    // threw a bare object"; the assertion pins the current contract.
+    const ctx = buildErrorContext({});
+    assert.equal(ctx.message, "[object Object]");
   });
 });

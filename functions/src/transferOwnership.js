@@ -166,7 +166,11 @@ function buildErrorContext(err) {
   } else if (err === null || err === undefined) {
     message = "<unknown error>";
   } else {
-    message = String(err);
+    // String(new Error("")) returns "Error" which is useless in logs. Collapse
+    // that and any other empty stringification to the explicit sentinel so the
+    // log line is never blank and never silently pretends to carry a message.
+    const str = String(err);
+    message = str && str !== "Error" ? str : "<unknown error>";
   }
   const stack = err && typeof err.stack === "string" ? err.stack : null;
   return { errorId, code, message, stack };
@@ -441,10 +445,16 @@ async function runConfirm({ db, tenantId, dryRunId }) {
     // can quote it back when filing a ticket. Preserve the original HttpsError
     // code/message so failed-precondition vs internal semantics are not lost.
     if (err instanceof HttpsError) {
-      const enrichedDetails = {
-        ...(err.details && typeof err.details === "object" ? err.details : {}),
-        errorId: errCtx.errorId,
-      };
+      // Only spread `err.details` when it is a plain object. Arrays would leak
+      // their numeric keys alongside errorId; primitives / null would throw or
+      // silently drop. Non-object details are replaced with the errorId wrapper.
+      const detailsIsPlainObject =
+        err.details != null &&
+        typeof err.details === "object" &&
+        !Array.isArray(err.details);
+      const enrichedDetails = detailsIsPlainObject
+        ? { ...err.details, errorId: errCtx.errorId }
+        : { errorId: errCtx.errorId };
       throw new HttpsError(err.code, err.message, enrichedDetails);
     }
     throw new HttpsError("internal", "transferOwnership failed", failurePayload);
