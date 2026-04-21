@@ -1,12 +1,30 @@
-# Handoff — Issue 整理 + 過剰起票防止ルール確立 + 7 PR merge (2026-04-22)
+# Handoff — Codex scope-narrowed follow-up 双子消化 + 2 PR merge (2026-04-22 late session)
 
-## セッション成果サマリ
+## セッション成果サマリ（2026-04-22 遅延セッション）
 
-本セッションで **7 PR merge / 10 Issue close / 3 Issue scope 絞り**を実施。Codex セカンドオピニオンに基づき「過剰起票」を防ぐ運用ルールを確立した。セッション開始時 open 16 件 → 終了時 **12 件**（net -4、PR merge 7 件）。
+2026-04-22 昼セッションで scope 絞りした Codex follow-up 双子 Issue (#127 / #120) を消化。**2 PR merge / 2 Issue close**。勢いと context を保ったまま 1 日 3 PR 目を完走。
 
-前セッションまでに完了した Node.js 22 upgrade / admin ID token helper / Phase 0.9 RUNBOOK は変更なし。prod deploy と iOS 実機 smoke test は引き続きユーザー作業待ち。
+| PR | 内容 | Issue |
+|----|------|-------|
+| #150 | audit-createdby per-tenant 部分結果保持 + testable `auditCreatedBy` export (DI 化、9 test) | **#127 closed** |
+| #151 | transferOwnership errorId 付与 + err.stack 構造化ログ + HttpsError.details enrich (8 test) | **#120 closed** |
 
-### マージ済み PR（本セッション）
+### 本セッション適用した運用ルール
+- 過剰起票防止（新規 Issue 起票ゼロ）
+- review agent rating 5-6 は Issue 化せず PR 内で吸収（Array.isArray 判定、empty message fallback は対応 / Error Reporting 連携・dryRun errorId 化は scope 絞り見送り）
+- emulator 必須テストは Test plan 未実行として明記（次セッション or CI emulator 環境へ後送り）
+
+Issue 数推移: セッション開始時 open 12 → 終了時 **10**（net -2）。
+
+前セッションまでに完了した Node.js 22 upgrade / admin ID token helper / Phase 0.9 RUNBOOK / 昼セッションの 7 PR + 過剰起票防止ルールは変更なし。prod deploy と iOS 実機 smoke test は引き続きユーザー作業待ち。
+
+---
+
+## 前セッション成果（2026-04-22 昼、参考保持）
+
+**7 PR merge / 10 Issue close / 3 Issue scope 絞り**を実施。Codex セカンドオピニオンに基づき「過剰起票」を防ぐ運用ルールを確立した。セッション開始時 open 16 件 → 終了時 12 件（net -4、PR merge 7 件）。
+
+### マージ済み PR（前セッション昼分、参考保持）
 
 | PR | 内容 | Issue |
 |----|------|-------|
@@ -157,28 +175,28 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 - 審査アカウント whitelist 登録確認済（上記 § 1）必須
 - prod 実施はユーザー明示承認必須
 
-## Open Issue（優先度順、2026-04-22 時点 12 件）
+## Open Issue（優先度順、2026-04-22 遅延セッション末時点 10 件）
 
 ### P0（要対応、open 継続中）
 
 | # | タイトル | 状態 |
 |---|---------|------|
-| #100 | Firestore Rules の recordings 権限が過剰 | **実装は PR #115 で完了、dev deploy 済、prod deploy 完了後に close 予定**（本セッションで状態コメント追加） |
+| #100 | Firestore Rules の recordings 権限が過剰 | **実装は PR #115 で完了、dev deploy 済、prod deploy 完了後に close 予定** |
 
 ### bug（workaround あり）
 
 | # | タイトル | 状態 |
 |---|---------|------|
-| #141 | ClientRepositoryTests 全体実行時の Firebase configure 未実行クラッシュ | 本セッション起票、原因候補コメント済、修正は別セッション |
+| #141 | ClientRepositoryTests 全体実行時の Firebase configure 未実行クラッシュ | 昼セッション起票、原因候補コメント済、修正は別セッション（iOS + XcodeBuildMCP 必要） |
 | #91 | アカウント削除後のローカル SwiftData / Outbox クリーンアップ | 既存、要対応 |
 
-### P2 follow-up（scope 絞り済）
+### P2 follow-up（scope 絞り済、残り 1 件）
 
 | # | タイトル |
 |---|---------|
-| #120 | transferOwnership: CLI エラーロギング改善（errorId 付与 / err.stack 構造化） |
-| #127 | audit-createdby.mjs: per-tenant 部分結果保持 |
 | #145 | processItem upload 失敗時の createRecording 未呼出検証 |
+
+> **消化済**: #120 (→ PR #151)、#127 (→ PR #150) は 2026-04-22 遅延セッションで close。
 
 ### P2 機能・テスト拡張
 
@@ -206,8 +224,8 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 6. **Day 3-4: 24h 安定監視**（エラー急増なし確認）
 7. **Day 4-5: Phase 0.9 dev 先行検証**（RUNBOOK `docs/runbook/phase-0-9-allowed-domains.md` § 手順 A）
 8. **Day 6+: Phase 0.9 prod 実施**（4/30 期限から切離、審査通過後推奨 → #111 close）
-9. **#91 / #141 の深掘り** — bug 系を先に
-10. **P2 follow-up (#120 / #127 / #145) を batch 処理** — 実害ベースで絞った scope のみ
+9. **#91 / #141 の深掘り** — bug 系を先に（#141 は iOS + XcodeBuildMCP、#91 は SwiftData cleanup）
+10. **P2 follow-up 残 (#145) を処理** — 昼/遅延セッションで #120 / #127 を消化済、残 1 件
 11. **#102 / #105 テスト拡張** — Emulator Suite 必要、時間確保セッションで
 
 > **Codex セカンドオピニオン要点（2026-04-22）**: (1) 一括 deploy 禁止（原因切り分け不能化）、(2) Node 22 を最優先・単独、(3) Phase 0.9 を 4/30 期限から切離、(4) 各 deploy 後は即時 smoke test + 数時間エラー監視、最後にまとめて 24h 監視、(5) 軽量 smoke test チェックリストで十分（過剰ドキュメント化回避）。
@@ -246,7 +264,12 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 - [phase-0-9-allowed-domains.md](../runbook/phase-0-9-allowed-domains.md) — Phase 0.9 allowedDomains 有効化手順（draft、ユーザー作業待ち）
 - [prod-deploy-smoke-test.md](../runbook/prod-deploy-smoke-test.md) — prod deploy 統合 smoke test チェックリスト（2026-04-22 新設、Codex 推奨段階 deploy 方針に対応）
 
-## 参考資料（本セッション）
+## 参考資料（本セッション = 2026-04-22 遅延）
+
+- [PR #150 audit-createdby per-tenant 部分結果保持](https://github.com/system-279/carenote-ios/pull/150)
+- [PR #151 transferOwnership errorId + err.stack](https://github.com/system-279/carenote-ios/pull/151)
+
+## 参考資料（前セッション = 2026-04-22 昼）
 
 - [PR #138 delete-account mock 深さ制限](https://github.com/system-279/carenote-ios/pull/138)
 - [PR #139 Rules エッジケース part 2](https://github.com/system-279/carenote-ios/pull/139)
