@@ -823,3 +823,234 @@ describe("migrationLogs 権限境界", () => {
     );
   });
 });
+
+// ===== Issue #116 follow-up: エッジケーステスト =====
+
+describe("エッジケース (Issue #116 follow-up)", () => {
+  async function seedRecording(tenantId, recordingId, createdBy) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context
+        .firestore()
+        .collection("tenants")
+        .doc(tenantId)
+        .collection("recordings")
+        .doc(recordingId)
+        .set({ scene: "visit", clientName: "山田太郎", createdBy });
+    });
+  }
+
+  // #116-1: Firebase SDK 経由で role が混入しない token に対する regression gate
+  describe("role claim 欠落 token", () => {
+    function noRoleToken(tenantId) {
+      return { tenantId };
+    }
+
+    it("role 欠落 member は他人の録音を update できない (isAdmin 成立せず)", async () => {
+      await seedRecording(TENANT_ID, "r-norole-upd", "member-b");
+      const db = testEnv.authenticatedContext(
+        "no-role-a",
+        noRoleToken(TENANT_ID)
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-norole-upd")
+          .update({ transcription: "改ざん試行" })
+      );
+    });
+
+    it("role 欠落 token で migrationLogs を read できない", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context
+          .firestore()
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("migrationLogs")
+          .doc("log-norole")
+          .set({ actor: "admin-sdk" });
+      });
+      const db = testEnv.authenticatedContext(
+        "no-role-a",
+        noRoleToken(TENANT_ID)
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("migrationLogs")
+          .doc("log-norole")
+          .get()
+      );
+    });
+  });
+
+  // #116-2: クライアントバグで null / 空文字が混入した際の二重防御
+  describe("createdBy 不正値 create", () => {
+    it("createdBy=null の create は拒否される", async () => {
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-null")
+          .set({ scene: "visit", clientName: "山田太郎", createdBy: null })
+      );
+    });
+
+    it("createdBy=空文字 の create は拒否される (auth.uid は空にならない想定)", async () => {
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-empty")
+          .set({ scene: "visit", clientName: "山田太郎", createdBy: "" })
+      );
+    });
+  });
+
+  // #116-3: isAdmin が同一テナント内限定で機能することの明示
+  describe("admin cross-tenant の recordings", () => {
+    it("tenant-b admin は tenant-a の録音を update できない", async () => {
+      await seedRecording(TENANT_ID, "r-cross-upd", "member-a");
+      const db = testEnv.authenticatedContext(
+        "admin-b",
+        adminAuth(TENANT_ID_B).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-cross-upd")
+          .update({ transcription: "クロステナント改ざん" })
+      );
+    });
+
+    it("tenant-b admin は tenant-a の録音を delete できない", async () => {
+      await seedRecording(TENANT_ID, "r-cross-del", "member-a");
+      const db = testEnv.authenticatedContext(
+        "admin-b",
+        adminAuth(TENANT_ID_B).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-cross-del")
+          .delete()
+      );
+    });
+  });
+
+  // #116-4: collection list クエリの権限（将来 allow get / allow list 分解時の regression gate）
+  describe("recordings list クエリ", () => {
+    async function seedTwoRecordings() {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const col = context
+          .firestore()
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings");
+        await col.doc("r-list-1").set({
+          scene: "visit",
+          clientName: "山田",
+          createdBy: "member-a",
+        });
+        await col.doc("r-list-2").set({
+          scene: "visit",
+          clientName: "佐藤",
+          createdBy: "member-b",
+        });
+      });
+    }
+
+    it("member は自テナントの recordings を list できる", async () => {
+      await seedTwoRecordings();
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .get()
+      );
+    });
+
+    it("他テナント member は recordings を list できない", async () => {
+      await seedTwoRecordings();
+      const db = testEnv.authenticatedContext(
+        "member-b",
+        memberAuth(TENANT_ID_B).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .get()
+      );
+    });
+
+    it("未認証は recordings を list できない", async () => {
+      await seedTwoRecordings();
+      const db = testEnv.unauthenticatedContext().firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .get()
+      );
+    });
+  });
+
+  // #116-5: admin 間の相互干渉シナリオの明示
+  describe("admin 間の recordings 操作", () => {
+    it("admin-1 は admin-2 の録音を update できる", async () => {
+      await seedRecording(TENANT_ID, "r-a1a2-upd", "admin-creator");
+      const db = testEnv.authenticatedContext(
+        "admin-writer",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-a1a2-upd")
+          .update({ transcription: "admin 間補正" })
+      );
+    });
+
+    it("admin-1 は admin-2 の録音を delete できる", async () => {
+      await seedRecording(TENANT_ID, "r-a1a2-del", "admin-creator");
+      const db = testEnv.authenticatedContext(
+        "admin-writer",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-a1a2-del")
+          .delete()
+      );
+    });
+  });
+});
