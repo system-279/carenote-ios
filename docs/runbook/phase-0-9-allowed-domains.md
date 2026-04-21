@@ -1,0 +1,231 @@
+# RUNBOOK: Phase 0.9 — `tenants/279.allowedDomains` 有効化
+
+**ステータス**: ドラフト（ユーザー承認待ち）
+**対象**: 本番 tenant `279` にドメインベースの自動参加（`279279.net`）を有効化する
+**関連**: Issue #111、ADR-007 Guest Tenant、`functions/index.js` `beforeSignIn`
+
+---
+
+## いつ使うか
+
+- Phase -1 / 0 / 0.5 / 1 すべて完了後、Apple Sign-In ドメイン制限を恒久有効化したい時
+- 新しい 279279.net ドメインのケアマネジャーを個別 whitelist 追加なしで 279 テナントに参加させたい時
+
+---
+
+## 背景（`beforeSignIn` の分岐と `allowedDomains` の役割）
+
+`functions/index.js` 抜粋:
+
+```js
+// 1. whitelist exact match → 実テナント
+// 2. allowedDomains domain match → 実テナント
+// 3. Apple プロバイダ → demo-guest
+// 4. それ以外 → permission-denied
+```
+
+現状 `tenants/279.allowedDomains` は未設定（= 空配列扱い）。この PR で `["279279.net"]` に設定すると:
+
+| シグナル | 現状 | 本 RUNBOOK 実施後 |
+|----------|------|------------------|
+| `foo@279279.net` を whitelist に追加せず Google/Email Sign-In | `permission-denied` | `tenants/279` に `role: "member"` で自動参加 |
+| `foo@279279.net` を whitelist 済で Google/Email Sign-In | 従来通り whitelist 経由で参加 | 変化なし |
+| `foo@other-domain.com` で Apple Sign-In | `demo-guest` tenant | 変化なし |
+| `foo@other-domain.com` で Google/Email Sign-In | `permission-denied` | 変化なし |
+
+---
+
+## 前提条件
+
+- [ ] Phase -1 (createdBy バックフィル) prod 完了 — PR #117 マージ済
+- [ ] Phase 0 (uid 参照棚卸し ADR-008) 完了 — PR #109 マージ済
+- [ ] Phase 0.5 (Firestore Rules 強化) **prod deploy 済** — PR #115 dev deploy 済、prod deploy は本 RUNBOOK 実施前に完了必須
+- [ ] Phase 1 (transferOwnership) **prod deploy 済** — PR #119 dev deploy 済、prod deploy は本 RUNBOOK 実施前に完了必須
+- [ ] Node.js 22 runtime prod deploy 済（本セッション PR #130 で対応）
+- [ ] iOS 実機 smoke test 済（Phase 0.5 + Phase 1 + Node 22 の主要動線確認）
+- [ ] `gcloud auth application-default login`（`system@279279.net`）で ADC 設定済
+- [ ] 既存 279 メンバーの全ドメインが把握済（279279.net 外のメンバーがいる場合は個別 whitelist で保護）
+
+---
+
+## 手順 A: dev 先行検証
+
+### 1. 現状確認
+
+```bash
+# dev tenants/279 の allowedDomains を確認（空配列 or 未設定が想定）
+firebase firestore:get tenants/279 --project=carenote-dev-279
+```
+
+期待値: `allowedDomains` フィールドなし、または `[]`。
+
+### 2. dev 設定
+
+```bash
+# Firestore Console（推奨、目視確認可）
+# https://console.firebase.google.com/project/carenote-dev-279/firestore/data/~2Ftenants~2F279
+# → allowedDomains フィールドを追加 → type: array → value: ["279279.net"] → Update
+
+# または gcloud CLI
+gcloud firestore documents patch tenants/279 \
+  --project=carenote-dev-279 \
+  --update-mask=allowedDomains \
+  --data='{"allowedDomains":["279279.net"]}'
+```
+
+**注意**: `allowedDomains` の値は **lowercase** で記載する（`beforeSignIn` は `d.toLowerCase().trim()` で比較）。
+
+### 3. 動作確認
+
+以下 3 パターンを iOS 実機 + dev build で検証:
+
+| パターン | テストアカウント | 期待結果 |
+|----------|----------------|---------|
+| 許可内ドメイン、whitelist 未登録 | 新規 `test-phase09-inside@279279.net`（Google or Email） | **279 テナントに自動参加**（新規動作）、`customClaims.tenantId === "279"`、`role: "member"` |
+| 許可外ドメイン、Apple Sign-In | テスト用 Apple ID（非 279279.net） | `demo-guest` tenant（従来通り） |
+| 許可外ドメイン、Google Sign-In | `test-phase09-outside@example.com` | `permission-denied`（従来通り） |
+| 許可内ドメイン、whitelist 済 | 既存 admin `system@279279.net` | 従来通り whitelist 経由で `role: "admin"` 維持 |
+
+**確認手段**: ログイン成功後、端末から ID token をローカル decode して `customClaims` を確認（**jwt.io 等への貼り付け禁止**）:
+
+```bash
+# 端末の Xcode console で ID token を取り出した場合
+echo "$ID_TOKEN" | cut -d. -f2 | base64 --decode 2>/dev/null | python3 -m json.tool
+# → tenantId / role の値を確認
+```
+
+### 4. dev rollback（必要な場合）
+
+```bash
+# Firestore Console で allowedDomains フィールドを削除、または gcloud で空配列に
+gcloud firestore documents patch tenants/279 \
+  --project=carenote-dev-279 \
+  --update-mask=allowedDomains \
+  --data='{"allowedDomains":[]}'
+```
+
+---
+
+## 手順 B: prod 実施
+
+**CLAUDE.md MUST**: prod 操作前にユーザー明示承認取得。以下コマンドをエージェントが自動実行することは禁止。
+
+### 1. 事前確認
+
+- [ ] 手順 A（dev 先行検証）の 3 パターン動作確認すべて PASS
+- [ ] 手順 A で dev の `allowedDomains = ["279279.net"]` に更新後、**24 時間以上** 本番相当の動作を監視（Cloud Logging で `beforeSignIn` のエラー急増がないこと）
+- [ ] low-traffic 時間帯（例: JST 平日 22:00 〜 翌 6:00）
+- [ ] prod の `transferOwnership` / `deleteAccount` が `ACTIVE` で `nodejs22`（`firebase functions:list --project=carenote-prod-279`）
+- [ ] prod の Firestore Rules が Phase 0.5 相当（`firestore.rules` が PR #115 の内容で deploy 済）
+- [ ] 作業者が 279 テナントの admin 権限を持つ（`migrationLogs` への書込が許可される）
+- [ ] 既存 prod メンバー（非 279279.net ドメインの例外ユーザー）が個別 whitelist 登録済
+
+### 2. prod 設定
+
+**Firestore Console 推奨**（目視確認付き、誤操作リスク最小）:
+
+1. https://console.firebase.google.com/project/carenote-prod-279/firestore/data/~2Ftenants~2F279 を開く
+2. 現在の `allowedDomains` フィールドを確認（ないはず）
+3. 「フィールドを追加」→ field: `allowedDomains`、type: `array`、value: 要素 1 つ `279279.net`（**lowercase**）
+4. 更新
+
+**gcloud 代替**（コンソールにアクセスできない場合のみ）:
+
+```bash
+# 必ず invocation 前置きで CONFIRM_PROD + gcloud named config を指定
+CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+  gcloud firestore documents patch tenants/279 \
+    --project=carenote-prod-279 \
+    --update-mask=allowedDomains \
+    --data='{"allowedDomains":["279279.net"]}'
+```
+
+### 3. 動作確認（prod）
+
+設定直後に以下を実施:
+
+- [ ] Cloud Logging で `beforeSignIn` の直近 10 分間のエラー率が平常値以下
+- [ ] 既存 prod ユーザーの再ログインで `customClaims.tenantId === "279"` / `role` が変わっていないこと（whitelist が優先される仕様）
+- [ ] テストアカウント `test-phase09-prod@279279.net`（作業完了後 delete 前提）で新規 Google Sign-In → `customClaims.tenantId === "279"` / `role: "member"`
+- [ ] `deleteAccount` でテストアカウントを削除、Auth user + Firestore データ消滅確認
+
+### 4. prod rollback
+
+`beforeSignIn` エラー急増や想定外のユーザー参加が発生した場合、即座に実施:
+
+**Firestore Console:**
+1. tenants/279 の `allowedDomains` フィールドを削除、または値を空配列 `[]` に変更
+
+**gcloud:**
+```bash
+CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+  gcloud firestore documents patch tenants/279 \
+    --project=carenote-prod-279 \
+    --update-mask=allowedDomains \
+    --data='{"allowedDomains":[]}'
+```
+
+rollback 後、`beforeSignIn` の次回実行から `allowedDomains` 分岐が無効化される（Firestore 読み取りは都度）。
+
+### 5. 実施記録
+
+本 RUNBOOK 末尾の「実施ログ」セクションに以下を追記してコミット:
+
+```
+- 実施日時: YYYY-MM-DD HH:MM JST
+- 実施者: <GitHub handle>
+- prod 設定値: ["279279.net"]
+- 動作確認結果: （上記チェックリストの PASS/FAIL）
+- 異常時の対応: （あれば）
+```
+
+---
+
+## セキュリティ注意事項
+
+| 項目 | 対応 |
+|------|------|
+| 許可ドメイン文字列 | 必ず lowercase で登録。`beforeSignIn` は比較時に lowercase 化するが、Firestore には lowercase で入れる運用規範を保つ |
+| 作業者権限 | tenants/279 への write は admin のみ（Firestore Rules Phase 0.5 で enforce） |
+| rollback 速度 | Firestore ドキュメント更新は即反映。`beforeSignIn` は都度 Firestore 読み取りのためキャッシュなし |
+| 既存ユーザー影響 | whitelist が allowedDomains より優先される仕様のため、既存 admin/editor の role は保護される |
+| 想定外ドメイン追加 | `allowedDomains` に `gmail.com` 等の汎用ドメインを追加しない。必ず企業固有ドメインのみ |
+| 監査 | `tenants/279` の変更は Cloud Audit Log に記録される。GCP Console → Logging で確認可能 |
+
+---
+
+## トラブルシューティング
+
+### 設定後に既存 admin ユーザーの role が "member" に降格した
+
+想定外の挙動。`beforeSignIn` は whitelist を allowedDomains より先に check するため発生しないはず。発生した場合:
+
+1. 直ちに `allowedDomains` を空配列に rollback
+2. 降格ユーザーは whitelist 登録を再確認（`tenants/279/whitelist` コレクションに entry が存在するか）
+3. 必要に応じて admin が Admin SDK で `setCustomUserClaims` 直接実行
+
+### 許可内ドメインの新規ユーザーが `permission-denied` で止まる
+
+- Firestore の `allowedDomains` 値が正しく配列で保存されているか確認（`type: string` ではなく `type: array`）
+- 値が lowercase か確認
+- ユーザーのメールアドレスに空白・全角文字が混ざっていないか確認（`beforeSignIn` は `.trim()` するが、フォーム側で弾くのが理想）
+
+### Cloud Logging に `beforeSignIn` のレイテンシ増
+
+`tenants` collection 全件走査が発生するため、テナント数が増えると線形に悪化する（ADR-007 既知制約 #5）。現状 `279` + `demo-guest` の 2 件なので影響軽微。
+
+---
+
+## 関連
+
+- [ADR-007 Guest Tenant for Apple Sign-In](../adr/ADR-007-guest-tenant-for-apple-signin.md)
+- [ADR-005 Auth Blocking Function](../adr/ADR-005-auth-blocking-function.md)
+- Issue #111（本 RUNBOOK の追跡 Issue）
+- Phase 0.5 Firestore Rules 強化（PR #115）
+- Phase 1 transferOwnership（PR #119）
+
+---
+
+## 実施ログ
+
+（未実施）
