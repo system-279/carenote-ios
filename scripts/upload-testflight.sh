@@ -18,6 +18,16 @@ sed -i '' "s/CURRENT_PROJECT_VERSION: \"[0-9]*\"/CURRENT_PROJECT_VERSION: \"$BUI
 echo "== XcodeGen =="
 xcodegen generate
 
+# entitlements 検証 (Issue #71): XcodeGen が project.yml の properties 未定義で
+# entitlements を空上書きするバグの再発防止。Sign in with Apple など必須
+# entitlement が失われた状態で archive されると App Store 審査で reject される。
+echo "== Entitlements verification =="
+if ! grep -q "com.apple.developer.applesignin" CareNote/CareNote.entitlements; then
+  echo "ERROR: Sign in with Apple entitlement missing from CareNote/CareNote.entitlements" >&2
+  echo "       project.yml の targets.CareNote.entitlements.properties を確認してください" >&2
+  exit 1
+fi
+
 echo "== Archive (v$(grep 'MARKETING_VERSION:' project.yml | head -1 | sed 's/.*: *"\(.*\)"/\1/'), build: $BUILD_NUMBER) =="
 xcodebuild archive \
   -project CareNote.xcodeproj \
