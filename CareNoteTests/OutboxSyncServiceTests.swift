@@ -351,7 +351,6 @@ struct OutboxSyncServiceTests {
         #expect(uploadCalls.first?.recordingId == recordingId.uuidString)
         #expect(createCalls.count == 1)
         #expect(createCalls.first?.createdBy == "test-uid-alpha")
-        #expect(createCalls.first?.createdBy.isEmpty == false)
         #expect(transcribeCalls.count == 1)
         #expect(transcribeCalls.first?.audioGCSUri == "gs://test-bucket/expected.m4a")
     }
@@ -433,11 +432,19 @@ struct OutboxSyncServiceTests {
         }
 
         let uploadCalls = await stubUploader.uploadCalls
+        let createCalls = await stubStore.createCalls
         #expect(uploadCalls.isEmpty, "uid=='' 時も pre-flight check で throw され uploadAudio は呼ばれない")
+        #expect(createCalls.isEmpty)
     }
 
     // MARK: - Helpers for processItem 主経路テスト
 
+    /// processQueueImmediately 経由テストのセットアップヘルパ。
+    /// ダミー音声ファイルを作成し ModelContainer と pair で返す。
+    /// - Note: ダミーファイルは OutboxSyncService.processQueueImmediately の
+    ///   `FileManager.default.fileExists(atPath:)` ガード（stale item 除外）を
+    ///   通過させるために必要。呼出側は `defer { try? FileManager.default.removeItem(atPath:) }`
+    ///   でクリーンアップする。
     private static func setupContainerWithAudioFile() throws -> (ModelContainer, String) {
         let container = try makeContainer()
         let audioPath = FileManager.default.temporaryDirectory
