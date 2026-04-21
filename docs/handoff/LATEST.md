@@ -120,7 +120,13 @@ firebase deploy --only functions --project carenote-prod-279
 ## Open Issue（優先度順）
 
 ### 本セッションで解消済み
-_#116 / #124 / #108 / #129（いずれも元の優先度は P1-P2）。先行セッションで #99 / #100 / #110 が解消。_
+_#116 / #124 / #108 / #129（いずれも元の優先度は P1-P2）。先行セッションで #99 / #110 が closed。_
+
+### P0（要対応、open 継続中）
+
+| # | タイトル | 状態 |
+|---|---------|------|
+| #100 | Firestore Rules の recordings 権限が過剰 | **実装は PR #115 で完了、dev deploy 済、prod deploy 完了後に close 予定** |
 
 ### P1
 
@@ -140,7 +146,7 @@ _#116 / #124 / #108 / #129（いずれも元の優先度は P1-P2）。先行セ
 
 | # | タイトル |
 |---|---------|
-| #90 | Guest Tenant スパム対策: TTL / レート制限 |
+| #90 | Guest Tenant (demo-guest) のスパム対策: TTL / レート制限 |
 | #92 | Guest Tenant 利用者向けの「本番ログイン不可」案内UI |
 | #102 | deleteAccount テスト拡張（partial failure / auth error codes） |
 | #103 | audit-createdby 堅牢性（token cache / pagination 保護） |
