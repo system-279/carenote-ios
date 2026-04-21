@@ -26,7 +26,7 @@ struct OutboxSyncServiceTests {
 
     private static func makeService(
         container: ModelContainer,
-        currentUidProvider: @escaping @Sendable () -> String? = { "test-uid" }
+        currentUidProvider: @escaping @Sendable @MainActor () -> String? = { "test-uid" }
     ) -> OutboxSyncService {
         let tokenProvider = StubAccessTokenProvider()
         return OutboxSyncService(
