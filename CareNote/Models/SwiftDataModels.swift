@@ -22,7 +22,9 @@ import SwiftData
 //     - CareNote/Features/Settings/SettingsView.swift
 //
 // CI guard: `scripts/lint-model-container.sh` detects new test-side drift
-// by rejecting any `ModelContainer(for:` outside SwiftDataTestHelper.swift.
+// by rejecting any `ModelContainer(for:` outside its ALLOWED_TEST_FILES list
+// (currently the helper above + OutboxSyncServiceTests.swift, the latter
+// temporarily allowed while Issue #164 tracks a shared-container regression).
 // Production-side `Schema([...])` drift is not CI-gated; keep this list
 // current as the authoritative checklist.
 
