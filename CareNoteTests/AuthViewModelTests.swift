@@ -38,6 +38,20 @@ final class MockEmailAuthProvider: @unchecked Sendable, EmailAuthProviding {
     }
 }
 
+// MARK: - MockLocalDataCleaner
+
+final class MockLocalDataCleaner: @unchecked Sendable, LocalDataCleaning {
+    var purgeCallCount = 0
+    var purgeError: Error?
+
+    func purgeAll() async throws {
+        purgeCallCount += 1
+        if let error = purgeError {
+            throw error
+        }
+    }
+}
+
 // MARK: - AuthViewModelTests
 
 @Suite("AuthViewModel Tests")
@@ -128,6 +142,57 @@ struct AuthViewModelTests {
 
         // signIn完了後はisLoadingがfalseに戻る
         #expect(vm.isLoading == false)
+    }
+
+    // MARK: - performPostDeletionCleanup （#91）
+    //
+    // `deleteAccount()` 全体の integration test は Firebase 依存（Auth.auth().revokeToken /
+    // Functions.httpsCallable）のため困難だが、post-deletion cleanup 部分は Firebase 非依存
+    // の internal method として抽出済 → 以下で behavioral に検証できる。
+    // `deleteAccount()` 全体の E2E は Emulator Suite（#105）で対応予定。
+
+    @Test @MainActor
+    func performPostDeletionCleanupはpurgeAllを呼ぶ() async {
+        let cleaner = MockLocalDataCleaner()
+        let vm = AuthViewModel(
+            authProvider: MockAuthProvider(),
+            emailAuthProvider: MockEmailAuthProvider(),
+            localDataCleaner: cleaner
+        )
+
+        await vm.performPostDeletionCleanup()
+
+        #expect(cleaner.purgeCallCount == 1)
+    }
+
+    @Test @MainActor
+    func purgeAll失敗時もperformPostDeletionCleanupはthrowsしない() async {
+        let cleaner = MockLocalDataCleaner()
+        cleaner.purgeError = NSError(domain: "TestPurge", code: 42, userInfo: [NSLocalizedDescriptionKey: "intentional"])
+        let vm = AuthViewModel(
+            authProvider: MockAuthProvider(),
+            emailAuthProvider: MockEmailAuthProvider(),
+            localDataCleaner: cleaner
+        )
+
+        // best-effort 契約: throw せず、authState も呼び出し側で .signedOut 遷移可能であること
+        await vm.performPostDeletionCleanup()
+
+        #expect(cleaner.purgeCallCount == 1)
+    }
+
+    @Test @MainActor
+    func cleaner未注入時はpurgeAllが呼ばれずnoop() async {
+        let cleaner = MockLocalDataCleaner()
+        let vm = AuthViewModel(
+            authProvider: MockAuthProvider(),
+            emailAuthProvider: MockEmailAuthProvider()
+        )
+
+        await vm.performPostDeletionCleanup()
+
+        // 注入されていない cleaner は呼ばれない（skipped、ログのみ残る）
+        #expect(cleaner.purgeCallCount == 0)
     }
 }
 
