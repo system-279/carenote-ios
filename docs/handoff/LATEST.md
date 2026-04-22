@@ -49,6 +49,8 @@
 
 ---
 
+> **Note (2026-04-22 日中追記)**: 以下 2026-04-23 早朝セッションの記録内で扱った **#141 Postpone 判定は PR #163 で覆り、close 済**。「再開時のアクションメモ」「再開条件」等の Postpone 前提記述は履歴保存目的で残すが、次セッションの参照対象ではない。
+
 # Handoff — 2026-04-23 早朝セッション: #159 CI retry fix merge / #141 真因確定 + Postpone
 
 ## セッション成果サマリ（2026-04-23 早朝セッション）
@@ -368,14 +370,14 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 |---|---------|------|
 | #100 | Firestore Rules の recordings 権限が過剰 | **実装は PR #115 で完了、dev deploy 済、prod deploy 完了後に close 予定** |
 
-### bug（workaround あり、2026-04-22 日中更新）
+### bug（追跡中、2026-04-22 日中更新）
 
 | # | タイトル | 状態 |
 |---|---------|------|
-| #164 | OutboxSyncServiceTests が SharedTestModelContainer と相性が悪く回帰する（真因未確定） | **2026-04-22 起票**、PR #163 で per-suite container に局所 rollback、真因調査は別セッション |
-| #165 | Schema drift risk: `@Model` 型を SharedTestModelContainer と LocalDataCleaner で hard-code | **2026-04-22 起票**、grep lint or `AppSchema.allModelTypes` 単一ソース化で解消 |
+| #164 | OutboxSyncServiceTests が SharedTestModelContainer と相性が悪く回帰する（真因未確定） | **2026-04-22 起票、未着手**。PR #163 で per-suite container に局所 rollback 済（CI green）、真因調査は別セッション |
+| #165 | Schema drift risk: `@Model` 型を SharedTestModelContainer と LocalDataCleaner で hard-code | **2026-04-22 起票、未着手**。grep lint or `AppSchema.allModelTypes` 単一ソース化で解消 |
 
-> **消化済 (2026-04-22 日中)**: #141 (→ PR #163 で根本解決)、#91 は前セッションで close 済。
+> **消化済 (2026-04-22 日中)**: #141 (→ PR #163 で根本解決)、#91 は PR #156 / #158 (2026-04-22 夜) で close 済。
 
 ### P2 機能・テスト拡張（残り 2 件）
 
@@ -406,7 +408,7 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 8. **Day 6+: Phase 0.9 prod 実施**（4/30 期限から切離、審査通過後推奨 → #111 close）
 9. **#164 OutboxSyncServiceTests shared container 互換性調査** — PR #163 で局所 rollback 済。真因候補は `.serialized` + async hop race / cleanup timing / cross-suite pollution。bisect で特定
 10. **#165 Schema drift 防止**（grep lint 追加または `AppSchema.allModelTypes` 単一ソース化）
-11. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで、#102 の追加 branch coverage は前セッションで closed）
+11. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで、#102 の追加 branch coverage は PR #154 で closed）
 
 > **Codex セカンドオピニオン要点（2026-04-22）**: (1) 一括 deploy 禁止（原因切り分け不能化）、(2) Node 22 を最優先・単独、(3) Phase 0.9 を 4/30 期限から切離、(4) 各 deploy 後は即時 smoke test + 数時間エラー監視、最後にまとめて 24h 監視、(5) 軽量 smoke test チェックリストで十分（過剰ドキュメント化回避）。
 
