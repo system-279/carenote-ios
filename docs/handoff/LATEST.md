@@ -2,7 +2,7 @@
 
 ## セッション成果サマリ（2026-04-22 夜セッション）
 
-Issue #91（アカウント削除後のローカル SwiftData / Outbox クリーンアップ、実セキュリティリスク）を本対応 + レビュー指摘 silent-failure C1 の follow-up まで一気通貫で実施。**2 PR merge / 2 Issue close / 1 Issue 起票 / 1 CI flaky Issue 起票**。
+Issue #91（アカウント削除後のローカル SwiftData / Outbox クリーンアップ、実セキュリティリスク）を本対応 + レビュー指摘 silent-failure C1 の follow-up まで一気通貫で実施。**2 PR merge / 2 Issue close / 2 Issue 起票**（#157 は同セッション内 close、#159 は CI infra flaky）。
 
 | PR | 内容 | Issue |
 |----|------|-------|
@@ -40,9 +40,16 @@ Issue #91（アカウント削除後のローカル SwiftData / Outbox クリー
 
 ### Issue 数推移
 
-セッション開始時 open 8 → 終了時 **7**（net **-1**、#91 / #157 close + #157 / #159 起票 = -2 + 2 - 1）。
+セッション開始時 open 8 → 終了時 **8**（net **0**）。
 
-> **注**: #157 は本セッション内で起票→close の full cycle を完遂したため Issue 残高に影響せず。#159 は CI インフラ問題で起票必須（CLAUDE.md triage 基準「CI/リリース判断を壊す」該当）。
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 8 |
+| #91 close (PR #156) | -1 | 7 |
+| #157 起票 → 同セッション close (PR #158) | ±0 | 7 |
+| #159 起票（CI iOS Tests flaky） | +1 | **8** |
+
+> **注**: net 0 だが進捗ゼロではない — PR merge 2 件で実装前進 (#91 のセキュリティリスク本対応完了)。#159 は CI インフラ問題で CLAUDE.md triage 基準「CI/リリース判断を壊す」該当のため起票必須（推測起票ではなく 3 連続再現済の実害）。triage rule に照らせば「Issue net ゼロの実装進捗」は許容範囲内。
 
 ---
 
