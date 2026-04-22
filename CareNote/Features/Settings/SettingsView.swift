@@ -102,11 +102,10 @@ struct SettingsView: View {
 
         do {
             try await authViewModel.deleteAccount()
-            // deleteAccount() は Auth 削除に成功しても purge 失敗時に errorMessage を
-            // セットする（best-effort、#157）。成功パスで errorMessage が残っていれば
-            // purge 失敗と判断してユーザーにアプリ再インストールを案内する（非再試行型）。
-            if let purgeFailureMessage = authViewModel.errorMessage {
-                deleteAccountError = purgeFailureMessage
+            // Auth 削除は成功、ただしローカル purge が失敗した場合は専用フラグが立つ（#157）。
+            // アプリ再インストールが必要なため非再試行型として UI 案内する。
+            if authViewModel.postDeletionPurgeFailed {
+                deleteAccountError = AuthViewModel.postDeletionPurgeFailureMessage
                 deleteAccountIsRetryable = false
             }
         } catch {
