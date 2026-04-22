@@ -1,4 +1,52 @@
-# Handoff — 2026-04-22 夕方セッション: P2 follow-up 消化 + #141 根本原因特定
+# Handoff — 2026-04-22 夜セッション: #91 本体対応完了（2 PR merge、レビュー指摘構造的解消）
+
+## セッション成果サマリ（2026-04-22 夜セッション）
+
+Issue #91（アカウント削除後のローカル SwiftData / Outbox クリーンアップ、実セキュリティリスク）を本対応 + レビュー指摘 silent-failure C1 の follow-up まで一気通貫で実施。**2 PR merge / 2 Issue close / 1 Issue 起票 / 1 CI flaky Issue 起票**。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #156 | LocalDataCleaning protocol + SwiftDataLocalDataCleaner (atomic purge + rollback) / deleteAccount 後に purge 呼出 / behavioral test 3 件 / 構造化 NSError ログ | **#91 closed** |
+| #158 | purge 失敗時の UI 通知（専用 flag `postDeletionPurgeFailed` 導入で errorMessage 兼用を構造的排除） | **#157 closed** |
+
+### 設計判断のハイライト
+
+- **errorMessage 兼用問題の根本解消**: PR #158 初版は `AuthViewModel.errorMessage` を SettingsView 側で転記する設計だったが、4 エージェント並列レビューの 3 エージェント（code-review / silent-failure / simplify）が合意で Critical 指摘。専用 flag `postDeletionPurgeFailed` に置換することで sign-in / sign-out 系との race / silent corruption を型レベルで排除
+- **purge の atomic 化**: PR #156 初版は個別 `try context.delete(model:)` チェーンで partial failure のリスクがあったが、silent-failure C2 指摘を受けて個別 do-catch + rollback + `LocalDataCleanerError.partialFailure` throw に変更。OutboxItem だけ残って別 tenant 誤送信（#91 最大リスク）を防止
+- **Firebase 非依存メソッド抽出**: `deleteAccount()` 全体は Firebase (`Auth.auth().revokeToken` / `Functions.httpsCallable`) 依存で unit test 不能だが、purge 呼出部分を `performPostDeletionCleanup()` internal method に抽出して behavioral test 可能に
+
+### レビュー運用
+
+- PR #156: 6 エージェント並列レビュー（code-reviewer / pr-test / comment / silent-failure / type-design / simplify）
+- PR #158: 4 エージェント並列レビュー（code-reviewer / pr-test / silent-failure / simplify、type-design は新規型なしでスキップ）
+- 指摘重複が高い問題 (errorMessage 兼用) を専用 flag で一発解消 → 複数 Critical を同時クローズ
+- 別 Issue 化判定は慎重: silent-failure C1 (SettingsView unmount) / pr-test G2 (isRetryable 抽出) / silent-failure I1 (DI 未注入 critical 分離) / silent-failure I2 (enum 化) はいずれも起票せず（推測起票 / インフラ要 / スコープ超 / 合流候補）
+
+### 本セッション起票（実害ベース）
+
+| # | タイトル | 優先度 | 理由 |
+|---|---------|-------|------|
+| #157 | アカウント削除後のローカル purge 失敗を UI/ユーザーに通知する | P2 | silent-failure C1 Conf 0.90、本セッション中に #158 で close |
+| #159 | CI: iOS Tests ワークフローが main push 後に 3 連続 failure | P2 | main CI green の担保不能、regression detection が実質壊れている |
+
+### 別 Issue 化しなかった指摘（過剰起票防止）
+
+| 指摘 | 理由 |
+|------|------|
+| silent-failure C1 (SettingsView unmount 時の UI 消失) | Conf 0.75 で「実機検証要」レベル、推測起票は triage rule 違反。次回 smoke test 時に確認 |
+| pr-test G2 (deleteAccountIsRetryable 分岐抽出) | testability 向上のみ、実バグなし（rating 8 review 提案） |
+| silent-failure I1 (DI 未注入と I/O 失敗の critical 分離) | error tracking 基盤 (Crashlytics 等) 未整備が前提条件、インフラ変更伴う |
+| silent-failure I2 (DeleteAccountError enum 化) | API 境界変更、#102 partial-failure 設計と合流候補で個別起票不要 |
+
+### Issue 数推移
+
+セッション開始時 open 8 → 終了時 **7**（net **-1**、#91 / #157 close + #157 / #159 起票 = -2 + 2 - 1）。
+
+> **注**: #157 は本セッション内で起票→close の full cycle を完遂したため Issue 残高に影響せず。#159 は CI インフラ問題で起票必須（CLAUDE.md triage 基準「CI/リリース判断を壊す」該当）。
+
+---
+
+## 前セッション成果（2026-04-22 夕方、参考保持）
 
 ## セッション成果サマリ（2026-04-22 夕方セッション）
 
