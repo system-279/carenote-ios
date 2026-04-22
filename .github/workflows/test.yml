@@ -38,6 +38,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lint - SwiftData schema drift guard (Issue #165)
+        run: bash scripts/lint-model-container.sh
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
