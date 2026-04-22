@@ -15,11 +15,39 @@ function resetState() {
   deletedUids = [];
 }
 
-before(() => {
+// ---- Mock handler injection ----
+//
+// index.js は `const { getAuth } = require("firebase-admin/auth")` のように
+// destructure してロード時に関数参照を固定する。mock 関数自体を差し替えても
+// 再ロードしない限り反映されないため、**mock 関数は固定のまま handler を
+// 動的に差し替えられる** 構造にする。`installMocks({ ... })` は handler だけ
+// 更新し、mock 関数本体は `initializeAdminMocks()` が最初の before() で1度だけ設置する。
+
+let _handlers = {};
+
+/**
+ * Mock ハンドラを差し替える（mock 関数本体は固定）。
+ *
+ * @param {object} [opts]
+ * @param {(path:string)=>Promise<void>|void} [opts.onDocDelete]   — doc.ref.delete() の挙動を差し替え
+ * @param {(bucket:string, path:string)=>Promise<void>|void} [opts.onFileDelete]
+ *                                                                — storage.bucket().file().delete() の挙動を差し替え
+ * @param {(uid:string)=>Promise<void>|void} [opts.onDeleteUser]   — auth.deleteUser() の挙動を差し替え
+ * @param {(collectionPath:string)=>Promise<{docs:Array}>} [opts.onRecordingsQuery]
+ *                                                                — where().get() の挙動を差し替え（collection フルパス受領）
+ */
+function installMocks(opts = {}) {
+  _handlers = opts;
+}
+
+function initializeAdminMocks() {
   function createDocRef(path) {
     return {
       collection: (subPath) => createCollectionRef(`${path}/${subPath}`),
       delete: async () => {
+        if (_handlers.onDocDelete) {
+          await _handlers.onDocDelete(path);
+        }
         deletedDocs.push(path);
         delete mockFirestoreData[path];
       },
@@ -31,6 +59,9 @@ before(() => {
       doc: (id) => createDocRef(`${path}/${id}`),
       where: (field, _op, value) => ({
         get: async () => {
+          if (_handlers.onRecordingsQuery) {
+            return _handlers.onRecordingsQuery(path);
+          }
           const docs = Object.entries(mockFirestoreData)
             .filter(([key, data]) => {
               if (!key.startsWith(path + "/")) return false;
@@ -61,6 +92,9 @@ before(() => {
     bucket: (name) => ({
       file: (path) => ({
         delete: async () => {
+          if (_handlers.onFileDelete) {
+            await _handlers.onFileDelete(name, path);
+          }
           deletedStorageFiles.push(`${name}/${path}`);
         },
       }),
@@ -70,13 +104,22 @@ before(() => {
   const adminAuth = require("firebase-admin/auth");
   adminAuth.getAuth = () => ({
     deleteUser: async (uid) => {
+      if (_handlers.onDeleteUser) {
+        await _handlers.onDeleteUser(uid);
+      }
       deletedUids.push(uid);
     },
   });
+}
+
+before(() => {
+  initializeAdminMocks();
 });
 
 afterEach(() => {
   resetState();
+  // mock handlers を default (no-op) に戻し、テスト間で差し込みが引き継がないよう保証。
+  installMocks({});
 });
 
 after(() => {
@@ -228,6 +271,116 @@ describe("deleteAccount Callable Function", () => {
       assert.ok(e.message.includes("セッション情報が不完全"), `unexpected: ${e.message}`);
     }
   });
+
+  // ---- #102: branch coverage for partial-failure paths and auth error codes ----
+
+  it("Firestore doc.delete が reject しても Auth user 削除は走る (Promise.allSettled 固定)", async () => {
+    mockFirestoreData["tenants/279/recordings/r1"] = {
+      createdBy: "alice",
+      audioStoragePath: "gs://audio-bucket/279/r1.m4a",
+    };
+
+    installMocks({
+      onDocDelete: async (path) => {
+        const err = new Error("firestore delete failed");
+        err.code = 13; // INTERNAL
+        throw err;
+      },
+    });
+
+    const result = await deleteAccount({
+      auth: { uid: "alice", token: { tenantId: "279" } },
+      data: {},
+    });
+
+    assert.deepStrictEqual(result, { success: true });
+    assert.deepStrictEqual(deletedUids, ["alice"], "doc.delete 失敗時も Auth user は削除される");
+  });
+
+  it("Storage file.delete が reject しても Auth user 削除は走る", async () => {
+    mockFirestoreData["tenants/279/recordings/r1"] = {
+      createdBy: "alice",
+      audioStoragePath: "gs://audio-bucket/279/r1.m4a",
+    };
+
+    installMocks({
+      onFileDelete: async () => {
+        const err = new Error("storage delete failed");
+        err.code = 500;
+        throw err;
+      },
+    });
+
+    const result = await deleteAccount({
+      auth: { uid: "alice", token: { tenantId: "279" } },
+      data: {},
+    });
+
+    assert.deepStrictEqual(result, { success: true });
+    assert.deepStrictEqual(deletedUids, ["alice"], "file.delete 失敗時も Auth user は削除される");
+  });
+
+  it("auth/user-not-found の場合は alreadyDeleted=true で success を返す", async () => {
+    installMocks({
+      onDeleteUser: async () => {
+        const err = new Error("auth user not found");
+        err.code = "auth/user-not-found";
+        throw err;
+      },
+    });
+
+    const result = await deleteAccount({
+      auth: { uid: "ghost", token: { tenantId: "279" } },
+      data: {},
+    });
+
+    assert.deepStrictEqual(result, { success: true, alreadyDeleted: true });
+    assert.deepStrictEqual(deletedUids, [], "deleteUser は throw したので記録されない");
+  });
+
+  it("auth/requires-recent-login は failed-precondition + requiresReauth:true を返す", async () => {
+    installMocks({
+      onDeleteUser: async () => {
+        const err = new Error("recent login required");
+        err.code = "auth/requires-recent-login";
+        throw err;
+      },
+    });
+
+    try {
+      await deleteAccount({
+        auth: { uid: "alice", token: { tenantId: "279" } },
+        data: {},
+      });
+      assert.fail("Should have thrown");
+    } catch (e) {
+      assert.strictEqual(e.code, "failed-precondition");
+      assert.deepStrictEqual(e.details, { requiresReauth: true });
+    }
+  });
+
+  it("その他の auth エラー (auth/internal-error 等) は internal + phase:'auth-delete' を返す", async () => {
+    installMocks({
+      onDeleteUser: async () => {
+        const err = new Error("auth internal error");
+        err.code = "auth/internal-error";
+        throw err;
+      },
+    });
+
+    try {
+      await deleteAccount({
+        auth: { uid: "alice", token: { tenantId: "279" } },
+        data: {},
+      });
+      assert.fail("Should have thrown");
+    } catch (e) {
+      assert.strictEqual(e.code, "internal");
+      assert.deepStrictEqual(e.details, { phase: "auth-delete" });
+    }
+  });
+
+  // ---- end #102 ----
 
   it("recordings query が失敗しても Auth user 削除は走る (C-Cdx-3)", async () => {
     // Monkey-patch: where().get() を reject させる
