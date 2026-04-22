@@ -163,6 +163,10 @@ struct AuthViewModelTests {
         await vm.performPostDeletionCleanup()
 
         #expect(cleaner.purgeCallCount == 1)
+        // 成功時は専用フラグを立てない（#157: UI 側で purge 失敗と誤認しないため）
+        #expect(vm.postDeletionPurgeFailed == false)
+        // authState は本メソッドで変更しない契約（呼び出し元の deleteAccount が遷移させる）
+        #expect(vm.authState == .signedOut)
     }
 
     @Test @MainActor
@@ -179,10 +183,14 @@ struct AuthViewModelTests {
         await vm.performPostDeletionCleanup()
 
         #expect(cleaner.purgeCallCount == 1)
+        // #157: 失敗時は専用フラグを立ててUIに通知（errorMessage 兼用を避ける）
+        #expect(vm.postDeletionPurgeFailed == true)
+        // errorMessage は signIn 系と兼用のため本経路では触らない
+        #expect(vm.errorMessage == nil)
     }
 
     @Test @MainActor
-    func cleaner未注入時はpurgeAllが呼ばれずnoop() async {
+    func cleaner未注入時はpurgeAllが呼ばれずフラグ設定() async {
         let cleaner = MockLocalDataCleaner()
         let vm = AuthViewModel(
             authProvider: MockAuthProvider(),
@@ -191,8 +199,18 @@ struct AuthViewModelTests {
 
         await vm.performPostDeletionCleanup()
 
-        // 注入されていない cleaner は呼ばれない（skipped、ログのみ残る）
+        // 注入されていない cleaner は呼ばれない（DI 配線バグ扱い）
         #expect(cleaner.purgeCallCount == 0)
+        // #157: DI 配線バグも purge 失敗と同じく専用フラグで通知
+        #expect(vm.postDeletionPurgeFailed == true)
+    }
+
+    @Test @MainActor
+    func postDeletionPurgeFailureMessageは再インストール案内を含む() {
+        // #157 / pr-test G3: 文言 drift 防止。user-facing guidance の要件を lock する。
+        let message = AuthViewModel.postDeletionPurgeFailureMessage
+        #expect(message.contains("再インストール"))
+        #expect(message.contains("reinstall"))
     }
 }
 

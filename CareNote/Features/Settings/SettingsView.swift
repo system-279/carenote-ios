@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var showDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
     @State private var deleteAccountError: String?
+    /// true: throws 経路（再試行可能）/ false: purge 失敗経路（アプリ削除が必要、再試行では解消しない）。
+    @State private var deleteAccountIsRetryable: Bool = true
 
     var body: some View {
         List {
@@ -53,9 +55,11 @@ struct SettingsView: View {
                         Label(message, systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.red)
-                        Text("一度ログアウトしてから再度お試しください。\nPlease sign out and try again.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if deleteAccountIsRetryable {
+                            Text("一度ログアウトしてから再度お試しください。\nPlease sign out and try again.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -93,12 +97,20 @@ struct SettingsView: View {
     private func deleteAccount() async {
         isDeletingAccount = true
         deleteAccountError = nil
+        deleteAccountIsRetryable = true
         defer { isDeletingAccount = false }
 
         do {
             try await authViewModel.deleteAccount()
+            // Auth 削除は成功、ただしローカル purge が失敗した場合は専用フラグが立つ（#157）。
+            // アプリ再インストールが必要なため非再試行型として UI 案内する。
+            if authViewModel.postDeletionPurgeFailed {
+                deleteAccountError = AuthViewModel.postDeletionPurgeFailureMessage
+                deleteAccountIsRetryable = false
+            }
         } catch {
             deleteAccountError = "アカウント削除に失敗しました。\nFailed to delete account."
+            deleteAccountIsRetryable = true
         }
     }
 }

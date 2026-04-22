@@ -112,6 +112,10 @@ final class AuthViewModel {
     var isLoading: Bool = false
     var errorMessage: String?
     var displayName: String?
+    /// アカウント削除後のローカル purge 失敗を UI に伝える専用フラグ（#157）。
+    /// `errorMessage` と分離することで signIn/signOut 系エラーとの race や誤検知を防ぐ
+    /// （PR #158 レビュー: silent-failure C2 / code-review I1 対応）。
+    private(set) var postDeletionPurgeFailed: Bool = false
 
     private let authProvider: AuthProviding
     let appleSignInCoordinator = AppleSignInCoordinator()
@@ -295,6 +299,7 @@ final class AuthViewModel {
     func deleteAccount() async throws {
         isLoading = true
         errorMessage = nil
+        postDeletionPurgeFailed = false
         defer { isLoading = false }
 
         // Apple Sign-In ユーザーは refresh token を revoke する（Guideline 5.1.1(v) 要件）。
@@ -341,10 +346,15 @@ final class AuthViewModel {
     ///
     /// 本メソッドは Firebase 非依存のため、`deleteAccount()` 全体のユニットテストが
     /// 困難な中でも独立して behavioral test が可能（#91 レビュー指摘対応）。
+    ///
+    /// 本メソッドは `authState` を変更しない（呼び出し元の `deleteAccount()` が
+    /// 継続して `.signedOut` に遷移させる）。失敗時は専用フラグ `postDeletionPurgeFailed`
+    /// を立て、SettingsView がそれを見てアプリ再インストール案内を表示する（#157）。
     @MainActor
     func performPostDeletionCleanup() async {
         guard let cleaner = localDataCleaner else {
             Self.logger.error("localDataCleaner not injected — post-deletion purge skipped. DI wiring bug.")
+            postDeletionPurgeFailed = true
             return
         }
 
@@ -359,8 +369,16 @@ final class AuthViewModel {
                 desc=\(ns.localizedDescription, privacy: .public) \
                 underlying=\(String(describing: ns.userInfo[NSUnderlyingErrorKey]), privacy: .public)
                 """)
+            postDeletionPurgeFailed = true
         }
     }
+
+    static let postDeletionPurgeFailureMessage = """
+        アカウントは削除されましたが、端末内データのクリアに失敗しました。
+        セキュリティ保護のため、アプリを一度削除して再インストールしてください。
+        Your account has been deleted, but clearing local data on this device failed.
+        Please delete and reinstall the app to ensure all data is removed.
+        """
 
     /// サインアウトする
     func signOut() {
