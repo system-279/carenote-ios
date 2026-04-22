@@ -69,10 +69,13 @@ private actor StubTranscriber: Transcribing {
 @Suite("OutboxSyncService incrementRetryCount Tests", .serialized)
 struct OutboxSyncServiceTests {
 
-    // OutboxSyncService は DI された modelContainer から独自に ModelContext を
-    // 派生させて処理するため、共有 container では mainContext の save が service
-    // 側 context に反映されない場合がある。Issue #141 root-cause fix の対象外と
-    // し、per-suite で独立 container を生成する。
+    // Shared container (SharedTestModelContainer) を使うと本 suite の
+    // processQueueImmediately 系 2 test が uploadCalls.count == 0 で回帰する。
+    // OutboxSyncService は modelContainer.mainContext をそのまま使っているため
+    // 当初仮説（独自 ModelContext 派生）は誤り。真因は未確定（候補: cleanup
+    // timing と async hop の race、cross-suite state pollution 等）。
+    // Issue #164 で真因調査し shared container へ合流させるまでは per-suite
+    // container を維持する。
     @MainActor
     private static func makeContainer() throws -> ModelContainer {
         let url = FileManager.default.temporaryDirectory
