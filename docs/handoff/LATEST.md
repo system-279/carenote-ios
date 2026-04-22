@@ -1,3 +1,54 @@
+# Handoff — 2026-04-22 日中セッション: #141 SwiftData SIGTRAP 根本解決 merge
+
+## セッション成果サマリ（2026-04-22 日中セッション）
+
+前セッション (2026-04-23 早朝) で Postpone 判定していた **Issue #141 (SwiftData 同一プロセス複数 ModelContainer SIGTRAP) を案 C' で根本解決**。全体テスト実行時の crash ゼロを達成し、CareNote iOS の test suite 安定性を回復。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #163 | SharedTestModelContainer 導入 + 9 test files 統一 + `.serialized` 適用 | **#141 closed** |
+
+### 設計判断のハイライト
+
+- **案 C' の 1 ファイル収束**: 当初見積もり「9 files 変更」だったが、helper 側で `SharedTestModelContainer` + 自動 cleanup を仕掛けることで呼び出し側の変更を回避しようとした。しかし `/simplify` の reuse agent が「per-suite `makeContainer()` 残存で SIGTRAP 再発リスク」を指摘し、7 files の per-suite container を一括 shared 化。最終 10 files / +95/-124（-29 行の純減）
+- **`.serialized` 全面適用**: Swift Testing の default parallel 実行が shared container 上で競合し `OutboxSyncServiceTests` が回帰 (uploadCalls.count が 3 倍に膨らむ) → SwiftData-backed 7 suites に `.serialized` 付与で解消
+- **OutboxSyncServiceTests のみ per-suite 維持**: `.serialized` 後も 2 test が `uploadCalls.count → 0` で回帰。当初「service が独自 ModelContext 派生」と推測したが `/review-pr` 6 agent の grep で **全て `modelContainer.mainContext`** 使用と判明 → 真因未確定のまま per-suite container に局所 rollback、Issue #164 で調査継続
+
+### レビュー運用
+
+- `/simplify` 3 並列: reuse agent の scope 拡張指摘で 1 file → 10 files に拡大（Issue #141 再発ガードを担保）
+- `/review-pr` 6 並列: Critical 2 件検出
+  - C1: OutboxSync コメント factually 誤り → commit c2f3e60 で訂正
+  - C2: Schema drift risk (`@Model` 型 hard-code 3 箇所) → Issue #165 で follow-up
+- Evaluator 分離プロトコル (5 files+) は `/review-pr` 6 並列で代替と判断
+
+### 本セッション起票（実害ベース）
+
+| # | タイトル | 優先度 | 根拠 |
+|---|---------|-------|------|
+| #164 | OutboxSyncServiceTests が SharedTestModelContainer と相性が悪く回帰する（真因未確定） | P2 bug | triage #2 再現可能なバグ、PR 作成時点で .serialized + shared で 2 test が `uploadCalls.count == 0` を再現 |
+| #165 | Schema drift risk: `@Model` 型を SharedTestModelContainer と LocalDataCleaner で hard-code | P2 bug | triage #2 実害シナリオ明確（新 `@Model` 追加時の LocalDataCleaner 漏れ = #91 type regression）+ review 5 agent 合議指摘 |
+
+### Issue 数推移
+
+セッション開始時 open 7 → 終了時 **8**（net **+1**、#141 close / #164 #165 起票）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 7 |
+| #141 close (PR #163) | -1 | 6 |
+| #164 起票（OutboxSync 真因調査） | +1 | 7 |
+| #165 起票（Schema drift） | +1 | **8** |
+
+> **注**: net +1 だが、#141 の SIGTRAP crash という既存の実害を解消した上で、調査過程で発見した 2 件の潜在リスクを可視化した結果。triage 基準に照らすと #164/#165 共に「再現可能な bug / 明確な実害シナリオ」で起票条件を満たす。レビュー agent の rating 7-9 指摘のみ採用、rating 5-6 の「改善提案」は全て PR コメント or 却下（triage rule 遵守）。
+
+### CI の現状
+
+- main 最新 (`589b87f`, PR #163) で iOS Tests job が **23m55s で green**。PR #161 の retry logic が実効することも実証（simulator runtime install の retry 発動なし）
+- 全 18 suites / 135 tests PASS
+
+---
+
 # Handoff — 2026-04-23 早朝セッション: #159 CI retry fix merge / #141 真因確定 + Postpone
 
 ## セッション成果サマリ（2026-04-23 早朝セッション）
@@ -317,12 +368,14 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 |---|---------|------|
 | #100 | Firestore Rules の recordings 権限が過剰 | **実装は PR #115 で完了、dev deploy 済、prod deploy 完了後に close 予定** |
 
-### bug（workaround あり）
+### bug（workaround あり、2026-04-22 日中更新）
 
 | # | タイトル | 状態 |
 |---|---------|------|
-| #141 | ClientRepositoryTests 全体実行時のクラッシュ（全体テスト連鎖失敗源） | **根本原因特定済（SwiftData 同一プロセス複数 ModelContainer → SIGTRAP）**、根本解決は設計変更要、open 維持 |
-| #91 | アカウント削除後のローカル SwiftData / Outbox クリーンアップ | 既存、要対応 |
+| #164 | OutboxSyncServiceTests が SharedTestModelContainer と相性が悪く回帰する（真因未確定） | **2026-04-22 起票**、PR #163 で per-suite container に局所 rollback、真因調査は別セッション |
+| #165 | Schema drift risk: `@Model` 型を SharedTestModelContainer と LocalDataCleaner で hard-code | **2026-04-22 起票**、grep lint or `AppSchema.allModelTypes` 単一ソース化で解消 |
+
+> **消化済 (2026-04-22 日中)**: #141 (→ PR #163 で根本解決)、#91 は前セッションで close 済。
 
 ### P2 機能・テスト拡張（残り 2 件）
 
@@ -351,9 +404,9 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 6. **Day 3-4: 24h 安定監視**（エラー急増なし確認）
 7. **Day 4-5: Phase 0.9 dev 先行検証**（RUNBOOK `docs/runbook/phase-0-9-allowed-domains.md` § 手順 A）
 8. **Day 6+: Phase 0.9 prod 実施**（4/30 期限から切離、審査通過後推奨 → #111 close）
-9. **#141 根本解決** — 本セッションで調査完了（SwiftData 同一プロセス複数 ModelContainer）、A/B/C 選択肢いずれも影響範囲大、時間確保セッションで着手
-10. **#91 アカウント削除後 SwiftData / Outbox クリーンアップ**（bug 系、iOS + XcodeBuildMCP 必要）
-11. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで、#102 の追加 branch coverage は本セッションで closed）
+9. **#164 OutboxSyncServiceTests shared container 互換性調査** — PR #163 で局所 rollback 済。真因候補は `.serialized` + async hop race / cleanup timing / cross-suite pollution。bisect で特定
+10. **#165 Schema drift 防止**（grep lint 追加または `AppSchema.allModelTypes` 単一ソース化）
+11. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで、#102 の追加 branch coverage は前セッションで closed）
 
 > **Codex セカンドオピニオン要点（2026-04-22）**: (1) 一括 deploy 禁止（原因切り分け不能化）、(2) Node 22 を最優先・単独、(3) Phase 0.9 を 4/30 期限から切離、(4) 各 deploy 後は即時 smoke test + 数時間エラー監視、最後にまとめて 24h 監視、(5) 軽量 smoke test チェックリストで十分（過剰ドキュメント化回避）。
 
@@ -373,12 +426,11 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 - `.github/workflows/test.yml` (iOS Tests) は paths-ignore で `firestore.rules` / `functions/**` / `docs/**` / `.github/**` 等を除外
 - `.github/workflows/functions-test.yml` (Functions & Rules Tests) が Firestore + Auth emulator で全テストスイート（`npm test` = 5 ファイル合計）を実行（Node 22）。本セッション末時点で Firestore Rules 64 tests + functions 系で合計 130 件前後。正確な件数は CI ログで確認。
 
-### Swift Testing: 全体テスト実行時の ClientRepositoryTests クラッシュ（#141）
+### Swift Testing: SwiftData SIGTRAP（#141、2026-04-22 日中 PR #163 で解消）
 
-- 個別 `xcodebuild -only-testing:` では PASS するスイートと、Xcode 26 β 環境では単独でも crash するスイートあり（Xcode / SwiftData のバージョン差に依存）
-- **真の root cause（2026-04-22 夕方セッションで特定）**: 同一プロセス内で同じ `@Model` 型を 2 つの異なる `ModelContainer` に登録すると SwiftData 内部で SIGTRAP。詳細は [#141 issue comment](https://github.com/system-279/carenote-ios/issues/141#issuecomment-4292636150)
-- **workaround**: CI は Xcode 16.3 で通過。ローカルで個別 test suite を `-only-testing:` で呼び分ける
-- **根本解決**: 設計変更（test host app 外し / `modelContainer` Optional 化 / app host ModelContainer 再利用）いずれも影響範囲大、時間確保セッションで着手
+- **解消**: `SharedTestModelContainer` (static let) + `cleanup()` で process 内 1 container に統一、`.serialized` で parallel race 防止。全 18 suites / 135 tests が CI green
+- **残存リスク**: `SwiftDataTestHelper.shared` init と `cleanup()` が `@Model` 型を hard-code（新規 `@Model` 追加時の drift → Issue #165 で対応）
+- **OutboxSyncServiceTests のみ per-suite container**: shared 化で 2 test が回帰、真因未確定のため Issue #164 で追跡
 
 ## ADR
 
@@ -391,7 +443,13 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 - [phase-0-9-allowed-domains.md](../runbook/phase-0-9-allowed-domains.md) — Phase 0.9 allowedDomains 有効化手順（draft、ユーザー作業待ち）
 - [prod-deploy-smoke-test.md](../runbook/prod-deploy-smoke-test.md) — prod deploy 統合 smoke test チェックリスト（2026-04-22 新設、Codex 推奨段階 deploy 方針に対応）
 
-## 参考資料（本セッション = 2026-04-22 夕方）
+## 参考資料（本セッション = 2026-04-22 日中）
+
+- [PR #163 SharedTestModelContainer 導入 + 9 test files 統一](https://github.com/system-279/carenote-ios/pull/163)
+- [Issue #164 OutboxSyncService shared container 互換性](https://github.com/system-279/carenote-ios/issues/164)
+- [Issue #165 Schema drift risk](https://github.com/system-279/carenote-ios/issues/165)
+
+## 参考資料（前セッション = 2026-04-22 夕方）
 
 - [PR #153 OutboxSyncService upload 失敗時 createRecording 未呼出検証](https://github.com/system-279/carenote-ios/pull/153)
 - [PR #154 delete-account partial-failure & auth error code の 5 分岐追加](https://github.com/system-279/carenote-ios/pull/154)
