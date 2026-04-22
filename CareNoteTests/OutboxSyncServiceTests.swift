@@ -17,13 +17,21 @@ private actor StubAccessTokenProvider: AccessTokenProviding {
 private actor StubAudioUploader: AudioUploading {
     private(set) var uploadCalls: [(localURL: URL, tenantId: String, recordingId: String)] = []
     var gcsUriToReturn: String = "gs://test-bucket/default.m4a"
+    var errorToThrow: Error?
 
     func uploadAudio(localURL: URL, tenantId: String, recordingId: String) async throws -> String {
         uploadCalls.append((localURL, tenantId, recordingId))
+        if let err = errorToThrow { throw err }
         return gcsUriToReturn
     }
 
     func setGcsUri(_ uri: String) { gcsUriToReturn = uri }
+    func setError(_ error: Error) { errorToThrow = error }
+}
+
+/// 汎用テスト用エラー（stub injection 用）。
+private struct TestInjectedError: Error, Equatable {
+    let label: String
 }
 
 /// 呼び出し履歴を記録する RecordingStoring stub。
@@ -435,6 +443,55 @@ struct OutboxSyncServiceTests {
         let createCalls = await stubStore.createCalls
         #expect(uploadCalls.isEmpty, "uid=='' 時も pre-flight check で throw され uploadAudio は呼ばれない")
         #expect(createCalls.isEmpty)
+    }
+
+    /// 回帰防止 (#145): Step 1 (uploadAudio) が throw した場合、
+    /// createRecording / transcribe は呼ばれない。
+    /// 将来「Firestore doc 先行作成 → URI 後埋め」構造への変更で Storage 失敗時に
+    /// orphan Firestore doc が残る regression を早期に検知する。
+    @Test @MainActor
+    func processQueueImmediately_upload失敗時_createRecordingが呼ばれない_145() async throws {
+        let (container, audioPath) = try Self.setupContainerWithAudioFile()
+        defer { try? FileManager.default.removeItem(atPath: audioPath) }
+
+        let stubUploader = StubAudioUploader()
+        await stubUploader.setError(TestInjectedError(label: "upload-failed"))
+        let stubStore = StubRecordingStore()
+        let stubTranscriber = StubTranscriber()
+
+        let service = OutboxSyncService(
+            modelContainer: container,
+            storageService: stubUploader,
+            firestoreService: stubStore,
+            transcriptionService: stubTranscriber,
+            tenantId: "test-tenant",
+            currentUidProvider: { "test-uid-upload-failed" }
+        )
+
+        let recordingId = UUID()
+        let context = container.mainContext
+        context.insert(RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: audioPath
+        ))
+        context.insert(OutboxItem(recordingId: recordingId))
+        try context.save()
+
+        // OutboxSyncService は原因 error を `OutboxSyncError.uploadFailed(_)` で wrap して throw する。
+        await #expect(throws: OutboxSyncError.self) {
+            try await service.processQueueImmediately()
+        }
+
+        let uploadCalls = await stubUploader.uploadCalls
+        let createCalls = await stubStore.createCalls
+        let transcribeCalls = await stubTranscriber.transcribeCalls
+
+        #expect(uploadCalls.count == 1, "upload は試行される（pre-flight を通過した後 Step 1 で throw）")
+        #expect(createCalls.isEmpty, "upload 失敗時に Firestore doc が先行作成されないこと (orphan 防止)")
+        #expect(transcribeCalls.isEmpty, "upload 失敗時は後続 Step の transcribe も実行されないこと")
     }
 
     // MARK: - Helpers for processItem 主経路テスト
