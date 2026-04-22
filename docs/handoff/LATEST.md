@@ -1,26 +1,53 @@
-# Handoff — Codex scope-narrowed follow-up 双子消化 + 2 PR merge (2026-04-22 late session)
+# Handoff — 2026-04-22 夕方セッション: P2 follow-up 消化 + #141 根本原因特定
 
-## セッション成果サマリ（2026-04-22 遅延セッション）
+## セッション成果サマリ（2026-04-22 夕方セッション）
 
-2026-04-22 昼セッションで scope 絞りした Codex follow-up 双子 Issue (#127 / #120) を消化。**2 PR merge / 2 Issue close**。勢いと context を保ったまま 1 日 3 PR 目を完走。
+2026-04-22 遅延セッション末に残っていた P2 follow-up 2 件を消化。**2 PR merge / 2 Issue close**。あわせて Issue #141（全体テスト実行クラッシュ）を深掘りし、**真の根本原因を特定**して Issue コメントに記録。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #153 | OutboxSyncService: upload 失敗時に `createRecording` が呼ばれないこと検証 test 追加（orphan Firestore doc regression gate） | **#145 closed** |
+| #154 | delete-account: partial-failure & auth error code の 5 分岐テスト追加 + `installMocks({...})` refactor（handler 差し込み構造） | **#102 closed** |
+
+### Issue #141 の根本原因特定（open 維持、調査結果は Issue コメント追記）
+
+当初の仮説「Firebase configure 未実行」ではなく、**SwiftData の挙動** が真の原因と判明。
+
+- **root cause**: 同一プロセス内で同じ `@Model` 型（`ClientCache` 等）を 2 つの異なる `ModelContainer` に登録すると SwiftData が SIGTRAP (`EXC_BREAKPOINT`) で terminate。crash log の `x2` register が `type metadata for ClientCache` を指していたことで確定。
+- **検証した 3 つの対症療法（いずれも無効）**:
+  1. `FirebaseTestBootstrap` で dummy `FirebaseOptions` configure → Firebase 警告は消えるがクラッシュ継続
+  2. schema を揃えて `makeClientOnlyTestModelContainer` を `makeTestModelContainer` に alias → crash 継続
+  3. `CareNoteApp.init` で test 時 dummy configure + `isStoredInMemoryOnly: CareNoteApp.isRunningTests` → 52→37 failed に改善するも依然 crash
+- **根本解決の選択肢（いずれも影響範囲大、未着手）**:
+  - A. test target から host app 依存を外す（XcodeGen project.yml 全面見直し）
+  - B. `CareNoteApp.modelContainer` を test 時 `nil` にする（production code に test 分岐）
+  - C. test で app host の既存 ModelContainer を再利用（test 分離性喪失、fixture clean 機構要）
+- **open 維持**: 根本解決は設計変更を要するため本セッションでは着手見送り。再開時は Xcode / SwiftData のバージョン変化も踏まえて再確認すること。
+- 詳細: [#141 issue comment](https://github.com/system-279/carenote-ios/issues/141#issuecomment-4292636150)
+
+### 本セッション適用した運用ルール
+- 過剰起票防止（新規 Issue 起票ゼロ）
+- test 変更は single-file / 小規模のためセルフレビュー止まり（`/review-pr` 6 agent 並列・`/codex review` は閾値未満でスキップ）
+- Issue #141 深掘りは production code revert で clean state 維持（影響範囲大の変更をセッション内で独断実装しない）
+
+Issue 数推移: セッション開始時 open 10 → 終了時 **8**（net -2、#145 / #102 close）。
+
+前セッションまでに完了した Node.js 22 upgrade / admin ID token helper / Phase 0.9 RUNBOOK / 遅延セッションの Codex follow-up 2 PR は変更なし。prod deploy と iOS 実機 smoke test は引き続きユーザー作業待ち。
+
+---
+
+## 前セッション成果（2026-04-22 遅延、参考保持）
+
+2026-04-22 昼セッションで scope 絞りした Codex follow-up 双子 Issue (#127 / #120) を消化。**2 PR merge / 2 Issue close**。
 
 | PR | 内容 | Issue |
 |----|------|-------|
 | #150 | audit-createdby per-tenant 部分結果保持 + testable `auditCreatedBy` export (DI 化、9 test) | **#127 closed** |
 | #151 | transferOwnership errorId 付与 + err.stack 構造化ログ + HttpsError.details enrich (8 test) | **#120 closed** |
 
-### 本セッション適用した運用ルール
-- 過剰起票防止（新規 Issue 起票ゼロ）
-- review agent rating 5-6 は Issue 化せず PR 内で吸収（Array.isArray 判定、empty message fallback は対応 / Error Reporting 連携・dryRun errorId 化は scope 絞り見送り）
-- emulator 必須テストは Test plan 未実行として明記（次セッション or CI emulator 環境へ後送り）
-
-Issue 数推移: セッション開始時 open 12 → 終了時 **10**（net -2）。
-
-前セッションまでに完了した Node.js 22 upgrade / admin ID token helper / Phase 0.9 RUNBOOK / 昼セッションの 7 PR + 過剰起票防止ルールは変更なし。prod deploy と iOS 実機 smoke test は引き続きユーザー作業待ち。
-
 ---
 
-## 前セッション成果（2026-04-22 昼、参考保持）
+## 前々セッション成果（2026-04-22 昼、参考保持）
 
 **7 PR merge / 10 Issue close / 3 Issue scope 絞り**を実施。Codex セカンドオピニオンに基づき「過剰起票」を防ぐ運用ルールを確立した。セッション開始時 open 16 件 → 終了時 12 件（net -4、PR merge 7 件）。
 
@@ -175,7 +202,7 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 - 審査アカウント whitelist 登録確認済（上記 § 1）必須
 - prod 実施はユーザー明示承認必須
 
-## Open Issue（優先度順、2026-04-22 遅延セッション末時点 10 件）
+## Open Issue（優先度順、2026-04-22 夕方セッション末時点 8 件）
 
 ### P0（要対応、open 継続中）
 
@@ -187,24 +214,17 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 
 | # | タイトル | 状態 |
 |---|---------|------|
-| #141 | ClientRepositoryTests 全体実行時の Firebase configure 未実行クラッシュ | 昼セッション起票、原因候補コメント済、修正は別セッション（iOS + XcodeBuildMCP 必要） |
+| #141 | ClientRepositoryTests 全体実行時のクラッシュ（全体テスト連鎖失敗源） | **根本原因特定済（SwiftData 同一プロセス複数 ModelContainer → SIGTRAP）**、根本解決は設計変更要、open 維持 |
 | #91 | アカウント削除後のローカル SwiftData / Outbox クリーンアップ | 既存、要対応 |
 
-### P2 follow-up（scope 絞り済、残り 1 件）
+### P2 機能・テスト拡張（残り 2 件）
 
 | # | タイトル |
 |---|---------|
-| #145 | processItem upload 失敗時の createRecording 未呼出検証 |
-
-> **消化済**: #120 (→ PR #151)、#127 (→ PR #150) は 2026-04-22 遅延セッションで close。
-
-### P2 機能・テスト拡張
-
-| # | タイトル |
-|---|---------|
-| #102 | deleteAccount テスト拡張（partial failure / auth error codes） |
 | #105 | deleteAccount E2E を Firebase Emulator Suite で実装 |
 | #111 | Phase 0.9: prod allowedDomains 有効化（RUNBOOK merged、実施待ち） |
+
+> **消化済**: #120 (→ PR #151)、#127 (→ PR #150) は 2026-04-22 遅延セッションで close。#145 (→ PR #153)、#102 (→ PR #154) は 2026-04-22 夕方セッションで close。
 
 ### 機能拡張（別セッション候補）
 
@@ -224,9 +244,9 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 6. **Day 3-4: 24h 安定監視**（エラー急増なし確認）
 7. **Day 4-5: Phase 0.9 dev 先行検証**（RUNBOOK `docs/runbook/phase-0-9-allowed-domains.md` § 手順 A）
 8. **Day 6+: Phase 0.9 prod 実施**（4/30 期限から切離、審査通過後推奨 → #111 close）
-9. **#91 / #141 の深掘り** — bug 系を先に（#141 は iOS + XcodeBuildMCP、#91 は SwiftData cleanup）
-10. **P2 follow-up 残 (#145) を処理** — 昼/遅延セッションで #120 / #127 を消化済、残 1 件
-11. **#102 / #105 テスト拡張** — Emulator Suite 必要、時間確保セッションで
+9. **#141 根本解決** — 本セッションで調査完了（SwiftData 同一プロセス複数 ModelContainer）、A/B/C 選択肢いずれも影響範囲大、時間確保セッションで着手
+10. **#91 アカウント削除後 SwiftData / Outbox クリーンアップ**（bug 系、iOS + XcodeBuildMCP 必要）
+11. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで、#102 の追加 branch coverage は本セッションで closed）
 
 > **Codex セカンドオピニオン要点（2026-04-22）**: (1) 一括 deploy 禁止（原因切り分け不能化）、(2) Node 22 を最優先・単独、(3) Phase 0.9 を 4/30 期限から切離、(4) 各 deploy 後は即時 smoke test + 数時間エラー監視、最後にまとめて 24h 監視、(5) 軽量 smoke test チェックリストで十分（過剰ドキュメント化回避）。
 
@@ -248,10 +268,10 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 
 ### Swift Testing: 全体テスト実行時の ClientRepositoryTests クラッシュ（#141）
 
-- 個別 `xcodebuild -only-testing:` では全 PASS
-- 全体 `xcodebuild test` では ClientRepositoryTests.fetchAll で Firebase 未 configure クラッシュ → 後続 66 件が連鎖失敗扱い
-- **workaround**: 個別 test suite を `-only-testing:` で呼ぶ
-- 開発ブロッカーではないが、CI / PR 確認時の混乱源
+- 個別 `xcodebuild -only-testing:` では PASS するスイートと、Xcode 26 β 環境では単独でも crash するスイートあり（Xcode / SwiftData のバージョン差に依存）
+- **真の root cause（2026-04-22 夕方セッションで特定）**: 同一プロセス内で同じ `@Model` 型を 2 つの異なる `ModelContainer` に登録すると SwiftData 内部で SIGTRAP。詳細は [#141 issue comment](https://github.com/system-279/carenote-ios/issues/141#issuecomment-4292636150)
+- **workaround**: CI は Xcode 16.3 で通過。ローカルで個別 test suite を `-only-testing:` で呼び分ける
+- **根本解決**: 設計変更（test host app 外し / `modelContainer` Optional 化 / app host ModelContainer 再利用）いずれも影響範囲大、時間確保セッションで着手
 
 ## ADR
 
@@ -264,12 +284,18 @@ Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Funct
 - [phase-0-9-allowed-domains.md](../runbook/phase-0-9-allowed-domains.md) — Phase 0.9 allowedDomains 有効化手順（draft、ユーザー作業待ち）
 - [prod-deploy-smoke-test.md](../runbook/prod-deploy-smoke-test.md) — prod deploy 統合 smoke test チェックリスト（2026-04-22 新設、Codex 推奨段階 deploy 方針に対応）
 
-## 参考資料（本セッション = 2026-04-22 遅延）
+## 参考資料（本セッション = 2026-04-22 夕方）
+
+- [PR #153 OutboxSyncService upload 失敗時 createRecording 未呼出検証](https://github.com/system-279/carenote-ios/pull/153)
+- [PR #154 delete-account partial-failure & auth error code の 5 分岐追加](https://github.com/system-279/carenote-ios/pull/154)
+- [Issue #141 根本原因特定コメント](https://github.com/system-279/carenote-ios/issues/141#issuecomment-4292636150)
+
+## 参考資料（前セッション = 2026-04-22 遅延）
 
 - [PR #150 audit-createdby per-tenant 部分結果保持](https://github.com/system-279/carenote-ios/pull/150)
 - [PR #151 transferOwnership errorId + err.stack](https://github.com/system-279/carenote-ios/pull/151)
 
-## 参考資料（前セッション = 2026-04-22 昼）
+## 参考資料（前々セッション = 2026-04-22 昼）
 
 - [PR #138 delete-account mock 深さ制限](https://github.com/system-279/carenote-ios/pull/138)
 - [PR #139 Rules エッジケース part 2](https://github.com/system-279/carenote-ios/pull/139)
