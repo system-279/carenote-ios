@@ -7,7 +7,7 @@
 | PR | 内容 | Issue |
 |----|------|-------|
 | #171 (merged) | `docs/runbook/prod-deploy-smoke-test.md` の Day 1 実施ログ記録（PASS） | - |
-| #169 (closed) | OutboxSyncServiceTests を shared container に差し戻す CI 再現確認 probe。local 3 回連続 PASS で再現不能 → close | #164 調査完了 |
+| #169 (closed) | OutboxSyncServiceTests を shared container に差し戻す CI 再現確認 probe。local 3 回連続 PASS で再現不能 → close | #164 **真因候補確立（仮説段階、open 維持）** |
 
 ### 主要判断のハイライト
 
