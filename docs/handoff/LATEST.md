@@ -1,3 +1,67 @@
+# Handoff — 2026-04-22 夜セッション: #165 Schema drift lint merge
+
+## セッション成果サマリ（2026-04-22 夜セッション）
+
+前セッション (2026-04-22 日中、PR #163) で起票した **Issue #165 (Schema drift risk) を最小対応で close**。`@Model` 型追加時の drift を CI で機械的に検知する lint を導入し、PR #163 の `SharedTestModelContainer` 方式を regression gate で保護した。加えて、初版 lint のレビュー過程で **line-oriented grep が multi-line `ModelContainer(for:` を silent pass する重大欠陥** を発見・修正。修正後の lint が既存の `OutboxSyncServiceTests.swift` violation を正しく検出し、Issue #164 追跡箇所として暫定許可（依存関係を #164 へ記録）。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #167 | `scripts/lint-model-container.sh` + CI step + `SwiftDataModels.swift` drift checklist | **#165 closed** |
+
+### 設計判断のハイライト
+
+- **PM/PL 判断で A 最小対応採用、B postpone**: Issue #165 本文に A (lint + doc comment) / B (`AppSchema.allModelTypes` 単一ソース化) の 2 案が提示されていたが、B は 8-10 ファイル改修で Evaluator 分離対象、直近 PR #163 でテスト基盤を触ったばかりで regression risk 高い。現状 4 `@Model` 型安定・新規追加予定なしで A の detection gate で十分と判断
+- **初版 lint の C1 欠陥発見**: `/review-pr` 6 並列レビューで silent-failure-hunter + pr-test-analyzer が独立で指摘、pr-test-analyzer は fabricated input で実証確認。grep の `\s` は newline にマッチせず、**`SharedTestModelContainer` 自身が multi-line style** のため、同 style のコピペ violation を全て silent pass する致命的欠陥。`perl -0777` slurp mode で修正し、generic + whitespace variants も同時に catch
+- **隠れ violation 顕在化**: 修正後 lint を走らせたら `OutboxSyncServiceTests.swift:84-87` の既存 `ModelContainer(for:)` を検出（PR #163 で Issue #164 追跡中の per-suite container 局所 rollback）。旧 lint が silent pass していた実証 → **C1 修正の正当性が現物で証明された**。`ALLOWED_TEST_FILES` 配列化で Issue #164 参照付き暫定許可、#164 close 時に削除する依存関係を script 内コメント + #164 Issue コメントに記録
+- **Positive pre-flight assertion 追加**: 許可ファイルの existence + pattern 含有を事前検証。helper 削除/rename や regex 破損でも silent pass しない（silent-failure-hunter H1/H2 対応）
+
+### レビュー運用
+
+- `/review-pr` 6 並列（type-design は新規型なしでスキップ、5 並列実動）:
+  - code-reviewer / comment-analyzer / code-simplifier: Approve
+  - **silent-failure-hunter: Critical 1 (C1 conf 95) + High 2 (H1 conf 90, H2 conf 85)**
+  - **pr-test-analyzer: Important 1 (rating 7、実証済)**
+- 初版 C1/H1/H2/Important を 1 commit で同時修正（commit `5ff4bf7`）、再 push で CI green
+- Evaluator 分離プロトコル (5 files+) は該当せず（3 ファイル +77 行の小規模 PR）
+
+### 本セッション起票（実害ベース）
+
+なし。Issue #164 への暫定許可クロス参照はコメント追加のみで新規 Issue 化せず（triage rule #5 未該当）。
+
+### Issue 数推移
+
+セッション開始時 open 8 → 終了時 **7**（net **-1**、#165 close）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 8 |
+| #165 close (PR #167) | -1 | **7** |
+
+> CLAUDE.md KPI「Issue は net で減らすべき」達成。rating ≥ 7 の指摘を全て対応済、rating 5-6 の「production-side Schema lint 拡張」は Issue #165 option B 相当で postpone（triage rule 遵守）。
+
+### CI の現状
+
+- main 最新 (`73fd304`, PR #167) で iOS Tests job が **36m54s で green**（全 135 tests PASS、macOS runner の初期 cold start 込み）
+- 新 lint step `Lint - SwiftData schema drift guard (Issue #165)` が CI 環境（macOS 15、bsd grep、macOS 標準 perl）で期待通り動作確認: `lint-model-container: OK (2 approved file(s) register @Model types)`
+
+### 次セッション推奨アクション（本セッション反映後、優先順）
+
+1. **審査アカウント whitelist 登録確認**（Firestore Console で `tenants/279/whitelist` に `demo-reviewer@carenote.jp` 確認 — Phase 0.9 前提ゲート、前セッションから継続）
+2. **iOS 実機 smoke test**（Phase 0.5 / Phase 1 / Node 22 統合動作確認、前セッションから継続）
+3. **Day 1-3 prod deploy 段階実施**（Node 22 → Phase 0.5 Rules → Phase 1 transferOwnership、各単独、24h 監視。`docs/runbook/prod-deploy-smoke-test.md` 使用）
+4. **#164 OutboxSyncServiceTests shared container 真因調査**（本セッションで新 lint が既存 violation を現物検出したことで調査優先度が上がった。ALLOWED_TEST_FILES 暫定許可削除が close 条件。Issue 本文 4 仮説を `/impl-plan` で順序立てて検証推奨）
+5. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで）
+6. **Phase 0.9 dev 先行検証 → prod 実施**（審査通過後、#111 close）
+
+> 本セッションで lint が OutboxSyncServiceTests violation を catch した事実は、#164 の per-suite container が「意図的な rollback」として構造化されたことを意味する。#164 真因調査の副産物として lint の ALLOWED_TEST_FILES 削除 + doc comment 更新が連動する依存関係を持つ。
+
+### 参考資料（本セッション = 2026-04-22 夜）
+
+- [PR #167 Schema drift lint + CI gate](https://github.com/system-279/carenote-ios/pull/167)
+- [Issue #164 OutboxSync 暫定許可クロス参照コメント](https://github.com/system-279/carenote-ios/issues/164#issuecomment-4294661569)
+
+---
+
 # Handoff — 2026-04-22 日中セッション: #141 SwiftData SIGTRAP 根本解決 merge
 
 ## セッション成果サマリ（2026-04-22 日中セッション）
@@ -158,89 +222,11 @@ Issue #91（アカウント削除後のローカル SwiftData / Outbox クリー
 
 ---
 
-## 前セッション成果（2026-04-22 夕方、参考保持）
+## 過去セッション詳細（アーカイブ）
 
-## セッション成果サマリ（2026-04-22 夕方セッション）
-
-2026-04-22 遅延セッション末に残っていた P2 follow-up 2 件を消化。**2 PR merge / 2 Issue close**。あわせて Issue #141（全体テスト実行クラッシュ）を深掘りし、**真の根本原因を特定**して Issue コメントに記録。
-
-| PR | 内容 | Issue |
-|----|------|-------|
-| #153 | OutboxSyncService: upload 失敗時に `createRecording` が呼ばれないこと検証 test 追加（orphan Firestore doc regression gate） | **#145 closed** |
-| #154 | delete-account: partial-failure & auth error code の 5 分岐テスト追加 + `installMocks({...})` refactor（handler 差し込み構造） | **#102 closed** |
-
-### Issue #141 の根本原因特定（open 維持、調査結果は Issue コメント追記）
-
-当初の仮説「Firebase configure 未実行」ではなく、**SwiftData の挙動** が真の原因と判明。
-
-- **root cause**: 同一プロセス内で同じ `@Model` 型（`ClientCache` 等）を 2 つの異なる `ModelContainer` に登録すると SwiftData が SIGTRAP (`EXC_BREAKPOINT`) で terminate。crash log の `x2` register が `type metadata for ClientCache` を指していたことで確定。
-- **検証した 3 つの対症療法（いずれも無効）**:
-  1. `FirebaseTestBootstrap` で dummy `FirebaseOptions` configure → Firebase 警告は消えるがクラッシュ継続
-  2. schema を揃えて `makeClientOnlyTestModelContainer` を `makeTestModelContainer` に alias → crash 継続
-  3. `CareNoteApp.init` で test 時 dummy configure + `isStoredInMemoryOnly: CareNoteApp.isRunningTests` → 52→37 failed に改善するも依然 crash
-- **根本解決の選択肢（いずれも影響範囲大、未着手）**:
-  - A. test target から host app 依存を外す（XcodeGen project.yml 全面見直し）
-  - B. `CareNoteApp.modelContainer` を test 時 `nil` にする（production code に test 分岐）
-  - C. test で app host の既存 ModelContainer を再利用（test 分離性喪失、fixture clean 機構要）
-- **open 維持**: 根本解決は設計変更を要するため本セッションでは着手見送り。再開時は Xcode / SwiftData のバージョン変化も踏まえて再確認すること。
-- 詳細: [#141 issue comment](https://github.com/system-279/carenote-ios/issues/141#issuecomment-4292636150)
-
-### 本セッション適用した運用ルール
-- 過剰起票防止（新規 Issue 起票ゼロ）
-- test 変更は single-file / 小規模のためセルフレビュー止まり（`/review-pr` 6 agent 並列・`/codex review` は閾値未満でスキップ）
-- Issue #141 深掘りは production code revert で clean state 維持（影響範囲大の変更をセッション内で独断実装しない）
-
-Issue 数推移: セッション開始時 open 10 → 終了時 **8**（net -2、#145 / #102 close）。
-
-前セッションまでに完了した Node.js 22 upgrade / admin ID token helper / Phase 0.9 RUNBOOK / 遅延セッションの Codex follow-up 2 PR は変更なし。prod deploy と iOS 実機 smoke test は引き続きユーザー作業待ち。
+2026-04-22 夕方 / 遅延 / 昼 セッションの詳細は [archive/2026-04-history.md](./archive/2026-04-history.md) に退避。主な完了内容: Phase 0.5 Rules / Phase 1 transferOwnership / Node 22 upgrade / audit-createdby / 関連 follow-up PR 群。設計判断の追跡時のみ参照。
 
 ---
-
-## 前セッション成果（2026-04-22 遅延、参考保持）
-
-2026-04-22 昼セッションで scope 絞りした Codex follow-up 双子 Issue (#127 / #120) を消化。**2 PR merge / 2 Issue close**。
-
-| PR | 内容 | Issue |
-|----|------|-------|
-| #150 | audit-createdby per-tenant 部分結果保持 + testable `auditCreatedBy` export (DI 化、9 test) | **#127 closed** |
-| #151 | transferOwnership errorId 付与 + err.stack 構造化ログ + HttpsError.details enrich (8 test) | **#120 closed** |
-
----
-
-## 前々セッション成果（2026-04-22 昼、参考保持）
-
-**7 PR merge / 10 Issue close / 3 Issue scope 絞り**を実施。Codex セカンドオピニオンに基づき「過剰起票」を防ぐ運用ルールを確立した。セッション開始時 open 16 件 → 終了時 12 件（net -4、PR merge 7 件）。
-
-### マージ済み PR（前セッション昼分、参考保持）
-
-| PR | 内容 | Issue |
-|----|------|-------|
-| #138 | delete-account.test.js mock の深いサブコレクション偽陽性修正 | **#104 closed** |
-| #139 | Firestore Rules エッジケーステスト part 2（role 値バリエーション + createdBy 書換防止 + 型崩れ）9 件追加 | **#135 closed** |
-| #142 | `currentUidProvider` の @MainActor 越境を型で明示（@preconcurrency 削除） | **#106 closed** |
-| #144 | `processItem` 主経路統合テスト 3 件追加（AC1 + C-Cdx-1 regression gate） | **#107 closed** |
-| #146 | firebase.json の重複 hosting キーを削除 | **#131 closed** |
-| #147 | upload-testflight.sh に entitlements 検証ステップ追加 | **#71 closed** |
-| #126 | audit-createdby.mjs 堅牢性強化（token cache / pagination guard / retry） | **#103 closed** |
-
-### Issue 整理（過剰起票防止ルール適用）
-
-Codex セカンドオピニオン（下記運用ルール参照）に基づき以下を整理:
-
-| # | 処置 | 理由 |
-|---|------|------|
-| #114 | **close** | backfill 専用の throwaway tool、dev/prod 両 backfill 実行済、統合テスト追加の ROI 不整合 |
-| #140 | **close（本セッション中に起票したのを撤回）** | rating 5-6 の「regression gate 対称性向上」で実害ゼロ |
-| #143 | **close（本セッション中に起票したのを撤回）** | silent-failure-hunter confidence 55、uid 失敗ログ欠落の実害なし |
-| #120 | **scope 絞り** | 多段レビュー follow-up を全て Issue 化していた。errorId 付与（実運用での追跡性）のみ残す |
-| #127 | **scope 絞り** | 4 項目 → per-tenant 部分結果保持（実害ベース）のみ残す |
-| #145 | **scope 絞り** | 4 項目 → I-1 upload 失敗時 createRecording 未呼出 regression gate のみ残す |
-
-### 本セッション起票（実バグのみ）
-
-| # | タイトル | Priority | 状態 |
-|---|---------|---------|------|
-| #141 | テストスイート: ClientRepositoryTests.fetchAll で Firebase configure 未実行によるクラッシュ | P2 bug | 原因候補コメント追加（Swift Testing runner と CareNoteApp.isRunningTests の相互作用）、深掘り未了 |
 
 ## 確立した運用ルール（Codex セカンドオピニオン 2026-04-22）
 
