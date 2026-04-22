@@ -8,7 +8,7 @@ import SwiftUI
 
 @main
 struct CareNoteApp: App {
-    @State private var authViewModel = AuthViewModel()
+    @State private var authViewModel: AuthViewModel
 
     let modelContainer: ModelContainer
 
@@ -29,14 +29,22 @@ struct CareNoteApp: App {
             isStoredInMemoryOnly: false
         )
 
+        let container: ModelContainer
         do {
-            modelContainer = try ModelContainer(
+            container = try ModelContainer(
                 for: schema,
                 configurations: [modelConfiguration]
             )
         } catch {
             fatalError("ModelContainer の初期化に失敗しました: \(error)")
         }
+        modelContainer = container
+
+        _authViewModel = State(
+            wrappedValue: AuthViewModel(
+                localDataCleaner: SwiftDataLocalDataCleaner(modelContainer: container)
+            )
+        )
     }
 
     private static var isRunningTests: Bool {

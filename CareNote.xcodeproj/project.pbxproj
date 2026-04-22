@@ -43,6 +43,7 @@
 		94DF9E5A0CCD3408F6EC31B7 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036156B4FFB1416DCC51D265 /* AuthViewModel.swift */; };
 		95566BC3B100A1D36D47B752 /* FirestoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E882F166342B21411BFDB30A /* FirestoreService.swift */; };
 		9687CC301087709E68BD17C4 /* RecordingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B373FAB82B749E309A7CA8 /* RecordingRepository.swift */; };
+		99ABEE1414D515B6DCE19AEF /* LocalDataCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C881A8F928E26F120A4C84 /* LocalDataCleaner.swift */; };
 		9B37E00611DD378F04C08327 /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47604C61474A5EA44EABDF67 /* RecordingView.swift */; };
 		9CD46FF561329A6CE6758629 /* TemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F7A54E6C83AA0B51126525 /* TemplateListView.swift */; };
 		A26180A6D0052F77736DE8C0 /* RecordingConfirmViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 037EF32E53608FE7657893D8 /* RecordingConfirmViewModel.swift */; };
@@ -92,6 +93,7 @@
 		19852073B5385852F328F281 /* StorageServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageServiceTests.swift; sourceTree = "<group>"; };
 		1CEEA689FBC6B94B6C315907 /* CareNote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CareNote.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D1751BC835BB28519295961 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		23C881A8F928E26F120A4C84 /* LocalDataCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDataCleaner.swift; sourceTree = "<group>"; };
 		2A76D8BBD11811BC4D741477 /* TemplateCreateViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateCreateViewModelTests.swift; sourceTree = "<group>"; };
 		2D764EF3D3EA6CDB7FD4A7B9 /* CareNoteTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CareNoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DD7DBB99EAE4823CA33FA82 /* ClientSelectViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSelectViewModelTests.swift; sourceTree = "<group>"; };
@@ -210,6 +212,7 @@
 				A0B042EBE580E9D6CBA65F7C /* AudioRecorderService.swift */,
 				2F6099F7F11B6C29BA776D6C /* ClientCacheService.swift */,
 				E882F166342B21411BFDB30A /* FirestoreService.swift */,
+				23C881A8F928E26F120A4C84 /* LocalDataCleaner.swift */,
 				31A63277501286D0902113FA /* OutboxSyncService.swift */,
 				5145C7CB43880EF7C55A94B3 /* StorageService.swift */,
 				CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */,
@@ -542,6 +545,7 @@
 				8A4E94E3CD9A0B866817E387 /* FirestoreModels.swift in Sources */,
 				95566BC3B100A1D36D47B752 /* FirestoreService.swift in Sources */,
 				3BD5BC7613B343D31D862160 /* KeychainHelper.swift in Sources */,
+				99ABEE1414D515B6DCE19AEF /* LocalDataCleaner.swift in Sources */,
 				F503CBD6C43A313174F070AA /* OutboxSyncService.swift in Sources */,
 				3F752F8424C4122A17EF1FEE /* PresetTemplates.swift in Sources */,
 				C6CF4C9D8589E6E86057F63E /* RecordingConfirmView.swift in Sources */,

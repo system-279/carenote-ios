@@ -116,15 +116,20 @@ final class AuthViewModel {
     private let authProvider: AuthProviding
     let appleSignInCoordinator = AppleSignInCoordinator()
     private let emailAuthProvider: EmailAuthProviding
+    /// アカウント削除後にローカル SwiftData / Outbox をクリアするための依存。
+    /// DI 未提供時は no-op（ログインのみのユニットテストでは注入不要）。
+    var localDataCleaner: LocalDataCleaning?
     private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "AuthVM")
 
     init(
         authProvider: AuthProviding = FirebaseGoogleAuthProvider(),
-        emailAuthProvider: EmailAuthProviding = FirebaseEmailAuthProvider()
+        emailAuthProvider: EmailAuthProviding = FirebaseEmailAuthProvider(),
+        localDataCleaner: LocalDataCleaning? = nil
     ) {
         self.authProvider = authProvider
         self.emailAuthProvider = emailAuthProvider
+        self.localDataCleaner = localDataCleaner
     }
 
     deinit {
@@ -320,6 +325,18 @@ final class AuthViewModel {
             Self.logger.info("Post-deletion signOut returned error (expected): \(error.localizedDescription, privacy: .public)")
         }
         GIDSignIn.sharedInstance.signOut()
+
+        // ローカル SwiftData / Outbox のクリーンアップ（best-effort）。失敗しても Auth 削除は
+        // 既に完了しているため deleteAccount 全体としては成功扱い。次ユーザーログイン時の
+        // 情報漏洩や Outbox 誤送信を防ぐのが目的（#91）。
+        if let cleaner = localDataCleaner {
+            do {
+                try await cleaner.purgeAll()
+            } catch {
+                Self.logger.error("Post-deletion local data purge failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         authState = .signedOut
         displayName = nil
     }

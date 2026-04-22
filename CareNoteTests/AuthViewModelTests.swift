@@ -38,6 +38,20 @@ final class MockEmailAuthProvider: @unchecked Sendable, EmailAuthProviding {
     }
 }
 
+// MARK: - MockLocalDataCleaner
+
+final class MockLocalDataCleaner: @unchecked Sendable, LocalDataCleaning {
+    var purgeCallCount = 0
+    var purgeError: Error?
+
+    func purgeAll() async throws {
+        purgeCallCount += 1
+        if let error = purgeError {
+            throw error
+        }
+    }
+}
+
 // MARK: - AuthViewModelTests
 
 @Suite("AuthViewModel Tests")
@@ -128,6 +142,34 @@ struct AuthViewModelTests {
 
         // signIn完了後はisLoadingがfalseに戻る
         #expect(vm.isLoading == false)
+    }
+
+    // MARK: - localDataCleaner DI （#91）
+    //
+    // deleteAccount 全体の integration test は Firebase 依存（Auth.auth().revokeToken /
+    // Functions.httpsCallable）のため本ユニットテストでは扱わない。E2E Emulator Suite（#105）
+    // で対応予定。本スイートでは DI 配線の整合性のみ検証する。
+
+    @Test @MainActor
+    func localDataCleaner注入時にプロパティへセットされる() {
+        let cleaner = MockLocalDataCleaner()
+        let vm = AuthViewModel(
+            authProvider: MockAuthProvider(),
+            emailAuthProvider: MockEmailAuthProvider(),
+            localDataCleaner: cleaner
+        )
+
+        #expect(vm.localDataCleaner != nil)
+    }
+
+    @Test @MainActor
+    func localDataCleaner未注入時はnilになる() {
+        let vm = AuthViewModel(
+            authProvider: MockAuthProvider(),
+            emailAuthProvider: MockEmailAuthProvider()
+        )
+
+        #expect(vm.localDataCleaner == nil)
     }
 }
 
