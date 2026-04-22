@@ -133,10 +133,36 @@ firebase deploy --only functions --project carenote-prod-279
 ### 実施ログ記入欄
 
 ```
-- 実施日時: YYYY-MM-DD HH:MM JST
-- 実施者: <GitHub handle>
-- 判定: PASS / FAIL
-- 異常時対応: （あれば）
+- 実施日時: 2026-04-23 03:51 JST (UTC 2026-04-22T18:51:04Z)
+- 実施者: system-279
+- 判定: PASS
+- 実行スコープ: Opt A（段階 deploy 原則で runtime 更新のみ分離、transferOwnership は Day 3 で別 deploy）
+- 実行コマンド:
+    CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod \
+      firebase deploy \
+        --only functions:beforeSignIn,functions:deleteAccount \
+        --project carenote-prod-279
+- 対象関数の変更:
+  - beforeSignIn: nodejs20 → nodejs22 (runtime update のみ、コード変更なし)
+  - deleteAccount: nodejs20 → nodejs22 (runtime update のみ、コード変更なし)
+- 事前確認:
+  - dev functions 3 関数 nodejs22 ACTIVE（事前稼働中）
+  - dev 過去 48h Cloud Logging ERROR/WARNING 0 件（NOTICE 各 2 件のみ、lifecycle）
+  - iOS code CI 135 tests PASS（commit 581bf13）
+- 事後確認:
+  - firebase functions:list: beforeSignIn / deleteAccount ともに nodejs22 / ACTIVE
+  - Cloud Logging 15 分監視 (18:51:04Z→19:06:04Z): ERROR/WARNING 0 件
+  - 実機 smoke test:
+    - ① サインアウト→Google ログイン: PASS
+    - ② 新規録音: PASS
+    - ③ 文字起こし編集: PASS
+    - ④ 録音リスト表示: PASS
+- baseline 記録:
+  - エラー率: 0% (deploy 後 15 分)
+  - p95 レイテンシ: deploy 直後のため有意な計測不可（Day 2 以降で比較基準を確立）
+  - NOTICE (lifecycle): beforeSignIn / deleteAccount 各 2 件（container 起動ログ、正常）
+- 異常時対応: なし
+- 次工程: Day 2 (Phase 0.5 Rules prod deploy) に 12h 経過後に着手可
 ```
 
 ---
