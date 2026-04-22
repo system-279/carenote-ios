@@ -10,7 +10,7 @@ struct ClientRepositoryTests {
 
     @MainActor
     private func makeRepository() throws -> (ClientRepository, ModelContainer) {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let repo = ClientRepository(modelContext: container.mainContext)
         return (repo, container)
     }

@@ -3,24 +3,14 @@ import Foundation
 import SwiftData
 import Testing
 
-@Suite("TemplateListViewModel Tests")
+@Suite("TemplateListViewModel Tests", .serialized)
 struct TemplateListViewModelTests {
-
-    private static func makeContainer() throws -> ModelContainer {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
-        let config = ModelConfiguration(url: url)
-        return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
-            configurations: config
-        )
-    }
 
     // MARK: - loadTemplates
 
     @Test @MainActor
     func loadTemplatesでSwiftDataからテンプレートを読み込む() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         let t1 = OutputTemplate(name: "カスタム1", prompt: "p1", outputType: OutputType.custom.rawValue, isPreset: false)
@@ -40,7 +30,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func loadTemplatesでプリセットとカスタムが分類される() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         PresetTemplates.seedIfNeeded(modelContext: context)
@@ -62,7 +52,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func tenantIdがnilの場合はテナントテンプレートをスキップ() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         mock.fetchResult = [
             FirestoreTemplate(id: "1", name: "T", prompt: "P", outputType: .custom, createdBy: "u", createdByName: "U", createdAt: Date(), updatedAt: Date()),
@@ -81,7 +71,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func テナントテンプレート読み込み成功() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         mock.fetchResult = [
             FirestoreTemplate(id: "1", name: "共有1", prompt: "P1", outputType: .custom, createdBy: "u1", createdByName: "User1", createdAt: Date(), updatedAt: Date()),
@@ -102,7 +92,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func テナントテンプレート読み込み失敗でerrorMessage設定() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         mock.fetchError = NSError(domain: "test", code: 1)
 
@@ -122,7 +112,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func プリセットテンプレートは削除できない() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         PresetTemplates.seedIfNeeded(modelContext: context)
@@ -141,7 +131,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func カスタムテンプレートを削除できる() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         let custom = OutputTemplate(name: "削除対象", prompt: "p", outputType: OutputType.custom.rawValue, isPreset: false)
@@ -164,7 +154,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func admin権限ありでテナントテンプレート削除成功() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: .custom, createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
 
@@ -184,7 +174,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func admin権限なしではテナントテンプレート削除されない() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: .custom, createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())
 
@@ -204,7 +194,7 @@ struct TemplateListViewModelTests {
 
     @Test @MainActor
     func テナントテンプレート削除失敗でerrorMessage設定() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         mock.deleteError = NSError(domain: "test", code: 1)
         let tmpl = FirestoreTemplate(id: "tmpl-1", name: "共有", prompt: "P", outputType: .custom, createdBy: "u1", createdByName: "U1", createdAt: Date(), updatedAt: Date())

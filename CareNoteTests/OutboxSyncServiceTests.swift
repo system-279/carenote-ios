@@ -66,9 +66,17 @@ private actor StubTranscriber: Transcribing {
     }
 }
 
-@Suite("OutboxSyncService incrementRetryCount Tests")
+@Suite("OutboxSyncService incrementRetryCount Tests", .serialized)
 struct OutboxSyncServiceTests {
 
+    // Shared container (SharedTestModelContainer) を使うと本 suite の
+    // processQueueImmediately 系 2 test が uploadCalls.count == 0 で回帰する。
+    // OutboxSyncService は modelContainer.mainContext をそのまま使っているため
+    // 当初仮説（独自 ModelContext 派生）は誤り。真因は未確定（候補: cleanup
+    // timing と async hop の race、cross-suite state pollution 等）。
+    // Issue #164 で真因調査し shared container へ合流させるまでは per-suite
+    // container を維持する。
+    @MainActor
     private static func makeContainer() throws -> ModelContainer {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
@@ -502,8 +510,9 @@ struct OutboxSyncServiceTests {
     ///   `FileManager.default.fileExists(atPath:)` ガード（stale item 除外）を
     ///   通過させるために必要。呼出側は `defer { try? FileManager.default.removeItem(atPath:) }`
     ///   でクリーンアップする。
+    @MainActor
     private static func setupContainerWithAudioFile() throws -> (ModelContainer, String) {
-        let container = try makeContainer()
+        let container = try Self.makeContainer()
         let audioPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("test-audio-\(UUID().uuidString).m4a").path
         try Data().write(to: URL(fileURLWithPath: audioPath))

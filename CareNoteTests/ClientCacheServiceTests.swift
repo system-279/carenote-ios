@@ -36,7 +36,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func キャッシュ空の場合needsRefreshはtrue() throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
         let service = ClientCacheService(clientManager: manager, modelContainer: container)
 
@@ -45,7 +45,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func キャッシュ新鮮な場合needsRefreshはfalse() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
         await manager.setClients([
             FirestoreClient(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
@@ -59,7 +59,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func forceRefreshでFirestoreデータがキャッシュされる() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
         await manager.setClients([
             FirestoreClient(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
@@ -75,7 +75,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func getCachedClientsはふりがな順にソートされる() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
         await manager.setClients([
             FirestoreClient(id: "c1", name: "山田太郎", furigana: "やまだたろう"),
@@ -93,7 +93,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func forceRefreshで既存キャッシュが置き換わる() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
 
         await manager.setClients([
@@ -116,7 +116,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func Firestoreエラー時にrefreshFailedエラー() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
         await manager.setError(NSError(domain: "Test", code: 1))
 
@@ -129,7 +129,7 @@ struct ClientCacheServiceTests {
 
     @Test @MainActor
     func refreshIfNeededはキャッシュ新鮮時にスキップ() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let manager = MockClientManager()
         await manager.setClients([
             FirestoreClient(id: "c1", name: "テスト", furigana: "てすと"),

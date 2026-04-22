@@ -3,18 +3,8 @@ import Foundation
 import SwiftData
 import Testing
 
-@Suite("RecordingListViewModel Tests")
+@Suite("RecordingListViewModel Tests", .serialized)
 struct RecordingListViewModelTests {
-
-    private static func makeContainer() throws -> ModelContainer {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
-        let config = ModelConfiguration(url: url)
-        return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self,
-            configurations: config
-        )
-    }
 
     private static func makeErrorRecording(id: UUID = UUID(), context: ModelContext) -> RecordingRecord {
         let recording = RecordingRecord(
@@ -35,7 +25,7 @@ struct RecordingListViewModelTests {
 
     @Test @MainActor
     func retryRecordingでステータスがpendingにリセットされる() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
         let vm = RecordingListViewModel(recordingRepository: repo)
@@ -70,7 +60,7 @@ struct RecordingListViewModelTests {
 
     @Test @MainActor
     func saveTranscriptionでテキストがSwiftDataに保存される() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
         let vm = RecordingListViewModel(recordingRepository: repo)
@@ -98,7 +88,7 @@ struct RecordingListViewModelTests {
 
     @Test @MainActor
     func deleteRecordingでリストから除外される() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
         let vm = RecordingListViewModel(recordingRepository: repo)
