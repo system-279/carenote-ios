@@ -3,23 +3,13 @@ import Foundation
 import SwiftData
 import Testing
 
-@Suite("RecordingConfirmViewModel Tests")
+@Suite("RecordingConfirmViewModel Tests", .serialized)
 struct RecordingConfirmViewModelTests {
-
-    private static func makeContainer() throws -> ModelContainer {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
-        let config = ModelConfiguration(url: url)
-        return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
-            configurations: config
-        )
-    }
 
     // tenantId を空にしてFirestore呼び出しをスキップ（テスト環境ではFirebaseApp未初期化）
     @Test @MainActor
     func loadTemplatesでプリセットが自動seedされる() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         let vm = RecordingConfirmViewModel(
@@ -41,7 +31,7 @@ struct RecordingConfirmViewModelTests {
 
     @Test @MainActor
     func loadTemplatesで既存テンプレートがある場合は再seedしない() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         PresetTemplates.seedIfNeeded(modelContext: context)
@@ -64,7 +54,7 @@ struct RecordingConfirmViewModelTests {
 
     @Test @MainActor
     func loadTemplatesでプリセットが先頭にソートされる() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         let custom = OutputTemplate(
@@ -94,7 +84,7 @@ struct RecordingConfirmViewModelTests {
 
     @Test @MainActor
     func デフォルト選択は最初のプリセット() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
 
         let vm = RecordingConfirmViewModel(
@@ -114,7 +104,7 @@ struct RecordingConfirmViewModelTests {
 
     @Test @MainActor
     func テナントテンプレート取得失敗時にerrorMessageが設定されプリセットは残る() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let mock = MockTemplateService()
         mock.fetchError = NSError(domain: "test", code: 1)

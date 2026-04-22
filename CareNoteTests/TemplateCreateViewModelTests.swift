@@ -5,24 +5,14 @@ import Testing
 
 // MARK: - TemplateCreateViewModelTests
 
-@Suite("TemplateCreateViewModel Tests")
+@Suite("TemplateCreateViewModel Tests", .serialized)
 struct TemplateCreateViewModelTests {
-
-    private static func makeContainer() throws -> ModelContainer {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
-        let config = ModelConfiguration(url: url)
-        return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
-            configurations: config
-        )
-    }
 
     // MARK: - Validation
 
     @Test @MainActor
     func 空の名前ではisValidがfalse() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             firestoreService: MockTemplateService()
@@ -34,7 +24,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func 空のプロンプトではisValidがfalse() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             firestoreService: MockTemplateService()
@@ -46,7 +36,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func 空白のみの名前ではisValidがfalse() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             firestoreService: MockTemplateService()
@@ -58,7 +48,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func 名前とプロンプト両方あればisValidがtrue() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             firestoreService: MockTemplateService()
@@ -72,7 +62,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func admin権限とtenantIdがあればテナントスコープ選択可能() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             tenantId: "tenant-1",
@@ -84,7 +74,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func admin権限なしではテナントスコープ選択不可() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             tenantId: "tenant-1",
@@ -96,7 +86,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func tenantIdなしではテナントスコープ選択不可() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             tenantId: nil,
@@ -110,7 +100,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func 個人テンプレートの保存がSwiftDataに保存される() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let vm = TemplateCreateViewModel(
             modelContext: context,
@@ -133,7 +123,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func テナントテンプレートの保存がFirestoreServiceを呼ぶ() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
@@ -157,7 +147,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func テナント保存でuserIdがnilの場合はエラー() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
@@ -179,7 +169,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func テナント保存でFirestore失敗時にerrorMessage設定() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         mock.createError = NSError(domain: "test", code: 1)
         let vm = TemplateCreateViewModel(
@@ -203,7 +193,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func テナントテンプレートの編集でupdateが呼ばれる() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         let existing = FirestoreTemplate(
             id: "tmpl-1",
@@ -237,7 +227,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func テナントテンプレート更新でFirestore失敗時にerrorMessage設定() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let mock = MockTemplateService()
         mock.updateError = NSError(domain: "test", code: 500)
         let existing = FirestoreTemplate(
@@ -266,7 +256,7 @@ struct TemplateCreateViewModelTests {
 
     @Test @MainActor
     func バリデーション失敗時にerrorMessage設定() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let vm = TemplateCreateViewModel(
             modelContext: container.mainContext,
             firestoreService: MockTemplateService()

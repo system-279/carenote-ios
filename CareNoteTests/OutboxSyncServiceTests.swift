@@ -66,9 +66,14 @@ private actor StubTranscriber: Transcribing {
     }
 }
 
-@Suite("OutboxSyncService incrementRetryCount Tests")
+@Suite("OutboxSyncService incrementRetryCount Tests", .serialized)
 struct OutboxSyncServiceTests {
 
+    // OutboxSyncService は DI された modelContainer から独自に ModelContext を
+    // 派生させて処理するため、共有 container では mainContext の save が service
+    // 側 context に反映されない場合がある。Issue #141 root-cause fix の対象外と
+    // し、per-suite で独立 container を生成する。
+    @MainActor
     private static func makeContainer() throws -> ModelContainer {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
@@ -502,8 +507,9 @@ struct OutboxSyncServiceTests {
     ///   `FileManager.default.fileExists(atPath:)` ガード（stale item 除外）を
     ///   通過させるために必要。呼出側は `defer { try? FileManager.default.removeItem(atPath:) }`
     ///   でクリーンアップする。
+    @MainActor
     private static func setupContainerWithAudioFile() throws -> (ModelContainer, String) {
-        let container = try makeContainer()
+        let container = try Self.makeContainer()
         let audioPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("test-audio-\(UUID().uuidString).m4a").path
         try Data().write(to: URL(fileURLWithPath: audioPath))

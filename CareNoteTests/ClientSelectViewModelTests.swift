@@ -7,13 +7,13 @@ import Testing
 // These tests verify search/filter logic only.
 // SwiftData integration is tested in ClientRepositoryTests.
 
-@Suite("ClientSelectViewModel Tests")
+@Suite("ClientSelectViewModel Tests", .serialized)
 struct ClientSelectViewModelTests {
 
     /// Create a ViewModel with pre-loaded clients (no SwiftData dependency).
     @MainActor
     private func makeViewModel(clients: [ClientCache] = []) -> ClientSelectViewModel {
-        let container = try! makeClientOnlyTestModelContainer()
+        let container = try! makeTestModelContainer()
         let repo = ClientRepository(modelContext: container.mainContext)
         let vm = ClientSelectViewModel(clientRepository: repo)
         vm.clients = clients
@@ -29,7 +29,7 @@ struct ClientSelectViewModelTests {
 
     @Test @MainActor
     func loadClientsでクライアント一覧が読み込まれる() async throws {
-        let container = try makeClientOnlyTestModelContainer()
+        let container = try makeTestModelContainer()
         let repo = ClientRepository(modelContext: container.mainContext)
         let vm = ClientSelectViewModel(clientRepository: repo)
 

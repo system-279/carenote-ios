@@ -3,19 +3,8 @@ import Foundation
 import SwiftData
 import Testing
 
-@Suite("RecordingRepository Tests")
+@Suite("RecordingRepository Tests", .serialized)
 struct RecordingRepositoryTests {
-
-    /// インメモリ ModelContainer を作成するヘルパー
-    private static func makeContainer() throws -> ModelContainer {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
-        let config = ModelConfiguration(url: url)
-        return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self,
-            configurations: config
-        )
-    }
 
     /// テスト用 RecordingRecord を作成するヘルパー
     private static func makeRecording(id: UUID = UUID()) -> RecordingRecord {
@@ -34,7 +23,7 @@ struct RecordingRepositoryTests {
 
     @Test @MainActor
     func resetOutboxItemで既存OutboxItemが削除され新規作成される() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
 
@@ -61,7 +50,7 @@ struct RecordingRepositoryTests {
 
     @Test @MainActor
     func resetOutboxItemでOutboxItemが存在しなくても新規作成される() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
 
@@ -85,7 +74,7 @@ struct RecordingRepositoryTests {
 
     @Test @MainActor
     func deleteで関連OutboxItemも削除される() throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
 
