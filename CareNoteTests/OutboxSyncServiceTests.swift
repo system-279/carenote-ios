@@ -69,23 +69,11 @@ private actor StubTranscriber: Transcribing {
 @Suite("OutboxSyncService incrementRetryCount Tests", .serialized)
 struct OutboxSyncServiceTests {
 
-    // Shared container (SharedTestModelContainer) を使うと本 suite の
-    // processQueueImmediately 系 2 test が uploadCalls.count == 0 で回帰する。
-    // OutboxSyncService は modelContainer.mainContext をそのまま使っているため
-    // 当初仮説（独自 ModelContext 派生）は誤り。真因は未確定（候補: cleanup
-    // timing と async hop の race、cross-suite state pollution 等）。
-    // Issue #164 で真因調査し shared container へ合流させるまでは per-suite
-    // container を維持する。
-    @MainActor
-    private static func makeContainer() throws -> ModelContainer {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftdata-test-\(UUID().uuidString).sqlite")
-        let config = ModelConfiguration(url: url)
-        return try ModelContainer(
-            for: RecordingRecord.self, OutboxItem.self, ClientCache.self, OutputTemplate.self,
-            configurations: config
-        )
-    }
+    // Issue #164 調査中: shared container (SharedTestModelContainer) に差し戻して
+    // 2 failing test (`processQueueImmediately_主経路_...`, `processQueueImmediately_uidNil...`)
+    // の再現と観測点を配置する。
+    // Codex セカンドオピニオン推奨の二分探索 (test save 直後 → service 入口 →
+    // fetch descriptor → cleanup 介入) で真因を絞り込む。
 
     private static func makeService(
         container: ModelContainer,
@@ -110,7 +98,7 @@ struct OutboxSyncServiceTests {
 
     @Test @MainActor
     func incrementRetryCountで通常時はretryCount増加のみ() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(container: container)
 
@@ -137,7 +125,7 @@ struct OutboxSyncServiceTests {
 
     @Test @MainActor
     func incrementRetryCountでmax超過時にステータスがerrorになる() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(container: container)
 
@@ -165,7 +153,7 @@ struct OutboxSyncServiceTests {
 
     @Test @MainActor
     func incrementRetryCountでtranscriptionStatusがdoneの場合は変更しない() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(container: container)
 
@@ -195,7 +183,7 @@ struct OutboxSyncServiceTests {
 
     @Test @MainActor
     func buildFirestoreRecordingでcurrentUidProviderが返すuidがcreatedByに入る() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(
             container: container,
@@ -224,7 +212,7 @@ struct OutboxSyncServiceTests {
 
     @Test @MainActor
     func buildFirestoreRecordingでuidが取れない場合はuserNotAuthenticatedエラー() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(
             container: container,
@@ -254,7 +242,7 @@ struct OutboxSyncServiceTests {
     func buildFirestoreRecordingでuidが空文字の場合もuserNotAuthenticatedエラー() async throws {
         // issue #99 二段防御の境界値テスト: nil と空文字を独立にカバー。
         // `currentUidProvider` が non-nil な空文字を返しても createdBy は保存されない。
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(
             container: container,
@@ -282,7 +270,7 @@ struct OutboxSyncServiceTests {
 
     @Test @MainActor
     func buildFirestoreRecordingで更新対象外フィールドは既存値を保持する() async throws {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let context = container.mainContext
         let service = Self.makeService(
             container: container,
@@ -512,7 +500,7 @@ struct OutboxSyncServiceTests {
     ///   でクリーンアップする。
     @MainActor
     private static func setupContainerWithAudioFile() throws -> (ModelContainer, String) {
-        let container = try Self.makeContainer()
+        let container = try makeTestModelContainer()
         let audioPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("test-audio-\(UUID().uuidString).m4a").path
         try Data().write(to: URL(fileURLWithPath: audioPath))
