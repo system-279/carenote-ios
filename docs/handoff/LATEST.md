@@ -17,7 +17,7 @@
 
 ### レビュー運用
 
-- PR #161: 2 エージェント並列レビュー（code-reviewer / silent-failure-hunter）。小規模 PR (1 file +28/-1) なので 6 エージェントは過剰
+- PR #161: 2 エージェント並列レビュー（code-reviewer / silent-failure-hunter）。小規模 PR (1 file +20/-1 最終 diff) なので 6 エージェントは過剰
 - #141 の案 B 実装は検証で効果なしと判明 → commit せず rollback (production code を dirty に残さない)
 
 ### 本セッション起票（実害ベース）
@@ -38,7 +38,7 @@
 - `CareNoteTests/TestHelpers/SwiftDataTestHelper.swift` に `SharedTestModelContainer` (static let) 追加
 - `makeTestModelContainer` / `makeClientOnlyTestModelContainer` を `SharedTestModelContainer.shared` に統合
 - 各 test の setUp で `context.delete(model:)` による事前 cleanup で分離性を代替
-- 影響範囲: 12+ test ファイル (`ClientRepositoryTests`, `ClientSelectViewModelTests`, `ClientCacheServiceTests`, `RecordingListViewModelTests`, `RecordingRepositoryTests`, `TemplateCreateViewModelTests`, `TemplateListViewModelTests`, `OutboxSyncServiceTests`, `RecordingConfirmViewModelTests` など)
+- 影響範囲: CareNoteTests 配下の 15 test ファイルのうち ModelContainer 生成ロジックを持つもの (明示列挙: `ClientRepositoryTests`, `ClientSelectViewModelTests`, `ClientCacheServiceTests`, `RecordingListViewModelTests`, `RecordingRepositoryTests`, `TemplateCreateViewModelTests`, `TemplateListViewModelTests`, `OutboxSyncServiceTests`, `RecordingConfirmViewModelTests` の 9 件。残りは `@Model` を touch しない可能性)
 - Quality Gate (Evaluator 分離プロトコル) 対象
 - 再現コマンド: `xcodebuild test -project CareNote.xcodeproj -scheme CareNote -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:CareNoteTests/ClientRepositoryTests`
 
