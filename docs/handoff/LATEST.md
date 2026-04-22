@@ -1,3 +1,73 @@
+# Handoff — 2026-04-23 早朝セッション: Day 1 prod deploy 完了 + #164 真因候補確立 + #170 hardening 起票
+
+## セッション成果サマリ（2026-04-23 早朝セッション）
+
+前セッション (2026-04-22 夜、PR #167) の直後に継続。積み残し Issue を PM/PL WBS で優先順に処理し、**Day 1 prod deploy (Node 22 runtime 化)** を完了、**Issue #164 の真因候補を cross-suite race と特定**、**Issue #170 (SharedTestModelContainer hardening bundle) を起票** した。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #171 (merged) | `docs/runbook/prod-deploy-smoke-test.md` の Day 1 実施ログ記録（PASS） | - |
+| #169 (closed) | OutboxSyncServiceTests を shared container に差し戻す CI 再現確認 probe。local 3 回連続 PASS で再現不能 → close | #164 調査完了 |
+
+### 主要判断のハイライト
+
+- **Day 1 スコープを Opt A（段階 deploy）で実行**: RUNBOOK 原文の `firebase deploy --only functions` (3 関数一括) ではなく、`--only functions:beforeSignIn,functions:deleteAccount` (2 関数分離) を採用。理由は「Day 1 は純粋 runtime 更新、Day 3 は transferOwnership の新規 deploy 検証」を分離することで、FAIL 時の原因切り分けを容易にするため。Codex セカンドオピニオンで計画段階レビュー実施
+- **#100 を方式 b で整理**（close せず open 維持 + ラベル変更）: PR #115 で実装完了済だが prod deploy 未実施。close すると「セキュリティ文脈消失」のため `P0 → P1 + deploy-pending` ラベルに変更、実装完了を Issue コメント記録。Day 2 (Phase 0.5 Rules deploy) 完了時に close 候補
+- **#164 真因は cross-suite race が最有力**（`/review-pr` 4 agent レビューで独立 2 agent が同一仮説指摘）: Swift Testing の `.serialized` は suite 内のみ直列化し **suite 間並列実行は抑止しない**。process-wide shared container で別 suite の cleanup が本 suite の test body 実行中に介入する race が uploadCalls.count==0 症状と整合。Local 環境で再現しないのは環境依存の race 典型
+- **#170 を hardening bundle として分離起票**: cross-suite race 対応（H1 `.serialized` トップレベル化）だけでなく、silent-failure-hunter の Critical 指摘 2 件（cleanup per-model logging / fatalError NSError 詳細化）と preflight fetch assertion / invariant test を一括して取り組むため
+- **PR #171 review 指摘の即時反映**: comment-analyzer の Critical C-1（24h ベースライン vs 15 分の整合破綻）を merge 前に修正。24h ベースライン欄を TBD で追加し、Day 2 着手前 (2026-04-23 15:51 JST) に再観測する運用を明文化
+
+### Day 1 prod deploy 実績
+
+- **実施日時**: 2026-04-23 03:51 JST (UTC 2026-04-22T18:51:04Z)
+- **対象**: `beforeSignIn` / `deleteAccount` を nodejs20 → nodejs22
+- **runtime 確認**: 両関数 nodejs22 / ACTIVE
+- **Cloud Logging 15 分監視**: ERROR/WARNING 0 件
+- **実機 smoke test**: Google ログイン → 録音 → 文字起こし編集 → 録音リスト、4 項目全 PASS
+- **判定**: PASS
+- **次工程**: Day 2 (Phase 0.5 Rules prod deploy) に **2026-04-23 15:51 JST 以降（12h 経過後）** 着手可能
+
+### レビュー運用
+
+- `/codex plan` セカンドオピニオン: 本セッション計画策定段階（WBS 設計 + Day 1 スコープ判断）
+- `/review-pr` 4 agent 並列（PR #169、調査用 probe）: code-reviewer Approve / comment-analyzer Critical 2 / pr-test-analyzer Rating 9 / silent-failure-hunter Critical conf 90-95 × 2 + High × 3。**結果を Issue #170 起票に昇華**
+- `/review-pr` 2 agent 並列（PR #171、docs-only）: code-reviewer Approve / comment-analyzer Critical 1 + Important 5。**C-1 を merge 前に反映**
+
+### Issue Net 変化
+
+セッション開始時 open 7 → 終了時 **8**（net **+1**、#170 起票）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 7 |
+| #170 起票 (hardening bundle) | +1 | **8** |
+
+> **CLAUDE.md KPI「Issue は net で減らすべき」違反**。正当性: triage rule #4 (rating ≥ 7 & conf ≥ 80) に silent-failure-hunter Critical conf 90/95 + pr-test-analyzer Rating 9 が該当、rule #5 (ユーザー明示指示) にも該当。#164 真因調査中に発見した cross-suite race 仮説と並列して 4 件の独立 hardening 項目を 1 bundle Issue にまとめた構造的判断。個別対応すると更に Issue 数が膨らむため妥当。
+
+### CI の現状
+
+- PR #171 (docs-only) merge 後の main `c50a371`: CI checks は docs のため skip。前 main `581bf13` の iOS Tests は PR #167 (lint gate) 時点で green 維持
+- PR #169 branch CI (closed): iOS Tests 25m27s green（Issue #164 が CI runner でも再現しなかったことを示す）→ **cross-suite race が環境依存 flake であることを示唆**
+
+### 次セッション推奨アクション（優先順）
+
+1. **24h ベースライン追記**（2026-04-23 15:51 JST 以降、Day 2 着手前）: Cloud Monitoring から `beforeSignIn` / `deleteAccount` のエラー率平均 / p95 レイテンシ / invocation count を取得し、`docs/runbook/prod-deploy-smoke-test.md` Day 1 実施ログ TBD 欄を埋める
+2. **M2: Day 2 Phase 0.5 Rules prod deploy**（deploy + 12h = 15:51 JST 以降）: RUNBOOK § Day 2 に従い、dev 事前検証 → `firebase deploy --only firestore:rules --project carenote-prod-279` 明示承認 → 実機 smoke test → baseline 記録 → Issue #100 close 判定
+3. **M3: Day 3 transferOwnership prod deploy**（Day 2 +12h）: `docs/runbook/phase-1-admin-id-token.md` § 手順 A で dev dryRun → confirm、prod deploy → 24h 束ね監視
+4. **Issue #170 hardening H1**（`.serialized` トップレベル化、#164 真因対応）: M3 完了後 or 並行着手。5 file+ 変更見込みで Evaluator 分離対象
+5. **M5: Phase 0.9 allowedDomains 有効化**（審査通過 + whitelist 確認後）
+6. **Phase 0.9 前の審査アカウント whitelist 確認**（Firestore Console 手作業、`tenants/279/whitelist/demo-reviewer@carenote.jp`）
+
+### 参考資料（本セッション = 2026-04-23 早朝）
+
+- [PR #171 Day 1 実施ログ merged](https://github.com/system-279/carenote-ios/pull/171)
+- [PR #169 #164 CI 再現 probe closed](https://github.com/system-279/carenote-ios/pull/169)
+- [Issue #170 SharedTestModelContainer hardening bundle](https://github.com/system-279/carenote-ios/issues/170)
+- [Issue #164 #169 close 時の仮説更新コメント](https://github.com/system-279/carenote-ios/issues/164#issuecomment-4295342997)
+- [Issue #100 方式 b 整理コメント](https://github.com/system-279/carenote-ios/issues/100#issuecomment-4295158875)
+
+---
+
 # Handoff — 2026-04-22 夜セッション: #165 Schema drift lint merge
 
 ## セッション成果サマリ（2026-04-22 夜セッション）
@@ -168,306 +238,3 @@
 
 ---
 
-# Handoff — 2026-04-22 夜セッション: #91 本体対応完了（2 PR merge、レビュー指摘構造的解消）
-
-## セッション成果サマリ（2026-04-22 夜セッション）
-
-Issue #91（アカウント削除後のローカル SwiftData / Outbox クリーンアップ、実セキュリティリスク）を本対応 + レビュー指摘 silent-failure C1 の follow-up まで一気通貫で実施。**2 PR merge / 2 Issue close / 2 Issue 起票**（#157 は同セッション内 close、#159 は CI infra flaky）。
-
-| PR | 内容 | Issue |
-|----|------|-------|
-| #156 | LocalDataCleaning protocol + SwiftDataLocalDataCleaner (atomic purge + rollback) / deleteAccount 後に purge 呼出 / behavioral test 3 件 / 構造化 NSError ログ | **#91 closed** |
-| #158 | purge 失敗時の UI 通知（専用 flag `postDeletionPurgeFailed` 導入で errorMessage 兼用を構造的排除） | **#157 closed** |
-
-### 設計判断のハイライト
-
-- **errorMessage 兼用問題の根本解消**: PR #158 初版は `AuthViewModel.errorMessage` を SettingsView 側で転記する設計だったが、4 エージェント並列レビューの 3 エージェント（code-review / silent-failure / simplify）が合意で Critical 指摘。専用 flag `postDeletionPurgeFailed` に置換することで sign-in / sign-out 系との race / silent corruption を型レベルで排除
-- **purge の atomic 化**: PR #156 初版は個別 `try context.delete(model:)` チェーンで partial failure のリスクがあったが、silent-failure C2 指摘を受けて個別 do-catch + rollback + `LocalDataCleanerError.partialFailure` throw に変更。OutboxItem だけ残って別 tenant 誤送信（#91 最大リスク）を防止
-- **Firebase 非依存メソッド抽出**: `deleteAccount()` 全体は Firebase (`Auth.auth().revokeToken` / `Functions.httpsCallable`) 依存で unit test 不能だが、purge 呼出部分を `performPostDeletionCleanup()` internal method に抽出して behavioral test 可能に
-
-### レビュー運用
-
-- PR #156: 6 エージェント並列レビュー（code-reviewer / pr-test / comment / silent-failure / type-design / simplify）
-- PR #158: 4 エージェント並列レビュー（code-reviewer / pr-test / silent-failure / simplify、type-design は新規型なしでスキップ）
-- 指摘重複が高い問題 (errorMessage 兼用) を専用 flag で一発解消 → 複数 Critical を同時クローズ
-- 別 Issue 化判定は慎重: silent-failure C1 (SettingsView unmount) / pr-test G2 (isRetryable 抽出) / silent-failure I1 (DI 未注入 critical 分離) / silent-failure I2 (enum 化) はいずれも起票せず（推測起票 / インフラ要 / スコープ超 / 合流候補）
-
-### 本セッション起票（実害ベース）
-
-| # | タイトル | 優先度 | 理由 |
-|---|---------|-------|------|
-| #157 | アカウント削除後のローカル purge 失敗を UI/ユーザーに通知する | P2 | silent-failure C1 Conf 0.90、本セッション中に #158 で close |
-| #159 | CI: iOS Tests ワークフローが main push 後に 3 連続 failure | P2 | main CI green の担保不能、regression detection が実質壊れている |
-
-### 別 Issue 化しなかった指摘（過剰起票防止）
-
-| 指摘 | 理由 |
-|------|------|
-| silent-failure C1 (SettingsView unmount 時の UI 消失) | Conf 0.75 で「実機検証要」レベル、推測起票は triage rule 違反。次回 smoke test 時に確認 |
-| pr-test G2 (deleteAccountIsRetryable 分岐抽出) | testability 向上のみ、実バグなし（rating 8 review 提案） |
-| silent-failure I1 (DI 未注入と I/O 失敗の critical 分離) | error tracking 基盤 (Crashlytics 等) 未整備が前提条件、インフラ変更伴う |
-| silent-failure I2 (DeleteAccountError enum 化) | API 境界変更、#102 partial-failure 設計と合流候補で個別起票不要 |
-
-### Issue 数推移
-
-セッション開始時 open 8 → 終了時 **8**（net **0**）。
-
-| 動き | 件数 | Open 数推移 |
-|------|------|------------|
-| 開始時 | — | 8 |
-| #91 close (PR #156) | -1 | 7 |
-| #157 起票 → 同セッション close (PR #158) | ±0 | 7 |
-| #159 起票（CI iOS Tests flaky） | +1 | **8** |
-
-> **注**: net 0 だが進捗ゼロではない — PR merge 2 件で実装前進 (#91 のセキュリティリスク本対応完了)。#159 は CI インフラ問題で CLAUDE.md triage 基準「CI/リリース判断を壊す」該当のため起票必須（推測起票ではなく 3 連続再現済の実害）。triage rule に照らせば「Issue net ゼロの実装進捗」は許容範囲内。
-
----
-
-## 過去セッション詳細（アーカイブ）
-
-2026-04-22 夕方 / 遅延 / 昼 セッションの詳細は [archive/2026-04-history.md](./archive/2026-04-history.md) に退避。主な完了内容: Phase 0.5 Rules / Phase 1 transferOwnership / Node 22 upgrade / audit-createdby / 関連 follow-up PR 群。設計判断の追跡時のみ参照。
-
----
-
-## 確立した運用ルール（Codex セカンドオピニオン 2026-04-22）
-
-**「過剰起票」防止のため、次セッション以降も継続適用推奨。**
-
-1. **新規 Issue 起票は原則禁止、例外は実バグのみ**
-2. **review agent の rating 5-6 提案は Issue 化しない**（PR コメント / 既存 Issue 追記 / TODO コメントで扱う）
-3. **Issue 化する条件**: 実害あり / 再現可能なバグ / ユーザー影響 / CI・リリース判断を壊す / 将来の重大 regression を低コストで防げる
-4. **review agent 提案は triage inbox に溜め、セッション末にまとめて Issue 化判断**（自動起票しない）
-5. **Issue は net で減らす KPI** — close 4 + 起票 4 = net 0 は進捗ゼロ扱い
-
-## 現在の状態
-
-- **ブランチ**: main（clean、CI green）
-- **ビルド**: Build 35（App Store Connect 審査中、2026-04-16 提出）
-- **審査通過見込み**: 90%+（deleteAccount が実データで機能する状態を確立済み）
-- **アカウント移行機能**: **Phase -1 / 0 / 0.5 / 1 完了**、dev Node 22 完了、prod deploy 待ち
-- **Phase 0.9**: RUNBOOK draft merged、dev 先行検証 + prod 実施はユーザー作業待ち
-
-## アカウント移行機能 + Node upgrade の Phase 構成
-
-| Phase | 内容 | 状態 |
-|---|---|---|
-| Phase -1 | `createdBy` 正常保存 + 監査 + deleteAccount テスト | ✅ PR #101 マージ済 |
-| Phase -1 A3 dev | dev 21 件バックフィル削除 | ✅ PR #112 |
-| Phase -1 A3 prod | prod 8 件バックフィル削除 | ✅ 実施済 + PR #117 |
-| Phase 0 | uid 参照棚卸し (ADR-008) | ✅ PR #109 |
-| Phase 0.5 | Firestore Rules 強化 + migrationLogs + rules-unit-testing + CI 組込 | ✅ PR #115 merged + dev deploy 完了、**prod deploy 残** |
-| Phase 0.5 拡充 | エッジケーステスト 20 件追加（55→64 tests、本セッション PR #139 含む） | ✅ PR #134 + #139 |
-| Phase 0.9 | RUNBOOK draft | ✅ PR #133 merged、**実施は smoke test 後** |
-| Phase 0.9 実施 | prod `tenants/279.allowedDomains = ["279279.net"]` 有効化 | ⏳ **ユーザー作業待ち** |
-| Phase 1 | `transferOwnership` Callable Function 実装 | ✅ PR #119 merged + dev deploy 完了、**prod deploy 残** |
-| Phase 1 helper | admin ID token helper + RUNBOOK | ✅ PR #128 / #132（Issue #120 part 1 + #129） |
-| Node 22 upgrade | dev deploy | ✅ PR #130 merged + dev 3 関数 nodejs22 ACTIVE (2026-04-21) |
-| Node 22 upgrade | **prod deploy** | ⏳ **ユーザー承認待ち**（期限 2026-04-30） |
-| Phase 2 | 本人主導 UI（移行コード方式） | 🔒 スコープ外（頻度低 × コスト高） |
-
-## ユーザー作業依頼（次セッション再開時の重要項目、優先順）
-
-> **2026-04-22 更新**: Codex セカンドオピニオンに基づき、deploy を**段階実施**に変更。Node 22 を最優先・単独 deploy、Phase 0.9 は 4/30 期限から切り離す。
-> 詳細チェックリスト: [`docs/runbook/prod-deploy-smoke-test.md`](../runbook/prod-deploy-smoke-test.md)
-
-### マスタースケジュール（Day 0 = 2026-04-22）
-
-| Day | 作業 | 判定 |
-|-----|------|------|
-| 0（今日） | smoke test RUNBOOK 整備 + 審査アカウント影響調査（whitelist 登録確認） | ✅ 本セッションで完了 |
-| 1 | iOS 実機 smoke test → **Node 22 prod deploy**（最優先・単独） | PASS → Day 2 |
-| 2 | **Phase 0.5 Rules prod deploy**（Node 22 安定後、単独） | PASS → Day 3 → Issue #100 close candidate |
-| 3 | **Phase 1 transferOwnership prod deploy**（単独） | PASS → 24h 監視開始 |
-| 3-4 | 24h 安定監視 | GO/NO-GO 判定 |
-| 4-5 | Phase 0.9 dev 先行検証（`docs/runbook/phase-0-9-allowed-domains.md` § A） | PASS → Day 6+ |
-| 6+ | **Phase 0.9 prod 実施**（4/30 期限から切離、審査通過後推奨） | → Issue #111 close |
-
-### 1. 事前必須: 審査アカウント影響調査（Phase 0.9 の前提ゲート）
-
-**Firestore Console で `tenants/279/whitelist` に `demo-reviewer@carenote.jp` が登録されているか確認**:
-
-```
-https://console.firebase.google.com/project/carenote-prod-279/firestore/data/~2Ftenants~2F279~2Fwhitelist
-```
-
-- 登録あり: Phase 0.9 有効化後も whitelist 優先仕様で影響なし（`beforeSignIn` の分岐順で検証済、`functions/index.js:39-57`）
-- 登録なし: Phase 0.9 prod 実施前に登録必須（詳細手順 `docs/runbook/prod-deploy-smoke-test.md` § 審査アカウント確認）
-
-### 2. iOS 実機 smoke test（全 prod deploy の前提ゲート）
-
-**目的**: Phase 0.5 Rules + Phase 1 transferOwnership + Node 22 runtime の統合動作確認
-
-検証動線（iOS 実機、dev build）:
-- Apple Sign-In → `beforeSignIn` が `nodejs22` で起動し、`tenantId` custom claim 取得
-- 新規録音作成 → Firestore に `createdBy=自分のuid` で保存
-- 自分の録音の transcription 編集 → 成功
-- RecordingList 表示 → 他人の録音も read 可で従来通り
-- （可能なら）テストアカウントで `deleteAccount` callable 呼出、自データ削除 + Auth user 削除確認
-
-**Node 22 起動確認のヒント**: Cloud Logging で `beforeSignIn` / `deleteAccount` / `transferOwnership` の container 起動ログに `nodejs22` が記録される。初回は cold start でやや遅延することあり（想定内）。
-
-**失敗時の rollback**: `docs/runbook/prod-deploy-smoke-test.md` § 失敗時エスカレーション を参照。
-
-> **注意**: 以下の prod deploy コマンドはすべて `firebase` CLI で `--project=carenote-prod-279` を明示する。`firebase` CLI は `gcloud` と別系統のため `CLOUDSDK_ACTIVE_CONFIG_NAME` は不要。ただし同じターミナルで `gcloud` を使う場合は `CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod` の invocation 前置きを使うこと（CLAUDE.md 規範）。
-
-### 3. Node 22 runtime prod deploy（Day 1、最優先、**期限 2026-04-30**）
-
-```
-firebase deploy --only functions --project carenote-prod-279
-```
-
-- prod 操作のため ユーザー確認必須
-- Node 20 は 2026-04-30 deprecated、2026-10-30 decommissioned
-- deploy 後 `firebase functions:list --project=carenote-prod-279` で 3 関数が `nodejs22` ACTIVE 確認
-- 詳細手順: `docs/runbook/prod-deploy-smoke-test.md` § Day 1
-
-### 4. Phase 0.5 Rules prod deploy（Day 2、Node 22 安定後、単独）
-
-```
-firebase deploy --only firestore:rules --project carenote-prod-279
-```
-
-- prod 操作のため CLAUDE.md MUST に従いユーザー確認必須
-- deploy 完了後 Issue #100 close 判定
-- 詳細手順: `docs/runbook/prod-deploy-smoke-test.md` § Day 2
-
-### 5. Phase 1 transferOwnership prod deploy（Day 3、Rules 安定後、単独）
-
-```
-firebase deploy --only functions:transferOwnership --project carenote-prod-279
-```
-
-- prod 操作のため ユーザー確認必須
-- 詳細手順: `docs/runbook/prod-deploy-smoke-test.md` § Day 3
-
-### 6. Phase 0.9 `allowedDomains` 有効化（Day 6+、**4/30 期限から切離**）
-
-> **Codex セカンドオピニオン 2026-04-22**: Phase 0.9 を焦って本番反映しログイン障害を起こす方がリスク高。Node 22 期限と切り離し、App Store 審査通過後の安定期に実施推奨。
-
-- RUNBOOK: `docs/runbook/phase-0-9-allowed-domains.md`
-- 先に dev 先行検証（手順 A、4 パターン動作確認）
-- 審査アカウント whitelist 登録確認済（上記 § 1）必須
-- prod 実施はユーザー明示承認必須
-
-## Open Issue（優先度順、2026-04-22 夕方セッション末時点 8 件）
-
-### P0（要対応、open 継続中）
-
-| # | タイトル | 状態 |
-|---|---------|------|
-| #100 | Firestore Rules の recordings 権限が過剰 | **実装は PR #115 で完了、dev deploy 済、prod deploy 完了後に close 予定** |
-
-### bug（追跡中、2026-04-22 日中更新）
-
-| # | タイトル | 状態 |
-|---|---------|------|
-| #164 | OutboxSyncServiceTests が SharedTestModelContainer と相性が悪く回帰する（真因未確定） | **2026-04-22 起票、未着手**。PR #163 で per-suite container に局所 rollback 済（CI green）、真因調査は別セッション |
-| #165 | Schema drift risk: `@Model` 型を SharedTestModelContainer と LocalDataCleaner で hard-code | **2026-04-22 起票、未着手**。grep lint or `AppSchema.allModelTypes` 単一ソース化で解消 |
-
-> **消化済 (2026-04-22 日中)**: #141 (→ PR #163 で根本解決)、#91 は PR #156 / #158 (2026-04-22 夜) で close 済。
-
-### P2 機能・テスト拡張（残り 2 件）
-
-| # | タイトル |
-|---|---------|
-| #105 | deleteAccount E2E を Firebase Emulator Suite で実装 |
-| #111 | Phase 0.9: prod allowedDomains 有効化（RUNBOOK merged、実施待ち） |
-
-> **消化済**: #120 (→ PR #151)、#127 (→ PR #150) は 2026-04-22 遅延セッションで close。#145 (→ PR #153)、#102 (→ PR #154) は 2026-04-22 夕方セッションで close。
-
-### 機能拡張（別セッション候補）
-
-| # | タイトル |
-|---|---------|
-| #65 | Apple ID アカウントリンク |
-| #90 | Guest Tenant (demo-guest) スパム対策 |
-| #92 | Guest Tenant 本番ログイン不可案内UI |
-
-## 次セッション推奨アクション（優先度順、2026-04-22 Codex 推奨に準拠）
-
-1. **審査アカウント whitelist 登録確認**（Firestore Console で `tenants/279/whitelist` に `demo-reviewer@carenote.jp` 確認 — Phase 0.9 前提ゲート）
-2. **iOS 実機 smoke test を済ませる**（Phase 0.5 / Phase 1 / Node 22 の統合動作確認、`docs/runbook/prod-deploy-smoke-test.md` 使用）
-3. **Day 1: Node 22 runtime prod deploy（最優先・単独、期限 2026-04-30）**（ユーザー承認 → 全 functions deploy）
-4. **Day 2: Phase 0.5 Rules prod deploy（単独）**（ユーザー承認 → Rules apply → #100 close）
-5. **Day 3: Phase 1 transferOwnership prod deploy（単独）**（ユーザー承認 → Cloud Function deploy）
-6. **Day 3-4: 24h 安定監視**（エラー急増なし確認）
-7. **Day 4-5: Phase 0.9 dev 先行検証**（RUNBOOK `docs/runbook/phase-0-9-allowed-domains.md` § 手順 A）
-8. **Day 6+: Phase 0.9 prod 実施**（4/30 期限から切離、審査通過後推奨 → #111 close）
-9. **#164 OutboxSyncServiceTests shared container 互換性調査** — PR #163 で局所 rollback 済。真因候補は `.serialized` + async hop race / cleanup timing / cross-suite pollution。bisect で特定
-10. **#165 Schema drift 防止**（grep lint 追加または `AppSchema.allModelTypes` 単一ソース化）
-11. **#105 deleteAccount E2E Emulator Suite テスト**（時間確保セッションで、#102 の追加 branch coverage は PR #154 で closed）
-
-> **Codex セカンドオピニオン要点（2026-04-22）**: (1) 一括 deploy 禁止（原因切り分け不能化）、(2) Node 22 を最優先・単独、(3) Phase 0.9 を 4/30 期限から切離、(4) 各 deploy 後は即時 smoke test + 数時間エラー監視、最後にまとめて 24h 監視、(5) 軽量 smoke test チェックリストで十分（過剰ドキュメント化回避）。
-
-### deleteOldAuthUser 分離 Function（Phase 1 残件）
-
-Issue #110 本体は transferOwnership のみ。旧 Auth user 削除は別 Function として残してあるため、将来独立 Issue 化して実装する（ロールバック余地を Phase 1 完了後に評価）。
-
-## 既知の警告
-
-### Cloud Functions Node.js 22 runtime（Issue #124 / #108 解消済み、先行セッション）
-
-- dev 3 関数は 2026-04-21 時点で nodejs22 ACTIVE、deprecation warning 消滅
-- prod は未 deploy（ユーザー承認必要、期限 2026-04-30）
-
-### CI Workflow
-
-- `.github/workflows/test.yml` (iOS Tests) は paths-ignore で `firestore.rules` / `functions/**` / `docs/**` / `.github/**` 等を除外
-- `.github/workflows/functions-test.yml` (Functions & Rules Tests) が Firestore + Auth emulator で全テストスイート（`npm test` = 5 ファイル合計）を実行（Node 22）。本セッション末時点で Firestore Rules 64 tests + functions 系で合計 130 件前後。正確な件数は CI ログで確認。
-
-### Swift Testing: SwiftData SIGTRAP（#141、2026-04-22 日中 PR #163 で解消）
-
-- **解消**: `SharedTestModelContainer` (static let) + `cleanup()` で process 内 1 container に統一、`.serialized` で parallel race 防止。全 18 suites / 135 tests が CI green
-- **残存リスク**: `SwiftDataTestHelper.shared` init と `cleanup()` が `@Model` 型を hard-code（新規 `@Model` 追加時の drift → Issue #165 で対応）
-- **OutboxSyncServiceTests のみ per-suite container**: shared 化で 2 test が回帰、真因未確定のため Issue #164 で追跡
-
-## ADR
-
-- [ADR-007](../adr/ADR-007-guest-tenant-for-apple-signin.md) — Apple Sign-In 用 Guest Tenant 自動プロビジョニング。Status: 採用。
-- [ADR-008](../adr/ADR-008-account-ownership-transfer.md) — アカウント所有権移行方式。Phase 0 棚卸し + Phase 1 実装詳細（状態遷移図、エラーマッピング、チェックポイント、監査ログスキーマ、Partial Update 不変性、入力検証、運用呼出フロー、count drift 仕様）まで記載。Status: Accepted。
-
-## RUNBOOK
-
-- [phase-1-admin-id-token.md](../runbook/phase-1-admin-id-token.md) — admin ID token 発行 + cleanup 手順（`get-admin-id-token.mjs --cleanup-uid` 使用）
-- [phase-0-9-allowed-domains.md](../runbook/phase-0-9-allowed-domains.md) — Phase 0.9 allowedDomains 有効化手順（draft、ユーザー作業待ち）
-- [prod-deploy-smoke-test.md](../runbook/prod-deploy-smoke-test.md) — prod deploy 統合 smoke test チェックリスト（2026-04-22 新設、Codex 推奨段階 deploy 方針に対応）
-
-## 参考資料（本セッション = 2026-04-22 日中）
-
-- [PR #163 SharedTestModelContainer 導入 + 9 test files 統一](https://github.com/system-279/carenote-ios/pull/163)
-- [Issue #164 OutboxSyncService shared container 互換性](https://github.com/system-279/carenote-ios/issues/164)
-- [Issue #165 Schema drift risk](https://github.com/system-279/carenote-ios/issues/165)
-
-## 参考資料（前セッション = 2026-04-22 夕方）
-
-- [PR #153 OutboxSyncService upload 失敗時 createRecording 未呼出検証](https://github.com/system-279/carenote-ios/pull/153)
-- [PR #154 delete-account partial-failure & auth error code の 5 分岐追加](https://github.com/system-279/carenote-ios/pull/154)
-- [Issue #141 根本原因特定コメント](https://github.com/system-279/carenote-ios/issues/141#issuecomment-4292636150)
-
-## 参考資料（前セッション = 2026-04-22 遅延）
-
-- [PR #150 audit-createdby per-tenant 部分結果保持](https://github.com/system-279/carenote-ios/pull/150)
-- [PR #151 transferOwnership errorId + err.stack](https://github.com/system-279/carenote-ios/pull/151)
-
-## 参考資料（前々セッション = 2026-04-22 昼）
-
-- [PR #138 delete-account mock 深さ制限](https://github.com/system-279/carenote-ios/pull/138)
-- [PR #139 Rules エッジケース part 2](https://github.com/system-279/carenote-ios/pull/139)
-- [PR #142 @preconcurrency → @MainActor 明示](https://github.com/system-279/carenote-ios/pull/142)
-- [PR #144 processItem 主経路テスト](https://github.com/system-279/carenote-ios/pull/144)
-- [PR #146 firebase.json 重複 hosting 整理](https://github.com/system-279/carenote-ios/pull/146)
-- [PR #147 upload-testflight entitlements 検証](https://github.com/system-279/carenote-ios/pull/147)
-- [PR #126 audit-createdby 堅牢性強化](https://github.com/system-279/carenote-ios/pull/126)
-
-## 参考資料（先行セッション）
-
-- [PR #130 Node 22 upgrade](https://github.com/system-279/carenote-ios/pull/130)
-- [PR #132 admin ID token helper 堅牢化](https://github.com/system-279/carenote-ios/pull/132)
-- [PR #133 Phase 0.9 RUNBOOK draft](https://github.com/system-279/carenote-ios/pull/133)
-- [PR #134 Rules エッジケーステスト part 1](https://github.com/system-279/carenote-ios/pull/134)
-- [PR #101 Phase -1](https://github.com/system-279/carenote-ios/pull/101)
-- [PR #112 A3 dev バックフィル](https://github.com/system-279/carenote-ios/pull/112)
-- [PR #115 Phase 0.5 Rules](https://github.com/system-279/carenote-ios/pull/115)
-- [PR #117 A3 prod バックフィル](https://github.com/system-279/carenote-ios/pull/117)
-- [PR #119 Phase 1 transferOwnership](https://github.com/system-279/carenote-ios/pull/119)
-- [PR #128 admin ID token helper part 1](https://github.com/system-279/carenote-ios/pull/128)
