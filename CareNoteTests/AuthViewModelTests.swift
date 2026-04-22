@@ -163,6 +163,8 @@ struct AuthViewModelTests {
         await vm.performPostDeletionCleanup()
 
         #expect(cleaner.purgeCallCount == 1)
+        // 成功時は errorMessage を設定しない（#157: UI 側で purge 失敗と誤認しないため）
+        #expect(vm.errorMessage == nil)
     }
 
     @Test @MainActor
@@ -179,10 +181,12 @@ struct AuthViewModelTests {
         await vm.performPostDeletionCleanup()
 
         #expect(cleaner.purgeCallCount == 1)
+        // #157: 失敗時は errorMessage にユーザー向けガイダンスを設定
+        #expect(vm.errorMessage == AuthViewModel.postDeletionPurgeFailureMessage)
     }
 
     @Test @MainActor
-    func cleaner未注入時はpurgeAllが呼ばれずnoop() async {
+    func cleaner未注入時はpurgeAllが呼ばれずerrorMessage設定() async {
         let cleaner = MockLocalDataCleaner()
         let vm = AuthViewModel(
             authProvider: MockAuthProvider(),
@@ -191,8 +195,10 @@ struct AuthViewModelTests {
 
         await vm.performPostDeletionCleanup()
 
-        // 注入されていない cleaner は呼ばれない（skipped、ログのみ残る）
+        // 注入されていない cleaner は呼ばれない（DI 配線バグ扱い）
         #expect(cleaner.purgeCallCount == 0)
+        // #157: DI 配線バグも purge 失敗と同じくユーザー通知する
+        #expect(vm.errorMessage == AuthViewModel.postDeletionPurgeFailureMessage)
     }
 }
 

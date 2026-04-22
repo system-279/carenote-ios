@@ -341,10 +341,15 @@ final class AuthViewModel {
     ///
     /// 本メソッドは Firebase 非依存のため、`deleteAccount()` 全体のユニットテストが
     /// 困難な中でも独立して behavioral test が可能（#91 レビュー指摘対応）。
+    ///
+    /// purge 失敗時は `errorMessage` にユーザー向けガイダンスを設定する（#157）。
+    /// Auth 削除は既完了のため `authState = .signedOut` への遷移は呼び出し側で継続する。
+    /// 完全復旧にはアプリ削除 + 再インストールが確実なため、その旨を案内する。
     @MainActor
     func performPostDeletionCleanup() async {
         guard let cleaner = localDataCleaner else {
             Self.logger.error("localDataCleaner not injected — post-deletion purge skipped. DI wiring bug.")
+            errorMessage = Self.postDeletionPurgeFailureMessage
             return
         }
 
@@ -359,8 +364,16 @@ final class AuthViewModel {
                 desc=\(ns.localizedDescription, privacy: .public) \
                 underlying=\(String(describing: ns.userInfo[NSUnderlyingErrorKey]), privacy: .public)
                 """)
+            errorMessage = Self.postDeletionPurgeFailureMessage
         }
     }
+
+    static let postDeletionPurgeFailureMessage = """
+        アカウントは削除されましたが、端末内データのクリアに失敗しました。
+        セキュリティ保護のため、アプリを一度削除して再インストールしてください。
+        Your account has been deleted, but clearing local data on this device failed.
+        Please delete and reinstall the app to ensure all data is removed.
+        """
 
     /// サインアウトする
     func signOut() {
