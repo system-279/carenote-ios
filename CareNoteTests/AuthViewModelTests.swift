@@ -144,14 +144,15 @@ struct AuthViewModelTests {
         #expect(vm.isLoading == false)
     }
 
-    // MARK: - localDataCleaner DI （#91）
+    // MARK: - performPostDeletionCleanup （#91）
     //
-    // deleteAccount 全体の integration test は Firebase 依存（Auth.auth().revokeToken /
-    // Functions.httpsCallable）のため本ユニットテストでは扱わない。E2E Emulator Suite（#105）
-    // で対応予定。本スイートでは DI 配線の整合性のみ検証する。
+    // `deleteAccount()` 全体の integration test は Firebase 依存（Auth.auth().revokeToken /
+    // Functions.httpsCallable）のため困難だが、post-deletion cleanup 部分は Firebase 非依存
+    // の internal method として抽出済 → 以下で behavioral に検証できる。
+    // `deleteAccount()` 全体の E2E は Emulator Suite（#105）で対応予定。
 
     @Test @MainActor
-    func localDataCleaner注入時にプロパティへセットされる() {
+    func performPostDeletionCleanupはpurgeAllを呼ぶ() async {
         let cleaner = MockLocalDataCleaner()
         let vm = AuthViewModel(
             authProvider: MockAuthProvider(),
@@ -159,17 +160,39 @@ struct AuthViewModelTests {
             localDataCleaner: cleaner
         )
 
-        #expect(vm.localDataCleaner != nil)
+        await vm.performPostDeletionCleanup()
+
+        #expect(cleaner.purgeCallCount == 1)
     }
 
     @Test @MainActor
-    func localDataCleaner未注入時はnilになる() {
+    func purgeAll失敗時もperformPostDeletionCleanupはthrowsしない() async {
+        let cleaner = MockLocalDataCleaner()
+        cleaner.purgeError = NSError(domain: "TestPurge", code: 42, userInfo: [NSLocalizedDescriptionKey: "intentional"])
+        let vm = AuthViewModel(
+            authProvider: MockAuthProvider(),
+            emailAuthProvider: MockEmailAuthProvider(),
+            localDataCleaner: cleaner
+        )
+
+        // best-effort 契約: throw せず、authState も呼び出し側で .signedOut 遷移可能であること
+        await vm.performPostDeletionCleanup()
+
+        #expect(cleaner.purgeCallCount == 1)
+    }
+
+    @Test @MainActor
+    func cleaner未注入時はpurgeAllが呼ばれずnoop() async {
+        let cleaner = MockLocalDataCleaner()
         let vm = AuthViewModel(
             authProvider: MockAuthProvider(),
             emailAuthProvider: MockEmailAuthProvider()
         )
 
-        #expect(vm.localDataCleaner == nil)
+        await vm.performPostDeletionCleanup()
+
+        // 注入されていない cleaner は呼ばれない（skipped、ログのみ残る）
+        #expect(cleaner.purgeCallCount == 0)
     }
 }
 

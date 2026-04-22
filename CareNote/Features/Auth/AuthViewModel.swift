@@ -117,8 +117,10 @@ final class AuthViewModel {
     let appleSignInCoordinator = AppleSignInCoordinator()
     private let emailAuthProvider: EmailAuthProviding
     /// アカウント削除後にローカル SwiftData / Outbox をクリアするための依存。
-    /// DI 未提供時は no-op（ログインのみのユニットテストでは注入不要）。
-    var localDataCleaner: LocalDataCleaning?
+    /// `private(set)` で外部書き換えを禁止（#91 セキュリティ要件: 差替で purge 無効化を防ぐ）。
+    /// Optional なのは `CareNoteApp.init` で `ModelContainer` 構築後に後注入するため、および
+    /// ログインのみを扱うユニットテストで注入不要にするため。
+    private(set) var localDataCleaner: LocalDataCleaning?
     private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
     private static let logger = Logger(subsystem: "jp.carenote.app", category: "AuthVM")
 
@@ -326,19 +328,38 @@ final class AuthViewModel {
         }
         GIDSignIn.sharedInstance.signOut()
 
-        // ローカル SwiftData / Outbox のクリーンアップ（best-effort）。失敗しても Auth 削除は
-        // 既に完了しているため deleteAccount 全体としては成功扱い。次ユーザーログイン時の
-        // 情報漏洩や Outbox 誤送信を防ぐのが目的（#91）。
-        if let cleaner = localDataCleaner {
-            do {
-                try await cleaner.purgeAll()
-            } catch {
-                Self.logger.error("Post-deletion local data purge failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        await performPostDeletionCleanup()
 
         authState = .signedOut
         displayName = nil
+    }
+
+    /// アカウント削除完了後に呼び出すローカルデータ purge フェーズ（best-effort）。
+    /// 失敗しても Auth 削除は既完了のため throws せず、構造化 error ログのみ残す。
+    /// `cleaner` 未注入時は no-op だが、本番環境で nil になるのは DI 配線バグなので
+    /// error ログを出して検知できるようにする（#91 フォローアップ候補）。
+    ///
+    /// 本メソッドは Firebase 非依存のため、`deleteAccount()` 全体のユニットテストが
+    /// 困難な中でも独立して behavioral test が可能（#91 レビュー指摘対応）。
+    @MainActor
+    func performPostDeletionCleanup() async {
+        guard let cleaner = localDataCleaner else {
+            Self.logger.error("localDataCleaner not injected — post-deletion purge skipped. DI wiring bug.")
+            return
+        }
+
+        do {
+            try await cleaner.purgeAll()
+        } catch {
+            let ns = error as NSError
+            Self.logger.error("""
+                Post-deletion local data purge failed. \
+                domain=\(ns.domain, privacy: .public) \
+                code=\(ns.code, privacy: .public) \
+                desc=\(ns.localizedDescription, privacy: .public) \
+                underlying=\(String(describing: ns.userInfo[NSUnderlyingErrorKey]), privacy: .public)
+                """)
+        }
     }
 
     /// サインアウトする
