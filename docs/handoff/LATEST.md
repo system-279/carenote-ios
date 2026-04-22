@@ -1,3 +1,55 @@
+# Handoff — 2026-04-23 早朝セッション: #159 CI retry fix merge / #141 真因確定 + Postpone
+
+## セッション成果サマリ（2026-04-23 早朝セッション）
+
+2026-04-22 夜セッションで起票された #159 (iOS Tests CI flaky) を解消。加えて #141 (SwiftData ModelContainer 重複クラッシュ) を再現検証し、**案 B (ModelContainer Optional 化) が効果なし**と確認。真の解決策 = **案 C' (test 全体で shared container)** を特定して Issue に追記し、本セッションでは Postpone (open 維持)。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #160 | docs/handoff 2026-04-22 夜セッション成果反映 + Issue 推移計算ミス修正 | — |
+| #161 | iOS Simulator Runtime install の retry logic 追加 (最大 3 回 + `set -euo pipefail`) | **#159 closed** |
+
+### 設計判断のハイライト
+
+- **PR #161 Review 反映で fallback 削除**: 初版は「既存 iOS runtime が利用可能なら warning で継続」の fallback path を含んでいたが、code-reviewer + silent-failure-hunter の 2 エージェント並列レビューが共通で Critical 指摘 (`'iOS' in identifier` は iOS 16 等古い runtime も通過 → Boot Simulator が `iPhone 16 Pro` を見つけられず silent skip)。最小 scope (retry のみ) に絞って再コミット
+- **#141 は対症療法不能と確定**: `ModelContainer` を Optional 化して body 副作用 (`PresetTemplates seedIfNeeded`) を遮断しても、test helper 側で毎 test 新 container 生成するため SIGTRAP 継続。`test 全体で shared container` に切替える大規模 test refactor (12+ files) が唯一の根本解決
+- **#141 は Postpone (open 維持)**: 再開条件を明記 (Xcode/iOS 更新での挙動変化再検証 / 全体テスト実行の必要性高まり / 新規 `@Model` 型追加との合流)
+
+### レビュー運用
+
+- PR #161: 2 エージェント並列レビュー（code-reviewer / silent-failure-hunter）。小規模 PR (1 file +28/-1) なので 6 エージェントは過剰
+- #141 の案 B 実装は検証で効果なしと判明 → commit せず rollback (production code を dirty に残さない)
+
+### 本セッション起票（実害ベース）
+
+なし。
+
+### Issue 数推移
+
+セッション開始時 open 8 → 終了時 **7**（net **-1**、#159 close）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 8 |
+| #159 close (PR #161) | -1 | **7** |
+
+### #141 再開時のアクションメモ
+
+- `CareNoteTests/TestHelpers/SwiftDataTestHelper.swift` に `SharedTestModelContainer` (static let) 追加
+- `makeTestModelContainer` / `makeClientOnlyTestModelContainer` を `SharedTestModelContainer.shared` に統合
+- 各 test の setUp で `context.delete(model:)` による事前 cleanup で分離性を代替
+- 影響範囲: 12+ test ファイル (`ClientRepositoryTests`, `ClientSelectViewModelTests`, `ClientCacheServiceTests`, `RecordingListViewModelTests`, `RecordingRepositoryTests`, `TemplateCreateViewModelTests`, `TemplateListViewModelTests`, `OutboxSyncServiceTests`, `RecordingConfirmViewModelTests` など)
+- Quality Gate (Evaluator 分離プロトコル) 対象
+- 再現コマンド: `xcodebuild test -project CareNote.xcodeproj -scheme CareNote -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:CareNoteTests/ClientRepositoryTests`
+
+### CI の現状
+
+- main 最新 (`9a177fe`, PR #161) は `.github/**` のみの変更で iOS Tests job が `paths-ignore` により trigger されない
+- **次の substantive PR (Swift コード変更を含む) で retry 効果の実効検証が必要**
+- それまで main iOS Tests CI 最新失敗は 24760085320 (2026-04-22 04:24Z, commit 506f4e8) のまま残る
+
+---
+
 # Handoff — 2026-04-22 夜セッション: #91 本体対応完了（2 PR merge、レビュー指摘構造的解消）
 
 ## セッション成果サマリ（2026-04-22 夜セッション）
