@@ -48,6 +48,7 @@ jobs:
           MAX_ATTEMPTS: '3'
           RETRY_INTERVAL: '30'
         run: |
+          set -euo pipefail
           attempt=1
           while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
             echo "Attempt $attempt of $MAX_ATTEMPTS: xcodebuild -downloadPlatform iOS"
@@ -61,16 +62,7 @@ jobs:
             fi
             attempt=$((attempt + 1))
           done
-          if xcrun simctl list runtimes --json | python3 -c "
-          import json, sys
-          d = json.load(sys.stdin)
-          ok = any('iOS' in r.get('identifier', '') and r.get('isAvailable') for r in d.get('runtimes', []))
-          sys.exit(0 if ok else 1)
-          "; then
-            echo "::warning::Download failed after $MAX_ATTEMPTS attempts, but iOS simulator runtime is already available - continuing"
-            exit 0
-          fi
-          echo "::error::Failed to install iOS simulator runtime after $MAX_ATTEMPTS attempts and no fallback runtime available"
+          echo "::error::Failed to install iOS simulator runtime after $MAX_ATTEMPTS attempts"
           exit 1
 
       - name: Install XcodeGen
