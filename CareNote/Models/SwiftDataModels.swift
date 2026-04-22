@@ -1,6 +1,33 @@
 import Foundation
 import SwiftData
 
+// MARK: - Schema Drift Guard (Issue #165)
+//
+// When adding a new `@Model` type in this file, update every site that
+// enumerates the SwiftData schema. Missing one will silently regress:
+//  - Issue #91 (LocalDataCleaner) → orphan data after account delete
+//  - Issue #141 (SIGTRAP) → duplicate type registration crashes the process
+//
+// Sites to update:
+//  1. CareNoteTests/TestHelpers/SwiftDataTestHelper.swift
+//     - `SharedTestModelContainer.shared` `ModelContainer(for: ...)` init list
+//     - `cleanup()` `context.delete(model:)` chain
+//  2. CareNote/Services/LocalDataCleaner.swift
+//     - `purgeAll()` operations array
+//  3. Every production `Schema([...])` enumeration:
+//     - CareNote/App/CareNoteApp.swift
+//     - CareNote/Features/Recording/RecordingView.swift
+//     - CareNote/Features/RecordingConfirm/RecordingConfirmView.swift
+//     - CareNote/Features/Settings/TemplateListView.swift
+//     - CareNote/Features/Settings/SettingsView.swift
+//
+// CI guard: `scripts/lint-model-container.sh` detects new test-side drift
+// by rejecting any `ModelContainer(for:` outside its ALLOWED_TEST_FILES list
+// (currently the helper above + OutboxSyncServiceTests.swift, the latter
+// temporarily allowed while Issue #164 tracks a shared-container regression).
+// Production-side `Schema([...])` drift is not CI-gated; keep this list
+// current as the authoritative checklist.
+
 // MARK: - RecordingRecord
 
 @Model
