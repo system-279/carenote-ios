@@ -41,8 +41,9 @@
 
 ### CI の現状
 
-- main 最新 (`73fd304`, PR #167) で iOS Tests job が **36m54s で green**（全 135 tests PASS、macOS runner の初期 cold start 込み）
+- PR #167 feature branch (`5ff4bf7`) 最終 CI で iOS Tests job が **36m54s で green**（全 135 tests PASS、macOS runner の初期 cold start 込み）
 - 新 lint step `Lint - SwiftData schema drift guard (Issue #165)` が CI 環境（macOS 15、bsd grep、macOS 標準 perl）で期待通り動作確認: `lint-model-container: OK (2 approved file(s) register @Model types)`
+- 本 handoff PR push 時点で main `73fd304` (squash merge commit) の CI は進行中。設定/docs のみの変更で regression リスクなし
 
 ### 次セッション推奨アクション（本セッション反映後、優先順）
 
