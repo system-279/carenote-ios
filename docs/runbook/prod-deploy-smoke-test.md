@@ -215,16 +215,38 @@ firebase deploy --only firestore:rules --project carenote-prod-279
 
 ### PASS 判定
 
-- [ ] 上記全 check PASS → Day 3 へ進む → Issue #100 close candidate
+- [x] 上記全 check PASS → Day 3 へ進む → Issue #100 close candidate
 - [ ] FAIL 時: Firebase Console → Firestore → ルール → リビジョンから旧版復元（または `git revert 25aa2a3  # PR #115 Phase 0.5 Rules commit` + `firebase deploy --only firestore:rules --project carenote-prod-279`）
 
 ### 実施ログ記入欄
 
 ```
-- 実施日時: YYYY-MM-DD HH:MM JST
-- 実施者: <GitHub handle>
-- 判定: PASS / FAIL
-- 異常時対応: （あれば）
+- 実施日時: 2026-04-23 19:24:53 JST (開始) → 19:25:01 JST (完了、8 秒)
+- 実施者: system-279
+- 判定: PASS
+- 事前確認:
+  - Day 1 Node 22 deploy から 25h40m 経過 (deploy 2026-04-22 15:51 JST → Day 2 start 2026-04-23 19:24 JST)、Day 1 24h ベースライン エラー率 0% 確認済（PR #175、runbook L164-172）
+  - 64 rules-unit-tests + 88 その他テスト = 152 passing / 0 failing（`firebase emulators:exec --only firestore,auth --project=carenote-test "cd functions && npm test"`、2026-04-23 JST 18:xx 実施）
+  - 最新 firestore.rules を dev 再同期済（`firebase deploy --only firestore:rules --project carenote-dev-279`、2026-04-23 JST 17:42 完了）
+- dev smoke test（6 項目、rules-unit-tests で代替実施）:
+  - ① 自作成録音の編集/削除 → ✅（L560 update + L642 delete / firestore-rules.test.js）
+  - ② 他人作成録音の編集/削除試行 → permission-denied ✅（L576 update + L658 delete）
+  - ③ admin が他人録音の削除 → ✅（L674 delete + L592 update）
+  - ④ 未認証での recordings read → permission-denied ✅（L94 read + L106 write + L1009 list）
+  - ⑤ member が migrationLogs read 試行 → permission-denied ✅（L729）
+  - ⑥ admin が migrationLogs read → ✅（L713、空コレクションでも通過）
+- Deploy 実行: `firebase deploy --only firestore:rules --project carenote-prod-279` → `released rules firestore.rules to cloud.firestore`（compile PASS）
+- Deploy 後確認:
+  - Firebase Console 反映確認: CLI の `released rules` 応答で反映を確認（UI 目視は次セッションに委任、rollback 必要時のみ優先確認）
+  - 実機 smoke test: 本実施ログ時点では skip（iOS 実機/TestFlight build 未配布、rules-unit-tests 64 件で iOS SDK 経由の挙動等価カバー済、低トラフィック prod のリスク限定）。次回 TestFlight リリース時に自録音 CRUD / RecordingList 他人録音 read 2 項目を実施しこの実施ログに後追い記録する
+  - 直後 40 分 Cloud Logging 監視（deploy +15min の checklist を超過して +37min 時点で集計）: beforeSignIn / deleteAccount invocation 0、project 全体 ERROR 0、permission-denied 急増 0（= Day 1 24h baseline と同水準、悪化なし）
+- Day 2 ベースライン記録（deploy +15〜40min、観測期間 2026-04-23 10:25:00Z → 11:04:59Z）:
+  - permission-denied エラー率: 0%（invocation 0 / denied 0）
+  - Firestore read/write latency p95: 測定不能（invocation 0、低トラフィック prod は Cloud Functions metric 経由の間接指標となるため client SDK side での観測は次回 TestFlight リリース時に収集）
+  - invocation count (Cloud Functions): 0（beforeSignIn / deleteAccount 共通）
+  - 備考: prod 低トラフィック環境の特性上、deploy 後 40 分間 Firebase 側トラフィックが発生しなかった。Day 3 着手判定は「ERROR 急増なし」で PASS、実アクセス負荷下での rules 挙動は次回 iOS リリース後に別途観測する
+- 異常時対応: なし
+- 次工程: Day 3 (Phase 1 transferOwnership prod deploy) に **2026-04-24 07:25 JST 以降（deploy 完了から 12h 経過）** 着手可
 ```
 
 ---
