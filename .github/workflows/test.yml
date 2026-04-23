@@ -3,14 +3,13 @@ name: iOS Tests
 on:
   pull_request:
     branches: [main]
+    # Intentionally NOT ignored: scripts/**, .github/** — changes to CI
+    # lint scripts or workflows must self-trigger CI so a tampered lint
+    # or workflow cannot land without validation (Issue #170 H1).
     paths-ignore:
-      # Note: 'scripts/**' was removed from this list (Issue #170 H1) because
-      # CI lint scripts (lint-model-container.sh, lint-scheme-parallel.sh) live
-      # under scripts/ and a tampered lint script must trigger CI to be caught.
       - 'functions/**'
       - 'docs/**'
       - '**.md'
-      - '.github/**'
       - 'firestore.rules'
       - 'storage.rules'
       - 'firebase.json'
@@ -18,13 +17,9 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      # Note: 'scripts/**' was removed from this list (Issue #170 H1) because
-      # CI lint scripts (lint-model-container.sh, lint-scheme-parallel.sh) live
-      # under scripts/ and a tampered lint script must trigger CI to be caught.
       - 'functions/**'
       - 'docs/**'
       - '**.md'
-      - '.github/**'
       - 'firestore.rules'
       - 'storage.rules'
       - 'firebase.json'
