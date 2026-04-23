@@ -540,18 +540,37 @@ describe("recordings 権限境界", () => {
       );
     });
 
-    it("member は createdBy 欠落の create を拒否される", async () => {
+    // ADR-010: Build 35 互換性のため、createdBy 欠落 / 空文字も create を許容する。
+    //          なりすまし防止は "他人の uid は deny" の条件で担保。
+    it("member は createdBy 欠落の create を許可される (防御的、Build 35 互換)", async () => {
       const db = testEnv.authenticatedContext(
         "member-a",
         memberAuth(TENANT_ID).token
       ).firestore();
-      await assertFails(
+      await assertSucceeds(
         db
           .collection("tenants")
           .doc(TENANT_ID)
           .collection("recordings")
           .doc("r-missing")
           .set({ scene: "visit", clientName: "山田太郎" })
+      );
+    });
+
+    // Build 35 (iOS Unlisted 公開中) は FirestoreRecording.createdBy に空文字を
+    // 保存する (#99/#101 参照)。Rules は空文字を許容して Build 35 互換性を担保。
+    it("member は createdBy='' (空文字) の create を許可される (Build 35 互換)", async () => {
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-build35")
+          .set({ scene: "visit", clientName: "山田太郎", createdBy: "" })
       );
     });
   });
@@ -684,6 +703,144 @@ describe("recordings 権限境界", () => {
           .collection("recordings")
           .doc("r-admin-del")
           .delete()
+      );
+    });
+  });
+
+  // ADR-010: 既存 createdBy="" recording (Build 35 で作成された稼働中データ) の権限境界
+  //   - member: author 判定 "" != uid で不成立 → admin のみ操作可 (設計意図)
+  //   - admin: immutable 制約を守れば update / delete 可
+  //   - createdBy を別値に書き換える update は admin 経路でも immutable 制約で deny
+  //     (所有権書換は Admin SDK 経由の Callable でのみ実施 — #119 transferOwnership)
+  describe('createdBy="" 既存レコード (Build 35 互換)', () => {
+    it("member は createdBy='' の recording を update できない", async () => {
+      await seedRecording(TENANT_ID, "r-legacy-upd-deny", "");
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-legacy-upd-deny")
+          .update({ transcription: "編集" })
+      );
+    });
+
+    it("member は createdBy='' の recording を delete できない", async () => {
+      await seedRecording(TENANT_ID, "r-legacy-del-deny", "");
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-legacy-del-deny")
+          .delete()
+      );
+    });
+
+    it("admin は createdBy='' の recording を update できる (immutable 満たす transcription 更新)", async () => {
+      await seedRecording(TENANT_ID, "r-legacy-upd-admin", "");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-legacy-upd-admin")
+          .update({ transcription: "admin による補正" })
+      );
+    });
+
+    it("admin も createdBy='' を別値に書き換える update は immutable 違反で拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-legacy-rewrite-admin", "");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-legacy-rewrite-admin")
+          .update({ createdBy: "admin-a" })
+      );
+    });
+
+    it("admin は createdBy='' の recording を delete できる", async () => {
+      await seedRecording(TENANT_ID, "r-legacy-del-admin", "");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-legacy-del-admin")
+          .delete()
+      );
+    });
+  });
+
+  // ADR-010 AC14 強化 (Evaluator HIGH 指摘対応):
+  // createdBy フィールドが欠落した recording (AC2 防御経路で write された理論上のデータ) に対する
+  // 追加/削除 update を client 全経路で deny する。pre/post 双方で 'createdBy' の存在を等しく
+  // 要求することで "片側のみ存在" パターン (client からの追加 / FieldValue.delete による削除) を
+  // 遮断。実装: firestore.rules update ブロックの immutable 制約を双方向 in-check に強化。
+  describe("createdBy 不在 recording (AC2 防御経路の保護)", () => {
+    async function seedRecordingWithoutCreatedBy(tenantId, recordingId) {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context
+          .firestore()
+          .collection("tenants")
+          .doc(tenantId)
+          .collection("recordings")
+          .doc(recordingId)
+          .set({ scene: "visit", clientName: "山田太郎" });
+      });
+    }
+
+    it("admin も createdBy 不在 recording に createdBy を追加する update は拒否される", async () => {
+      await seedRecordingWithoutCreatedBy(TENANT_ID, "r-no-cb-add");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-no-cb-add")
+          .update({ createdBy: "admin-a" })
+      );
+    });
+
+    it("admin は createdBy 不在 recording の他フィールド update は許可される (後方互換)", async () => {
+      await seedRecordingWithoutCreatedBy(TENANT_ID, "r-no-cb-safe");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-no-cb-safe")
+          .update({ transcription: "補正" })
       );
     });
   });
@@ -903,12 +1060,16 @@ describe("エッジケース (Issue #116 follow-up)", () => {
       );
     });
 
-    it("createdBy=空文字 の create は拒否される (auth.uid は空にならない想定)", async () => {
+    // ADR-010: 空文字 createdBy は Build 35 の実 payload。以前は deny 前提だったが、
+    //          稼働バイナリ (Build 35, App Store Unlisted 公開中) と互換を取るため許容。
+    //          既存テストは #116 follow-up 時点 (Phase 0.5 前提) で記述されたが、
+    //          Build 35 ロールバック後の恒久設計 (#100) では空文字は許容側に反転する。
+    it("createdBy='' の create は許可される (Build 35 の実 payload、ADR-010)", async () => {
       const db = testEnv.authenticatedContext(
         "member-a",
         memberAuth(TENANT_ID).token
       ).firestore();
-      await assertFails(
+      await assertSucceeds(
         db
           .collection("tenants")
           .doc(TENANT_ID)

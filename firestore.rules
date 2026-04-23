@@ -40,14 +40,71 @@ service cloud.firestore {
         allow read, write: if isTenantMember(tenantId);
       }
 
-      // 録音
-      // NOTE(2026-04-23 rollback): Phase 0.5 強化版 rules を本日 prod deploy したが、
-      // 稼働中 iOS (Build 35 / App Store 公開中) が #101 (2026-04-20 merge) を含まず
-      // `createdBy` を書き込まないため、新 rules の create 条件 `createdBy == uid` で
-      // permission-denied → 業務停止。応急として本 block を Phase 0.5 前の状態に戻す。
-      // 再導入条件: #101 を含む Build 36 を全稼働実機に配布完了後、別 PR で再適用する。
+      // 録音 (Issue #100 恒久解消、ADR-010 参照)
+      //
+      // 設計方針: iOS 稼働バイナリ (Build 35) を変更せずに、createdBy の "存在"
+      //         と "値" を条件分岐キーに使った二段階 Rules で権限過剰を解消する。
+      //
+      //   read   : テナントメンバー全員 (業務上の相互参照を許容)。
+      //            ※ Firestore Security Rules の制約上、list query は返却する全
+      //              ドキュメントが read 条件を満たす必要がある。稼働中 Build 35 の
+      //              RecordingList は createdBy フィルタを持たないため、read を先に
+      //              createdBy ベース制限すると query 全体が permission-denied で
+      //              破綻する (前回 Phase 0.5 rollback の再来)。将来 Build で iOS
+      //              query 側に createdBy フィルタを導入してから段階強化する
+      //              (詳細・代替案の却下理由: ADR-010)
+      //
+      //   create : テナントメンバー全員可。createdBy フィールドの扱い:
+      //              - 省略 OK (防御的、Build 35 では通常到達しない経路)
+      //              - "" (空文字) OK ← Build 35 の実際の write payload (#99/#101 参照)
+      //              - auth.uid OK ← 将来 Build N (#101 以降) の write payload
+      //              - 上記以外 (他人の uid / null / 型違い) は DENY
+      //            (なりすまし防止と Build 35 互換性の両立)
+      //
+      //   update : admin または 作成者本人 (createdBy == auth.uid)。
+      //            加えて createdBy 不変制約: クライアント経路での所有権書換を禁止し、
+      //            所有権移管は Admin SDK 経由の Callable (transferOwnership) で行う。
+      //            既存 createdBy="" の recording は "" != uid により author 分岐が
+      //            不成立となり admin のみが操作可能 (設計意図)。
+      //
+      //   delete : admin または 作成者本人 (update と同じ author 判定、immutable は不要)。
+      //            既存 createdBy="" の recording は admin のみ delete 可能。
       match /recordings/{recordingId} {
-        allow read, write: if isTenantMember(tenantId);
+        allow read: if isTenantMember(tenantId);
+
+        allow create: if isTenantMember(tenantId)
+          && (
+            !('createdBy' in request.resource.data)
+            || request.resource.data.createdBy == ''
+            || request.resource.data.createdBy == request.auth.uid
+          );
+
+        allow update: if (
+            isAdmin(tenantId)
+            || (
+              'createdBy' in resource.data
+              && resource.data.createdBy == request.auth.uid
+            )
+          )
+          && (
+            // createdBy immutable: pre/post 双方で存在+等値、または双方で不在のいずれか。
+            // 片側のみ存在 (追加 / FieldValue.delete による削除) は client 全経路で deny。
+            (
+              'createdBy' in request.resource.data
+              && 'createdBy' in resource.data
+              && request.resource.data.createdBy == resource.data.createdBy
+            )
+            || (
+              !('createdBy' in request.resource.data)
+              && !('createdBy' in resource.data)
+            )
+          );
+
+        allow delete: if isAdmin(tenantId)
+          || (
+            'createdBy' in resource.data
+            && resource.data.createdBy == request.auth.uid
+          );
       }
 
       // 移行ログ（Phase 1 transferOwnership の監査用。admin SDK 経由でのみ書込）

@@ -305,6 +305,88 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 
 ---
 
+## Phase 0.5.1: recordings Rules 恒久再設計 prod deploy（2026-04-24〜）
+
+Day 2 Phase 0.5 原案は稼働 iOS Build 35 との不整合で rollback 済（PR #180、handoff 2026-04-23 夜）。
+**iOS バイナリを変更せず GCP 側 Rules のみで Issue #100 を恒久解消**する再設計版。
+
+設計詳細: [ADR-010 recordings Rules 権限モデル段階的強化設計](../adr/ADR-010-recordings-permission-model.md)
+
+### 事前確認（skip 禁止）
+
+- [ ] `functions/test/firestore-rules.test.js` 全件 PASS（今回 160/160、Phase 0.5 原案時 152 → +8 件新規 + 既存 2 件反転。内訳: `createdBy=''` create 許可 1 + 既存 `createdBy=''` recording 境界 5 + `createdBy` 不在 recording 防御 2 / 反転: 欠落 create deny→allow・空文字 create deny→allow）
+- [ ] prod audit baseline 記録: `node functions/scripts/audit-createdby.mjs carenote-prod-279`（read-only、ADR-010 に記録）
+- [ ] 最新 `firestore.rules` が dev に deploy 済
+- [ ] ADR-010 / 本 runbook セクション / 新 test が PR に含まれている
+
+### Smoke test（deploy 前、dev で実施、**rules-unit-tests での代替は禁止**）
+
+前回 Phase 0.5 失敗の最大教訓: 「rules-unit-tests は新 iOS × 新 Rules のみ検証し、稼働バイナリ × 新 Rules を検証できない」。
+本 Phase では以下を**必ず実機で実施**する（Codex plan review 観点 7 対応）:
+
+- [ ] Build 35 相当 iOS（dev 接続）で録音 create → 成功（permission-denied が出ないこと）
+- [ ] Build 35 相当 iOS で RecordingList 表示 → 従来通り他人の録音も read 可
+- [ ] Build 35 相当 iOS で自録音の編集/削除試行 → admin ログイン時は成功、非 admin は permission-denied（新設計では既存 createdBy="" recording は admin のみ）
+- [ ] Build 35 相当 iOS で他人の録音の編集/削除試行 → permission-denied
+
+### Deploy 実行
+
+```bash
+firebase deploy --only firestore:rules --project carenote-prod-279
+```
+
+**実行前にユーザー明示承認必須**（CLAUDE.md MUST）。
+
+### Deploy 後確認
+
+- [ ] Firebase Console → Firestore → ルール → 最新版が反映
+- [ ] prod 実機（Build 35 / 実運用者 = admin）で録音 CRUD 動作確認（**skip 禁止**）
+- [ ] 直後 10〜15 分間 Cloud Logging を監視:
+      `gcloud logging read 'severity>=ERROR' --limit 50 --project carenote-prod-279`
+- [ ] `permission-denied` の急増なし（Day 2 rollback 前 baseline と比較）
+- [ ] prod audit 再実行で既存 2 件（全 createdBy=""）が影響受けていないこと
+
+### PASS 判定
+
+- [x] 上記全 check PASS → Issue #100 close + ADR-010 Status を Accepted 確定
+- [ ] FAIL 時: Firebase Console → Firestore → ルール → リビジョンから PR #180 版復元、または `git revert` + 再 deploy
+
+### 再発防止プロトコル（ADR-010 § 再発防止）
+
+今後の Rules 変更 PR では以下を必須チェック:
+
+1. **前提 iOS build 番号を PR description に明記**
+2. **稼働バイナリ相当 payload × 新 Rules の unit test を追加**（今回追加した `createdBy="" 既存レコード` 境界 describe がテンプレート）
+3. **実機 smoke を skip 禁止**（rules-unit-tests は代替にならない）
+4. **prod audit を deploy 前に実行** し、既存データ分布を baseline として記録
+
+### 実施ログ記入欄
+
+```
+- 実施日時:
+- 実施者:
+- 判定: PASS / FAIL
+- 事前確認:
+  - rules-unit-tests 件数 / 結果:
+  - prod audit baseline: tenant 279 total=__, empty=__, missing=__, non-empty=__
+  - dev deploy 完了時刻:
+- Build 35 実機 smoke:
+  - create 成功:
+  - RecordingList read 成功:
+  - admin による自録音編集/削除 成功:
+  - 他人録音 編集/削除 permission-denied:
+- Deploy 実行: `firebase deploy --only firestore:rules --project carenote-prod-279` 結果:
+- Deploy 後確認:
+  - Console 反映:
+  - 実機 CRUD 成功:
+  - 10min Cloud Logging ERROR:
+  - prod audit 再実行差分:
+- 異常時対応:
+- 次工程: Issue #100 close コメント + ADR-010 Status 確定
+```
+
+---
+
 ## Day 3-4: 24h 安定監視
 
 Day 1-3 の変更を束ねて 24h 観測。
@@ -358,6 +440,7 @@ Day 1-3 の変更を束ねて 24h 観測。
 - Issue #111（Phase 0.9: prod allowedDomains 有効化）
 - [ADR-007 Guest Tenant for Apple Sign-In](../adr/ADR-007-guest-tenant-for-apple-signin.md)
 - [ADR-008 Account Ownership Transfer](../adr/ADR-008-account-ownership-transfer.md)
+- [ADR-010 recordings Rules 権限モデル段階的強化設計](../adr/ADR-010-recordings-permission-model.md)
 - [phase-0-9-allowed-domains.md](./phase-0-9-allowed-domains.md)
 - [phase-1-admin-id-token.md](./phase-1-admin-id-token.md)
 - `docs/appstore-metadata.md`（審査アカウント情報）
