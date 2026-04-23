@@ -1,3 +1,89 @@
+# Handoff — 2026-04-24 セッション: Issue #100 **恒久解消** (PR #181 merged) + iOS delete follow-up #182 起票
+
+## ✅ 前セッション Phase 0.5 Rules rollback 判断ミスを GCP 側のみで根本解消
+
+前セッション (2026-04-23 夜) で Phase 0.5 強化版 Rules の prod deploy が稼働中 iOS Build 35 と不整合で業務停止 → rollback した。当初の想定ルート「Build 36 リリース → createdBy 書込み確認 → Phase 0.5 再 deploy」はユーザー方針「**iOS バージョンアップを避け、GCP 側のみで根本解決**」で破棄。本セッションで **iOS バイナリを変更せず** Issue #100 恒久解消を達成。
+
+### セッション成果サマリ
+
+| PR | 内容 | Milestone |
+|----|------|-----------|
+| #181 (merged) | iOS 非変更で recordings 権限モデルを段階的強化 (ADR-010) | **Issue #100 恒久 close** |
+| #182 (新規起票) | iOS 側の録音 delete が Firestore に同期されない既存不具合 (bug / P2) | smoke 過程で発見・別追跡化 |
+
+### 主要判断のハイライト
+
+- **iOS 非変更方針の採用**: Build 36 リリース (iOS レビュー + TestFlight 経由、2-5 日所要) を避け、「createdBy の存在と値を条件分岐キーにした二段階 Rules」で Build 35 互換を維持しつつ Issue #100 核心 (他人 update/delete) を遮断
+- **read は暫定許容**: 案B (read も createdBy 制限) は Firestore query 仕様 (返却全 doc が read rule を満たす必要) により Build 35 の RecordingList が permission-denied で破綻 → 前回業務停止再発リスク。ADR-010 で将来 Build N+ 時の段階強化計画を明記
+- **既存 recordings は backfill しない判断**: 2026-04-24 prod audit 実測で tenant 279 の全 2 件が `createdBy=""` (string 型)、admin = 実運用者なので admin 権限で業務継続可能。ADR-010 consequences 明記
+- **admin の createdBy 書換も immutable**: Phase 0.5 原案の設計思想を継承。所有権書換は Admin SDK 経由 Callable `transferOwnership` (ADR-008) に限定
+- **Evaluator HIGH 指摘の双方向 in-check 強化**: 「admin が createdBy なし recording に createdBy を追加する update」の silent pass バグを双方向 `in` チェックで修正 + 専用テスト 2 件追加
+- **smoke 5「削除復活」は本 PR 対象外と確定**: コード調査 (`RecordingListViewModel.swift:101-109` + `FirestoreService.swift` に `deleteRecording` メソッド未実装 + grep で `recordings` コレクションの `.delete()` 呼出ゼロ) で、iOS 既存不具合と確定。本 PR の Rules 変更とは完全に無関係なので Issue #182 で別追跡化
+
+### 実装実績
+
+- **変更ファイル**: 4 個 (+491/-11)
+  - `firestore.rules` (recordings block rewrite、+58/-6)
+  - `functions/test/firestore-rules.test.js` (+8 新規テスト + 既存 2 件反転、+169/-9)
+  - `docs/adr/ADR-010-recordings-permission-model.md` (新規、179 行)
+  - `docs/runbook/prod-deploy-smoke-test.md` (Phase 0.5.1 セクション追加、+83/-0)
+- **テスト**: **160/160 PASS** (Phase 0.5 原案時 152 → +8 件新規拡張: createdBy='' create 許容 1 + 既存 createdBy='' 境界 5 + createdBy 不在 recording 防御 2)
+- **Prod 操作** (全てユーザー明示承認済):
+  - `firebase deploy --only firestore:rules --project carenote-prod-279` (2026-04-24、compile PASS + released rules to cloud.firestore)
+  - prod audit (read-only) 2 回実行: baseline (deploy 前) + 事後確認 (deploy 後) 両方で tenant 279 = 2 件全 `createdBy=""` (string 型) を確認 → silent-failure-hunter H1 (非 string 混入リスク) が実データ上ゼロを実証
+- **dev 操作**: `firebase deploy --only firestore:rules --project carenote-dev-279` 2 回 (初回 + Evaluator HIGH 修正後)
+- **実機 smoke**: Build 35 (TestFlight prod 接続) で create / read / update 全 PASS、delete は #182 で追跡
+
+### レビュー運用 (3 層の独立レビュー + Quality Gate)
+
+- **Codex plan review** (設計段階、`/codex plan` MCP): Go with conditions、7 観点 (Build 35 互換 / Rules 構文 / author 判定単一依存 / allowedDomains 組合せ / backfill / 移行摩擦 / 再発防止) 全対応
+- **Evaluator agent** (実装 AC 検証、quality-gate.md Evaluator 分離プロトコル発動): HIGH 1 件 (update immutable 論理バグ) 検出 → 双方向 `in` チェック修正 + テスト 2 件追加 → 再検証 PASS
+- **`/review-pr` 4 エージェント並列** (code-reviewer / pr-test-analyzer / silent-failure-hunter / comment-analyzer、type-design は新規型なしで skip): Critical 0、Important 全対応 (テスト数 158→160 訂正 / admin 他フィールド update 可の Consequences 精緻化 / audit 結果明記 / FieldValue.delete() Rules 論理式保証の注記 / Rules コメントへ Firestore query 制約追加)、Suggestion も同時反映 (ADR-008 参照追加 + runbook header に ADR-010 link 追加)
+- **rules-unit-tests**: 160/160 PASS (3 回実行: 初回 158 → Evaluator 修正後 160 → review 反映後 160)
+
+### 再発防止プロトコル (ADR-010 § 再発防止 + runbook Phase 0.5.1)
+
+前回 Phase 0.5 rollback の教訓を構造化:
+1. **Rules 変更 PR 必須項目**: 前提 iOS build 番号明記 + 稼働バイナリ相当 payload テスト + Build N 相当 payload テスト
+2. **prod deploy 前ゲート**: 実機 smoke **skip 禁止** + rules-unit-tests **代替禁止** + prod audit baseline 記録 + dev deploy 先行
+3. **「rules-unit-tests は実機 smoke の代替ではない」を docs 明文化**
+
+### Issue Net 変化
+
+セッション開始時 open **8** → #100 close (-1) → #182 起票 (+1) → 終了時 open **8** (net **0**)
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 8 |
+| #100 close (PR #181 merge で auto-close + 詳細コメント投稿) | -1 | 7 |
+| #182 起票 (iOS delete 未実装、triage #1 実害 + #2 再現可能 + rating 8+) | +1 | **8** |
+
+> **Net 0 の理由明示**: 既存実害 (#100 recordings 権限過剰、rollback 状態で再露出中) を恒久解消して -1、調査過程で発見した既存 iOS 不具合 (delete 未実装で削除後復活) を可視化して +1。triage 基準下で両方適正 (#100 は元から実害、#182 は rating 8+/conf 95+ 相当)。KPI 的には net 0 だが「未対応の現存リスク解消 + 既存未追跡不具合の可視化」で実内容は進捗あり。
+
+### CI の現状
+
+- PR #181 merge 後の main `6ad3ae6`: functions テスト 160/160、firestore.rules compile PASS 実証済
+- iOS Tests CI は PR #173 の scheme parallelizable=NO 強制 + lint-scheme-parallel.sh で安定運用継続
+
+### 次セッション推奨アクション (優先順)
+
+1. **#182 iOS delete 機能の Firestore 同期実装** (bug, P2): `FirestoreService.deleteRecording` 追加 + `RecordingListViewModel.deleteRecording` で Firestore delete 呼び出し。ADR-010 の author 分岐 (`admin OR createdBy==uid`) を活用できる設計済。**方針 A (FirestoreService 直接呼び出し) 推奨**、方針 B (OutboxSync delete 拡張) はコスト高
+2. **#170 SharedTestModelContainer hardening H2-H6** (bug, P1): H1 は PR #173 で完了、H2-H6 follow-up 6-10h 見積もり
+3. **#111 実機 smoke test 後追い close**: 次回 TestFlight リリース時に自録音 CRUD / Guest 振分 / allowedDomains 自動加入 3 条件確認 → close
+4. **#105 deleteAccount E2E (Firebase Emulator Suite)** (enhancement, P2)
+5. **#178 Stage 2 GHA + WIF 運用基盤** (enhancement, P2、ADR-009 follow-up)
+6. **#92 / #90 Guest Tenant 関連**、**#65 Apple × Google account link**
+
+### 関連リンク
+
+- [PR #181 merged](https://github.com/system-279/carenote-ios/pull/181) — Issue #100 恒久解消
+- [Issue #100 close + 詳細コメント](https://github.com/system-279/carenote-ios/issues/100#issuecomment-4305906987)
+- [Issue #182 iOS delete follow-up](https://github.com/system-279/carenote-ios/issues/182)
+- [ADR-010 recordings Rules 権限モデル段階的強化設計](../adr/ADR-010-recordings-permission-model.md)
+- `docs/runbook/prod-deploy-smoke-test.md` § Phase 0.5.1
+
+---
+
 # Handoff — 2026-04-23 夜セッション: Day 3 + Phase 0.9 + ADR-009 → **Phase 0.5 Rules 判断ミス + 緊急 rollback**
 
 ## ⚠️ セッション終盤に Phase 0.5 Rules の判断ミスが発覚し、業務停止 → rollback 実施
