@@ -42,7 +42,12 @@ if [ ! -d "$SCHEMES_DIR" ]; then
 fi
 
 # Collect every committed scheme. Sort for deterministic CI output.
-mapfile -t SCHEMES < <(find "$SCHEMES_DIR" -name '*.xcscheme' | sort)
+# Use `while read` instead of `mapfile` because macOS ships bash 3.2
+# (no mapfile) and CI runs on macos-15 with the default /bin/bash.
+SCHEMES=()
+while IFS= read -r scheme; do
+  SCHEMES+=("$scheme")
+done < <(find "$SCHEMES_DIR" -name '*.xcscheme' | sort)
 if [ "${#SCHEMES[@]}" -eq 0 ]; then
   echo "::error::No *.xcscheme files in $SCHEMES_DIR — cannot enforce parallelization guard."
   exit 1
