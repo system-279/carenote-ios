@@ -4,9 +4,11 @@ on:
   pull_request:
     branches: [main]
     paths-ignore:
+      # Note: 'scripts/**' was removed from this list (Issue #170 H1) because
+      # CI lint scripts (lint-model-container.sh, lint-scheme-parallel.sh) live
+      # under scripts/ and a tampered lint script must trigger CI to be caught.
       - 'functions/**'
       - 'docs/**'
-      - 'scripts/**'
       - '**.md'
       - '.github/**'
       - 'firestore.rules'
@@ -16,9 +18,11 @@ on:
   push:
     branches: [main]
     paths-ignore:
+      # Note: 'scripts/**' was removed from this list (Issue #170 H1) because
+      # CI lint scripts (lint-model-container.sh, lint-scheme-parallel.sh) live
+      # under scripts/ and a tampered lint script must trigger CI to be caught.
       - 'functions/**'
       - 'docs/**'
-      - 'scripts/**'
       - '**.md'
       - '.github/**'
       - 'firestore.rules'
@@ -40,6 +44,9 @@ jobs:
 
       - name: Lint - SwiftData schema drift guard (Issue #165)
         run: bash scripts/lint-model-container.sh
+
+      - name: Lint - Test scheme parallelization guard (Issue #170 H1)
+        run: bash scripts/lint-scheme-parallel.sh
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1

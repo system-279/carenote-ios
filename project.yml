@@ -87,3 +87,30 @@ targets:
       base:
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: true
+
+# Issue #170 H1 / #164: cross-suite race を構造的に抑止するため、
+# CareNoteTests は parallelizable=false で実行する（process-wide
+# SharedTestModelContainer の cleanup が他 suite の test body 中に
+# 介入する race を防ぐ）。CI 側の `-parallel-testing-enabled NO` と
+# 二重防御。scripts/lint-scheme-parallel.sh が回帰を検知。
+schemes:
+  CareNote:
+    build:
+      targets:
+        CareNote: all
+        CareNoteTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - name: CareNoteTests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
