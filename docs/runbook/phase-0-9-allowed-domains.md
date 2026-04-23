@@ -254,4 +254,37 @@ rollback 後、`beforeSignIn` は次回実行時に Firestore を都度読み取
 
 ## 実施ログ
 
-（未実施）
+### 2026-04-23 21:00 JST: prod allowedDomains 有効化（Stage 1 CLI 運用）
+
+- 実施者: system-279
+- 判定: PASS
+- 手段: SA impersonation + Firestore REST API v1 PATCH（ADR-009 Stage 1 採用）
+- 前提整備:
+  - `system@279279.net` (roles/owner on prod) に SA `firebase-adminsdk-fbsvc@carenote-prod-279.iam.gserviceaccount.com` の `roles/iam.serviceAccountTokenCreator` を付与
+  - `gcloud iam service-accounts add-iam-policy-binding firebase-adminsdk-fbsvc@carenote-prod-279.iam.gserviceaccount.com --member=user:system@279279.net --role=roles/iam.serviceAccountTokenCreator --project=carenote-prod-279`
+  - IAM propagation 約 60〜90 秒
+- 設定前: `tenants/279.allowedDomains` = NOT SET（未定義フィールド）
+- 設定コマンド:
+  ```bash
+  TOKEN=$(gcloud auth print-access-token \
+    --impersonate-service-account=firebase-adminsdk-fbsvc@carenote-prod-279.iam.gserviceaccount.com)
+
+  curl -s -X PATCH \
+    "https://firestore.googleapis.com/v1/projects/carenote-prod-279/databases/(default)/documents/tenants/279?updateMask.fieldPaths=allowedDomains" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"fields":{"allowedDomains":{"arrayValue":{"values":[{"stringValue":"279279.net"}]}}}}'
+  ```
+- 設定後: `tenants/279.allowedDomains` = `["279279.net"]`（lowercase、runbook 規範準拠）
+- 前提フェーズ:
+  - Phase -1 createdBy バックフィル: PR #117（2026-04-21 完了）
+  - Phase 0 uid 参照棚卸し: PR #109（完了）
+  - Phase 0.5 Rules prod deploy: PR #176（2026-04-23 19:25 JST 完了）
+  - Phase 1 transferOwnership prod deploy: 2026-04-23 20:55 JST 完了（本 runbook = `prod-deploy-smoke-test.md` Day 3 実施ログ参照）
+  - Node.js 22 runtime prod deploy: PR #175（2026-04-23 完了）
+  - iOS 実機 smoke test: **次回 TestFlight リリース時に後追い予定**（自社単独フェーズで受容）
+  - 既存 279 メンバーのドメイン把握: **全員 `@279279.net` 確認済**（ユーザー明示、2026-04-23 セッション）
+- 動作確認: Cloud Logging の `beforeSignIn` で新規 `@279279.net` アカウントの自動 member 化は、次回新規サインアップ発生時に確認する（低トラフィック環境下で即時確認不可、自社単独フェーズで受容）
+- 24h 監視: 自社単独フェーズで短縮運用、`beforeSignIn` のエラー急増は自社ログインで即検知する前提
+- 運用基盤: Stage 2 GitHub Actions + Workload Identity Federation は follow-up Issue で整備（ADR-009 参照）
+

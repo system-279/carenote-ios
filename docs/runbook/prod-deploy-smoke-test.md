@@ -289,12 +289,19 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 
 ### 実施ログ記入欄
 
-```
-- 実施日時: YYYY-MM-DD HH:MM JST
-- 実施者: <GitHub handle>
-- 判定: PASS / FAIL
-- 異常時対応: （あれば）
-```
+- 実施日時: 2026-04-23 20:55 JST (UTC 2026-04-23T11:55Z 前後、deploy 完了)
+- 実施者: system-279
+- 判定: PASS
+- 実行スコープ: `firebase deploy --only functions:transferOwnership --project carenote-prod-279`（単独 function deploy、beforeSignIn / deleteAccount は触らない）
+- 事前確認:
+  - Day 2 Rules deploy (2026-04-23 19:25 JST) から 1h30m 経過、ERROR 0 維持（自社単独フェーズで 12h 待ち短縮、理由は ADR-009 + 本セッション handoff 参照）
+  - functions テスト: 2026-04-22 以降 `functions/` 変更なし、Day 2 実施時の 152 tests PASS 有効
+  - dev 事前 dryRun: **skip**（transferOwnership は Callable、deploy 時点で発火ゼロ、実運用時に初回 dev smoke test を実施する方針に変更）
+- Deploy 結果: `functions[transferOwnership(asia-northeast1)] Successful create operation` / Runtime: Node.js 22 (2nd Gen) / Memory: 256 MiB
+- `firebase functions:list --project=carenote-prod-279` で `transferOwnership` v2 callable / nodejs22 / ACTIVE 確認
+- Cloud Logging 直近 10 分監視: `severity>=ERROR` 結果 0 件（deploy 時点で Callable 呼出しなし、想定通り）
+- 24h 安定監視: 自社単独フェーズのため短縮運用。異常は自社ユーザー（実利用者）が即検知する前提
+- dev smoke test 後追い: 次回 transferOwnership 実運用時（苗字変更等）に `docs/runbook/phase-1-admin-id-token.md` § 手順 A を初回実施
 
 ---
 
