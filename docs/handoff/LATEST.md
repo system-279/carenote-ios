@@ -27,6 +27,7 @@ PR #179 merge 後の追加確認で、**Phase 0.5 Rules prod deploy (本日 19:2
 - **対応**: `firestore.rules` の `recordings` block を Phase 0.5 前の状態（`allow read, write: if isTenantMember(tenantId)`）に戻して `firebase deploy --only firestore:rules --project carenote-prod-279` 実施
 - **結果**: `cloud.firestore: rules file firestore.rules compiled successfully` / `released rules firestore.rules to cloud.firestore` → 業務復旧
 - **残置**: `migrationLogs` / `migrationState` の Rules は残した（Phase 1 transferOwnership 運用に必要、iOS app から触らないので影響なし）
+- **rules unit test は意図的に未修正**: `functions/test/firestore-rules.test.js` は Phase 0.5 強化版（create に createdBy 必須等）の期待のまま。rollback 後の rules と一時不整合となり CI `functions-test` workflow は FAIL 見込み。**Phase 0.5 Rules 再 deploy 時に test を合わせて戻す方針**。次セッションで Build 36 リリース + Phase 0.5 Rules 再 deploy を実施する際、rules と test を同じ PR で一緒に再適用する
 
 ### 影響を受けた/受けなかった今日の変更
 
@@ -34,7 +35,7 @@ PR #179 merge 後の追加確認で、**Phase 0.5 Rules prod deploy (本日 19:2
 |------|------|------|
 | Phase 0.5 Rules prod deploy (PR #115 / Day 2) | ❌ 業務停止発生 | **本 rollback で Phase 0.5 前の状態に戻した** |
 | Day 3 transferOwnership prod deploy | ✅ 影響なし（iOS app から呼ばない Callable） | そのまま継続 |
-| Phase 0.9 prod allowedDomains 設定 | ✅ 影響なし（beforeSignIn サーバ側変更のみ） | そのまま継続 |
+| Phase 0.9 prod allowedDomains 設定 | ⚠️ 機能自体は壊れていない（beforeSignIn 変更のみ）。ただし rollback 期間中は新規 `@279279.net` 自動加入 member にも **tenant-wide recordings 権限（read/write/delete）** が付与されるため、allowedDomains 有効 × 過剰権限の組合せリスク顕在（自社単独フェーズで受容、Phase 0.5 Rules 再 deploy で解消） | そのまま継続（自動加入 member は自社メンバーのみの前提） |
 | ADR-009 prod Firestore 運用パターン | ✅ 影響なし（文書のみ） | そのまま |
 | Issue #178 Stage 2 follow-up 起票 | ✅ 影響なし | そのまま |
 
