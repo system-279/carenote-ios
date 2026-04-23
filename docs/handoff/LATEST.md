@@ -67,7 +67,14 @@
 
 ### 次セッション推奨アクション (優先順)
 
-1. **#182 iOS delete 機能の Firestore 同期実装** (bug, P2): `FirestoreService.deleteRecording` 追加 + `RecordingListViewModel.deleteRecording` で Firestore delete 呼び出し。ADR-010 の author 分岐 (`admin OR createdBy==uid`) を活用できる設計済。**方針 A (FirestoreService 直接呼び出し) 推奨**、方針 B (OutboxSync delete 拡張) はコスト高
+1. **🔥 #182 iOS delete 機能の Firestore 同期実装 — 次セッション即着手・休まず完遂** (bug, P1 へ昇格検討): `FirestoreService.deleteRecording` 追加 + `RecordingListViewModel.deleteRecording` で Firestore delete 呼び出し。ADR-010 の author 分岐 (`admin OR createdBy==uid`) を活用できる設計済。**方針 A (FirestoreService 直接呼び出し) 確定**、方針 B (OutboxSync delete 拡張) は却下 (実装コスト高・ROI 低)。
+   - **impl-plan は Issue #182 のコメント `impl-plan v1` に詳細記載**（AC1-10 / RED-GREEN-REFACTOR ステップ / 変更ファイル予測 4 個 / 所要 2-3h / リスク対策 3 点）
+   - **次セッション開始時のアクション**:
+     1. `/catchup` で本 handoff を読む
+     2. Issue #182 `impl-plan v1` コメントを開く
+     3. feature branch `fix/issue-182-ios-delete-firestore-sync` 作成
+     4. RED フェーズ (失敗テスト追加) から開始
+   - **本セッションの反省 (ユーザーに謝罪済)**: PR #181 時に iOS 側の delete 実装確認を怠り、smoke test まで問題が顕在化しなかった。ADR-010 § 再発防止プロトコル §4 に「iOS/クライアント側実装確認」を恒久プロトコル化。
 2. **#170 SharedTestModelContainer hardening H2-H6** (bug, P1): H1 は PR #173 で完了、H2-H6 follow-up 6-10h 見積もり
 3. **#111 実機 smoke test 後追い close**: 次回 TestFlight リリース時に自録音 CRUD / Guest 振分 / allowedDomains 自動加入 3 条件確認 → close
 4. **#105 deleteAccount E2E (Firebase Emulator Suite)** (enhancement, P2)
