@@ -22,7 +22,8 @@ PR #179 merge 後の追加確認で、**Phase 0.5 Rules prod deploy (本日 19:2
 
 ### Rollback 実施
 
-- **実施時刻**: 2026-04-23 21:30 JST 頃（Phase 0.5 prod deploy から 2h05m 後）
+- **実施時刻**: 2026-04-23 **22:07:58 JST**（Phase 0.5 prod deploy から 2h42m56s 後、Firebase Rules REST API の ruleset `createTime` により一次確定）
+- **ruleset 識別子**: `projects/carenote-prod-279/rulesets/b86a7ee8-43f5-4a36-934d-50d21a596ee5`
 - **対応**: `firestore.rules` の `recordings` block を Phase 0.5 前の状態（`allow read, write: if isTenantMember(tenantId)`）に戻して `firebase deploy --only firestore:rules --project carenote-prod-279` 実施
 - **結果**: `cloud.firestore: rules file firestore.rules compiled successfully` / `released rules firestore.rules to cloud.firestore` → 業務復旧
 - **残置**: `migrationLogs` / `migrationState` の Rules は残した（Phase 1 transferOwnership 運用に必要、iOS app から触らないので影響なし）
