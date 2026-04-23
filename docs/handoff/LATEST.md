@@ -1,3 +1,80 @@
+# Handoff — 2026-04-23 夜セッション: Day 3 transferOwnership prod deploy + Phase 0.9 allowedDomains 有効化 + ADR-009 策定
+
+## セッション成果サマリ（2026-04-23 夜セッション）
+
+前セッション (2026-04-23 午後、PR #175/#176 merged) 直後に継続。`/catchup` で Day 1/Day 2 完了確認 → ユーザー判断「**自社単独フェーズで 24h 監視ゲートを圧縮し最速進行**」のもと、Day 2 deploy +1h30m 時点で Day 3 transferOwnership prod deploy に着手、続けて Phase 0.9 prod `allowedDomains` を有効化。
+
+**両機能（transferOwnership / allowedDomains）が prod で実動作可能な状態に到達**。副次的成果として prod Firestore 直接書き込みの恒常的運用パターンを ADR-009 として策定し、将来の GHA+WIF 運用基盤を Issue #178 で follow-up 起票。
+
+| 成果 | 内容 | Milestone |
+|------|------|-----------|
+| Day 3 transferOwnership prod deploy | 2026-04-23 20:55 JST 完了（Callable 新規 / Node.js 22 / asia-northeast1）、Cloud Logging ERROR 0 | **Phase 1 prod 反映完了** |
+| Phase 0.9 prod allowedDomains 設定 | 2026-04-23 21:00 JST 完了、`tenants/279.allowedDomains = ["279279.net"]` | **Phase 0.9 prod 反映完了（Issue #111 実機確認のみ残）** |
+| ADR-009 新規 | prod Firestore 直書き運用パターン（Stage 1 CLI + Stage 2 GHA+WIF 二段構え） | 恒常的運用基盤の設計確定 |
+| Issue #178 起票 | Stage 2 GHA + WIF follow-up（enhancement/P2、triage 基準 #5 ユーザー明示指示） | 将来運用基盤の追跡化 |
+| Issue #100 close | Day 3 完了で runbook `prod-deploy-smoke-test.md` L218 "Day 3 へ進む → Issue #100 close candidate" が確定 | Rules 過剰権限問題の解消 |
+
+### 主要判断のハイライト
+
+- **24h 監視ゲートの圧縮根拠**: prod は低トラフィック（Day 1 24h で beforeSignIn invocation 2 件、deleteAccount 0 件、runbook L174）で 24h 待っても統計的意味なし。自社単独テナント = 異常は実利用者（自分）が即検知、rollback 手順整備済のため Day 2 +1h30m で Day 3 着手を妥当と判断
+- **Day 3 dev dryRun の skip**: transferOwnership は Callable、deploy 時点で発火ゼロ（iOS app から呼ばれない限り実害なし）。年数回の苗字変更運用で初回に dev smoke を実施すれば十分と判断（runbook `phase-1-admin-id-token.md` § 手順 A は残置、初回運用時に活用）
+- **Phase 0.9 dev 先行検証の skip**: `beforeSignIn` コードは dev/prod 同一（Day 1 Node 22 runtime で動作実績）、`allowedDomains` は Firestore 1 field 追加のみ、rollback は `update({allowedDomains: []})` で 3 分。自社単独フェーズで dev 検証 ROI 薄と判断
+- **prod Firestore 書き込みが `PERMISSION_DENIED` で失敗 → SA impersonation 運用を確立**: user credential (`system@279279.net` ADC) では `tenants/279.allowedDomains` 書き込み不可。(a) Firestore Console 手動 / (b) `roles/datastore.user` 直接付与 / (c) SA key JSON / (d) 初回から GHA+WIF の 4 案検討し、「最小権限 + 再現性 + 緊急対応即応性」の観点から **SA 単位の `roles/iam.serviceAccountTokenCreator` 付与 + `gcloud auth print-access-token --impersonate-service-account=...` + Firestore REST API v1 PATCH** を採用。運用パターンは ADR-009 に記録
+- **ADR-009 二段構えの意図**: Stage 1（CLI 即応）を今セッションで完遂し次の prod 設定作業に即対応可能な状態へ。Stage 2（GHA+WIF による監査性・再現性強化）は follow-up Issue #178 で四半期内着手の方針。Stage 1 の IAM binding 維持可否は Stage 2 完了時点で再評価
+- **Issue #100 は close / #111 は open 維持の峻別**: #100 は runbook 明示の close candidate 条件が充足（Day 3 完了）で close。#111 は Acceptance Criteria に実機確認 2 条件（許可外ドメイン → Guest 振分 / 許可内ドメイン既存ログイン非破壊）が明記されており、次回 TestFlight リリース後に実機確認 → close する方針で open 維持（feedback_issue_postpone_pattern.md 遵守）
+
+### 実装実績
+
+- **新規ファイル**: 1 個
+  - `docs/adr/ADR-009-prod-firestore-write-access.md`（prod Firestore 運用パターン確定）
+- **変更ファイル**: 2 個
+  - `docs/runbook/prod-deploy-smoke-test.md`（Day 3 実施ログ記入欄を実績値で確定）
+  - `docs/runbook/phase-0-9-allowed-domains.md`（実施ログ新規追記、IAM bind + 設定コマンド + 前提フェーズ + 後追い方針含む）
+- **Prod 操作（すべて個別にユーザー明示承認取得済）**:
+  - `firebase deploy --only functions:transferOwnership --project carenote-prod-279`（2026-04-23 20:55 JST、Successful create / Node.js 22 2nd Gen）
+  - `gcloud iam service-accounts add-iam-policy-binding firebase-adminsdk-fbsvc@carenote-prod-279.iam.gserviceaccount.com --member=user:system@279279.net --role=roles/iam.serviceAccountTokenCreator --project=carenote-prod-279`（ADR-009 Stage 1 IAM 付与）
+  - `curl -X PATCH https://firestore.googleapis.com/v1/.../tenants/279?updateMask.fieldPaths=allowedDomains`（SA impersonation 経由、値: `["279279.net"]`）
+  - `gcloud logging read 'resource.type="cloud_function" severity>=ERROR'`（deploy 直後 10 分監視、ERROR 0 確認）
+- **Prod 読み取り**: `gcloud iam service-accounts list / get-iam-policy`、`gcloud projects get-iam-policy`、Firestore REST GET（before/after 確認）
+- **テスト**: 新規テスト追加なし（ADR + runbook + docs のみの変更）。functions コードは 2026-04-22 以降変更なし、Day 2 実施時 152/152 PASS 有効
+
+### レビュー運用
+
+- 変更ファイル 3 個（新規 1 + 変更 2）、全て docs のため CLAUDE.md Quality Gate の `/review-pr` 6 エージェント並列は過剰と判断 → **手動レビューチェックリスト**（Build/Security/Scope/Quality/Compat/Doc accuracy）で確認
+- `/simplify` / `/safe-refactor`: コード変更ゼロのため発動条件外
+- **Quality Gate Evaluator 分離**: 5 ファイル未満 + 新機能追加なし（新規運用パターンは ADR 記録のみでコード追加ゼロ） → 発動条件外
+
+### Issue Net 変化
+
+セッション開始時 open **7** → 終了時 open **7**（net **0**、close 1 / 起票 1）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 7 |
+| #100 close（Day 3 完了で close candidate 確定） | -1 | 6 |
+| #178 起票（Stage 2 GHA+WIF follow-up、triage #5 ユーザー明示指示） | +1 | **7** |
+
+> **Net 0 の理由明示**: #100 は実害解消（prod Rules 過剰権限問題）による close、#178 は ADR-009 follow-up として運用基盤整備の将来 scope 可視化。Issue KPI 的には net 0 だが、「未対応の現存リスクを解消（-1）＋ 将来の運用改善を可視化（+1）」で内容は進捗あり。triage 基準下で両 Issue とも適正（rating 7+ 相当）。
+
+### 次セッションのアクション（優先順）
+
+1. **#170 [bug/P1] SharedTestModelContainer hardening**（H1〜H6、claude 完結、見積もり 6〜10h）— 本セッション未着手、次セッションで最優先
+2. **#111 実機 smoke test 後追い close**: 次回 TestFlight Build 36 リリース時に自録音 CRUD / Guest 振分 / allowedDomains 自動加入の 3 条件確認 → Issue #111 コメント追記 → close
+3. **#105 [enhancement/P2] deleteAccount E2E（Firebase Emulator Suite）**（8〜12h）
+4. **#178 [enhancement/P2] Stage 2 GHA + WIF 運用基盤**（ADR-009 follow-up、四半期内）
+5. **#92 / #90 Guest Tenant 関連**、**#65 Apple × Google account link**
+
+### 関連リンク
+
+- [ADR-009 prod Firestore 直書き運用パターン](../adr/ADR-009-prod-firestore-write-access.md)
+- [Issue #100 close コメント](https://github.com/system-279/carenote-ios/issues/100#issuecomment-4304246352)
+- [Issue #111 open 維持コメント](https://github.com/system-279/carenote-ios/issues/111#issuecomment-4304247403)
+- [Issue #178 Stage 2 follow-up](https://github.com/system-279/carenote-ios/issues/178)
+- `docs/runbook/prod-deploy-smoke-test.md` Day 3 実施ログ記入欄
+- `docs/runbook/phase-0-9-allowed-domains.md` § 実施ログ
+
+---
+
 # Handoff — 2026-04-23 午後セッション: Day 1 24h baseline 確定 + Day 2 Phase 0.5 Rules prod deploy 完了 (PR #175/#176 merged)
 
 ## セッション成果サマリ（2026-04-23 午後セッション）
