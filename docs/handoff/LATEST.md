@@ -1,6 +1,83 @@
-# Handoff — 2026-04-23 夜セッション: Day 3 transferOwnership prod deploy + Phase 0.9 allowedDomains 有効化 + ADR-009 策定
+# Handoff — 2026-04-23 夜セッション: Day 3 + Phase 0.9 + ADR-009 → **Phase 0.5 Rules 判断ミス + 緊急 rollback**
 
-## セッション成果サマリ（2026-04-23 夜セッション）
+## ⚠️ セッション終盤に Phase 0.5 Rules の判断ミスが発覚し、業務停止 → rollback 実施
+
+### 何が起きたか
+
+PR #179 merge 後の追加確認で、**Phase 0.5 Rules prod deploy (本日 19:25 JST、Day 2) が稼働中の iOS バイナリ (Build 35 / App Store Unlisted 公開中) と整合しない**ことが判明。ユーザー実機で録音保存 → 文字起こし完了が permission-denied で失敗、**業務停止**。
+
+### 真因
+
+- Build 35 提出: 2026-04-16（= #101 "録音 createdBy 保存" (2026-04-20 merge) より前の iOS コード）
+- Build 35 は 2026-04-18 から App Store で Unlisted 配信中（自社メンバーが実機使用中）
+- 本日 Phase 0.5 Rules の `create` 条件 `request.resource.data.createdBy == request.auth.uid` を prod deploy
+- → Build 35 が createdBy を書き込まずに create → **permission-denied**
+
+### 判断ミスの構造
+
+1. **Phase 0.5 Rules deploy 前に「稼働中 iOS が #101 を含むか」を検証しなかった**
+2. Day 2 実施ログで「**実機 smoke test skip、rules-unit-tests 64 件で代替 PASS**」としたが、rules-unit-tests は「新 iOS コード (#101 適用済) × 新 Rules」の組合せしか検証していない。「**旧 Build 35 × 新 Rules**」= 実稼働中の組合せは一切検証されていなかった
+3. 「自社単独フェーズで 24h 監視圧縮」の流れで実機検証を軽視した判断全体が誤り
+4. Codex review (PR #179) は docs 整合性のみの軽量レビューで、Rules と稼働バイナリの整合には踏み込んでいなかった
+
+### Rollback 実施
+
+- **実施時刻**: 2026-04-23 21:30 JST 頃（Phase 0.5 prod deploy から 2h05m 後）
+- **対応**: `firestore.rules` の `recordings` block を Phase 0.5 前の状態（`allow read, write: if isTenantMember(tenantId)`）に戻して `firebase deploy --only firestore:rules --project carenote-prod-279` 実施
+- **結果**: `cloud.firestore: rules file firestore.rules compiled successfully` / `released rules firestore.rules to cloud.firestore` → 業務復旧
+- **残置**: `migrationLogs` / `migrationState` の Rules は残した（Phase 1 transferOwnership 運用に必要、iOS app から触らないので影響なし）
+
+### 影響を受けた/受けなかった今日の変更
+
+| 変更 | 影響 | 対応 |
+|------|------|------|
+| Phase 0.5 Rules prod deploy (PR #115 / Day 2) | ❌ 業務停止発生 | **本 rollback で Phase 0.5 前の状態に戻した** |
+| Day 3 transferOwnership prod deploy | ✅ 影響なし（iOS app から呼ばない Callable） | そのまま継続 |
+| Phase 0.9 prod allowedDomains 設定 | ✅ 影響なし（beforeSignIn サーバ側変更のみ） | そのまま継続 |
+| ADR-009 prod Firestore 運用パターン | ✅ 影響なし（文書のみ） | そのまま |
+| Issue #178 Stage 2 follow-up 起票 | ✅ 影響なし | そのまま |
+
+### Issue 再訂正
+
+- Issue #100 **reopen**（本日 close は時期尚早 → reopen コメントで rollback 経緯 + Close 再条件明記）
+- Open Issue: 開始時 7 → PR #179 merge 時 7（-#100 +#178）→ rollback 後 **8**（#100 reopen で +1）
+- Net 変化: セッション開始から +1（実害解消できず、むしろ業務停止を引き起こして復旧）
+
+### Close 再条件（Issue #100）
+
+次回以降:
+1. **Build 36 リリース**: `scripts/upload-testflight.sh` で Build 36 作成（#101 + 以降の 5 commit 込み）
+2. **全稼働実機に Build 36 を配布**（TestFlight / App Store update 経由）
+3. **Build 36 で `createdBy` が保存されることを実機確認**
+4. **Phase 0.5 Rules 再 deploy**（`firestore.rules` recordings に create/update/delete の createdBy 条件を復活）
+5. **再 deploy 後、実機で録音 CRUD を確認**（今回は skip した、今度は必須）
+6. 実機確認 PASS で Issue #100 close
+
+### プロセス改善（次セッションで別 ADR 化）
+
+**サーバ側 Rules / functions 変更が iOS app コードの前提を伴う場合、対応 iOS build が稼働実機に入ってから deploy する**を明文化:
+- `runbook/prod-deploy-smoke-test.md` の Day 2 Rules deploy 前提条件に「対応 iOS build の稼働実機反映」を追加
+- `firestore.rules` 変更 PR テンプレートに「前提 iOS build 番号」を必須記載
+- 「実機 smoke test を rules-unit-tests で代替」は **稼働中 iOS バイナリとの実機整合検証の代替にならない**ことを明示
+- 自社単独フェーズでも「稼働中 iOS バイナリとの互換性確認」は skip 禁止
+
+### Rollback で作成した PR / コミット
+
+- branch: `fix/rollback-phase-0-5-rules`
+- 手動編集: `firestore.rules` の `recordings` block を Phase 0.5 前に戻す
+- PR: （後述、本 handoff 更新 + 作成）
+- Issue #100 reopen コメント: https://github.com/system-279/carenote-ios/issues/100#issuecomment-4304611564
+
+### 次セッションの最優先アクション
+
+1. **Build 36 を `scripts/upload-testflight.sh` で作成・TestFlight upload**（#101 + 5 commit 込み）
+2. Build 36 を実機で受領（TestFlight 内部テスター経由）
+3. 実機で録音 CRUD を確認（createdBy が保存されるか）
+4. Phase 0.5 Rules を別 PR で再適用・prod deploy・実機再確認・Issue #100 close
+
+---
+
+## セッション成果サマリ（2026-04-23 夜セッション、rollback 前の成果）
 
 前セッション (2026-04-23 午後、PR #175/#176 merged) 直後に継続。`/catchup` で Day 1/Day 2 完了確認 → ユーザー判断「**自社単独フェーズで 24h 監視ゲートを圧縮し最速進行**」のもと、Day 2 deploy +1h30m 時点で Day 3 transferOwnership prod deploy に着手、続けて Phase 0.9 prod `allowedDomains` を有効化。
 
