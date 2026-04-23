@@ -1,3 +1,83 @@
+# Handoff — 2026-04-23 午後セッション: Day 1 24h baseline 確定 + Day 2 Phase 0.5 Rules prod deploy 完了 (PR #175/#176 merged)
+
+## セッション成果サマリ（2026-04-23 午後セッション）
+
+前セッション (2026-04-23 午前、PR #174) 直後に継続。`/catchup` で積み残し確認 → Day 1 deploy +24h 経過（2026-04-23 15:51 JST 超過）を確認し、**優先順位 1 → 3 の流れ（24h baseline 確定 → Day 2 Rules prod deploy）** をユーザー承認済で実行。PR #175 + #176 を merge し、**Day 1/Day 2 の 2 milestone を連続 PASS**。
+
+| PR | 内容 | Milestone |
+|----|------|-----------|
+| #175 (merged) | runbook Day 1 TBD 欄を 24h 観測データで確定（beforeSignIn 2 invocations / ERROR 0 / deleteAccount invocation 0） | **Day 1 24h ベースライン確定** |
+| #176 (merged) | Day 2 Phase 0.5 Rules prod deploy 実施ログ（PASS）追記 | **Day 2 Rules deploy PASS** |
+
+### 主要判断のハイライト
+
+- **dev smoke test を rules-unit-tests で代替**: runbook L193-198 の 6 項目（自録音 CRUD / 他人録音拒否 / admin 削除 / 未認証拒否 / member migrationLogs 拒否 / admin migrationLogs read）を `firestore-rules.test.js` 64 件のテスト ID（L560/L576/L642/L658/L674/L94/L106/L1009/L729/L713 等）と対応マッピング。実機 smoke は次回 TestFlight リリース時に後追い記録。rules 変更はサーバ側 semantic なので unit test で等価カバー、iOS SDK 経由の挙動検証は後工程で十分と判断
+- **低トラフィック prod 環境下の baseline 解釈**: Day 1 24h 期間で beforeSignIn invocation 2 件（status 200 + 403、403 は Google-Firebase からの blocking function 拒否で仕様通り）、deleteAccount 0 件。p95 は invocation 不足で算出不可のため、Day 2 異常検知は「ERROR 発生」「invocation 急増」「403 率急変」の定性指標で代替する方針を runbook に明記
+- **Day 2 deploy 後 +37min 監視で +15min checklist 条件を充足**: 当初予定（deploy +15min = 19:40 JST）を待たずユーザー指示でログ読み取り先行、既に 37min 経過していたため網羅性は上回り。Cloud Functions invocation 0 / project 全体 ERROR 0 / permission-denied 急増 0 を確認、PASS 判定
+- **実機 smoke の skip は明示記録で後追い保証**: runbook 実施ログに「次回 TestFlight リリース時に自録音 CRUD / RecordingList 他人録音 read 2 項目を実施しこの実施ログに後追い記録する」と明文化し、checklist の後追い性を担保
+- **Port 8080 の stale Python http.server を kill**: rules-unit-tests 前に Firestore Emulator の port 競合検出 (PID 53827、12日18時間起動の Xcode 付属 Python 3.9 `-m http.server 8080`)。destructive action につきユーザー明示承認後に kill、以降の emulator 起動 PASS
+
+### 実装実績
+
+- **変更ファイル**: 2 個（`docs/runbook/prod-deploy-smoke-test.md` のみ、累計 +38/-10）
+  - PR #175: Day 1 実施ログの 24h ベースライン TBD 欄を観測データで確定（+11/-5）
+  - PR #176: Day 2 実施ログ記入欄に deploy 結果 + dev smoke mapping + 40min 監視集計 + baseline 記録（+27/-5）
+- **Prod 操作**:
+  - `firebase deploy --only firestore:rules --project carenote-dev-279`（dev 再同期、2026-04-23 17:42 JST）
+  - `firebase deploy --only firestore:rules --project carenote-prod-279`（prod deploy、2026-04-23 19:24:53 → 19:25:01 JST / 8 秒、compile PASS + released 成功、**ユーザー明示承認済**）
+  - `gcloud logging read` でプロジェクト全体の post-deploy ERROR / permission-denied 集計
+- **テスト**: 152/152 PASS（rules 64 + transfer-ownership / delete-account / auth 88、`firebase emulators:exec --only firestore,auth --project=carenote-test "cd functions && npm test"`）
+- **CI**: 両 PR とも docs のみ 1 ファイル変更のため CI checks なし、main は直近 push (2026-04-23T04:18:03Z) で iOS Tests green 維持
+
+### レビュー運用
+
+- 両 PR とも docs のみ 1 ファイル +11〜27 行の小規模変更のため、CLAUDE.md Quality Gate 基準の `/review-pr` (6 エージェント並列) は過剰と判断し **手動レビューチェックリスト** で Build/Security/Scope/Quality/Compat/Doc accuracy を確認 → 問題なし
+- `/simplify` / `/safe-refactor` はコード変更ゼロのため発動条件外（3 ファイル以上 / 新機能追加 のいずれも該当せず）
+- マージ承認は PR 番号単位でユーザーに明示確認（feedback_pr_merge_authorization 遵守）: PR #175 → 承認 → merge / PR #176 → 承認 → merge
+
+### Issue Net 変化
+
+セッション開始時 open **7** → 終了時 open **7**（net **0**、close 0 / 起票 0）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 7 |
+| close / 起票 | 0 / 0 | **7** |
+
+> **Net 0 の理由明示**: 今セッションの主目的は prod deploy milestone 実行（Day 1 24h baseline + Day 2 Rules deploy）であり、Issue 処理ではない。**Issue #100 (Firestore Rules の recordings 権限過剰) は Day 3 (transferOwnership) 完了後に close 判定する runbook L218 の明示スコープに従い延期**。新規起票ゼロ = prod deploy 失敗なし + review agent rating 7+ 指摘ゼロ = triage 基準下では適正。KPI 的「進捗ゼロ」ではなく「本セッションは Issue 延期の milestone 実行」として記録。
+
+### CI の現状
+
+- main `e3c1648` (PR #176 merge 後): 直近の実行可能 CI は 2026-04-23T04:18:03Z の iOS Tests 20m48s green（docs only PR なので新規 CI run なし）
+- prod rules deploy 後 +40min: beforeSignIn / deleteAccount invocation 0 / project 全体 ERROR 0 / permission-denied 急増 0
+
+### 次セッション推奨アクション（優先順）
+
+1. **M3: Day 3 Phase 1 transferOwnership prod deploy**（**2026-04-24 07:25 JST 以降**着手可、deploy +12h）:
+   - 事前: `docs/runbook/phase-1-admin-id-token.md` § 手順 A で dev dryRun → confirm 完走
+   - Deploy: `firebase deploy --only functions:transferOwnership --project carenote-prod-279`（**ユーザー明示承認必須**）
+   - 事後: `firebase functions:list` で ACTIVE/nodejs22 確認 + 10min Cloud Logging 監視
+   - 完了後に Issue #100 の close 判定（runbook L218 candidate）+ 実施ログ記入欄埋め
+2. **Issue #170 H2-H6 hardening**（H1 完了済、independent follow-up）:
+   - H2: `cleanup()` per-model 失敗ログ
+   - H3: fatalError NSError userInfo 詳細化
+   - H4: preflight fetch assertion + PR #173 review-pr 残 follow-up
+   - H5: SharedTestModelContainer invariant test + cross-contamination smoke test
+   - H6: lint-model-container.sh エラーメッセージ改善 + xcodegen → lint 順序依存対応
+3. **実機 smoke test の後追い**（次回 TestFlight リリース時）:
+   - Day 2 runbook 実施ログに後追い: 自録音 CRUD / RecordingList 他人録音 read 2 項目
+   - Day 1 Functions 実アクセス時の p95 latency / permission-denied 率観測
+4. **M5: Phase 0.9 allowedDomains 有効化**（審査通過 + whitelist 確認後、Issue #111）
+5. **Phase 0.9 前の審査アカウント whitelist 確認**（Firestore Console 手作業、`tenants/279/whitelist/demo-reviewer@carenote.jp`）
+
+### 参考資料（本セッション = 2026-04-23 午後）
+
+- [PR #175 merged](https://github.com/system-279/carenote-ios/pull/175) — Day 1 24h ベースライン確定
+- [PR #176 merged](https://github.com/system-279/carenote-ios/pull/176) — Day 2 Phase 0.5 Rules prod deploy 実施ログ（PASS）
+- `docs/runbook/prod-deploy-smoke-test.md` L164-172 / L216-253 — Day 1/Day 2 実施ログ本文
+
+---
+
 # Handoff — 2026-04-23 午前セッション: #170 H1 実装完了 + #164 closed (PR #173 merged)
 
 ## セッション成果サマリ（2026-04-23 午前セッション）
