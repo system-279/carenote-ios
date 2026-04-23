@@ -35,11 +35,6 @@ cd "$ROOT"
 ALLOWED_TEST_FILES=(
   # Canonical shared container (PR #163 root-cause fix for Issue #141).
   "CareNoteTests/TestHelpers/SwiftDataTestHelper.swift"
-  # Temporarily allowed: PR #163 locally rolled back this one suite to a
-  # per-suite container because the shared container caused 2 tests to
-  # regress with uploadCalls.count == 0. Real cause still unknown — tracked
-  # in Issue #164. Remove from this list once #164 closes.
-  "CareNoteTests/OutboxSyncServiceTests.swift"
 )
 
 # Matches `ModelContainer[<Generic>](<newline/spaces>for:` — tolerates

@@ -3,12 +3,13 @@ name: iOS Tests
 on:
   pull_request:
     branches: [main]
+    # Intentionally NOT ignored: scripts/**, .github/** — changes to CI
+    # lint scripts or workflows must self-trigger CI so a tampered lint
+    # or workflow cannot land without validation (Issue #170 H1).
     paths-ignore:
       - 'functions/**'
       - 'docs/**'
-      - 'scripts/**'
       - '**.md'
-      - '.github/**'
       - 'firestore.rules'
       - 'storage.rules'
       - 'firebase.json'
@@ -18,9 +19,7 @@ on:
     paths-ignore:
       - 'functions/**'
       - 'docs/**'
-      - 'scripts/**'
       - '**.md'
-      - '.github/**'
       - 'firestore.rules'
       - 'storage.rules'
       - 'firebase.json'
@@ -40,6 +39,9 @@ jobs:
 
       - name: Lint - SwiftData schema drift guard (Issue #165)
         run: bash scripts/lint-model-container.sh
+
+      - name: Lint - Test scheme parallelization guard (Issue #170 H1)
+        run: bash scripts/lint-scheme-parallel.sh
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
