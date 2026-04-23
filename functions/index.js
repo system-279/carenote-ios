@@ -205,3 +205,8 @@ exports.deleteAccount = onCall(
 // recordings / templates / whitelist を書換える Callable Function。
 // 詳細は functions/src/transferOwnership.js および ADR-008 参照。
 exports.transferOwnership = require("./src/transferOwnership").transferOwnership;
+
+// enrichRecordingProbe (dev 専用、一時的): Gen 2 auth context trigger の実測用。
+// iOS SDK 認証書き込みで authType/authId が取れるかを観測する。測定完了後に削除。
+// 詳細は functions/src/enrichRecordingProbe.js のコメント参照。
+exports.enrichRecordingProbe = require("./src/enrichRecordingProbe").enrichRecordingProbe;
