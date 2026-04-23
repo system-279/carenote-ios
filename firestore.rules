@@ -45,9 +45,14 @@ service cloud.firestore {
       // 設計方針: iOS 稼働バイナリ (Build 35) を変更せずに、createdBy の "存在"
       //         と "値" を条件分岐キーに使った二段階 Rules で権限過剰を解消する。
       //
-      //   read   : テナントメンバー全員 (業務上の相互参照を許容、read 制限は
-      //            将来の Build で list query を createdBy で絞ってから段階強化する
-      //            — ADR-010 参照)
+      //   read   : テナントメンバー全員 (業務上の相互参照を許容)。
+      //            ※ Firestore Security Rules の制約上、list query は返却する全
+      //              ドキュメントが read 条件を満たす必要がある。稼働中 Build 35 の
+      //              RecordingList は createdBy フィルタを持たないため、read を先に
+      //              createdBy ベース制限すると query 全体が permission-denied で
+      //              破綻する (前回 Phase 0.5 rollback の再来)。将来 Build で iOS
+      //              query 側に createdBy フィルタを導入してから段階強化する
+      //              (詳細・代替案の却下理由: ADR-010)
       //
       //   create : テナントメンバー全員可。createdBy フィールドの扱い:
       //              - 省略 OK (防御的、Build 35 では通常到達しない経路)

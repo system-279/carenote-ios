@@ -314,7 +314,7 @@ Day 2 Phase 0.5 原案は稼働 iOS Build 35 との不整合で rollback 済（P
 
 ### 事前確認（skip 禁止）
 
-- [ ] `functions/test/firestore-rules.test.js` 全件 PASS（今回 158/158、Phase 0.5 原案時 152 から +6 件拡張: createdBy 欠落/空文字 create 許容 + 既存 createdBy="" recording の境界 5 件）
+- [ ] `functions/test/firestore-rules.test.js` 全件 PASS（今回 160/160、Phase 0.5 原案時 152 → +8 件新規 + 既存 2 件反転。内訳: `createdBy=''` create 許可 1 + 既存 `createdBy=''` recording 境界 5 + `createdBy` 不在 recording 防御 2 / 反転: 欠落 create deny→allow・空文字 create deny→allow）
 - [ ] prod audit baseline 記録: `node functions/scripts/audit-createdby.mjs carenote-prod-279`（read-only、ADR-010 に記録）
 - [ ] 最新 `firestore.rules` が dev に deploy 済
 - [ ] ADR-010 / 本 runbook セクション / 新 test が PR に含まれている
@@ -440,6 +440,7 @@ Day 1-3 の変更を束ねて 24h 観測。
 - Issue #111（Phase 0.9: prod allowedDomains 有効化）
 - [ADR-007 Guest Tenant for Apple Sign-In](../adr/ADR-007-guest-tenant-for-apple-signin.md)
 - [ADR-008 Account Ownership Transfer](../adr/ADR-008-account-ownership-transfer.md)
+- [ADR-010 recordings Rules 権限モデル段階的強化設計](../adr/ADR-010-recordings-permission-model.md)
 - [phase-0-9-allowed-domains.md](./phase-0-9-allowed-domains.md)
 - [phase-1-admin-id-token.md](./phase-1-admin-id-token.md)
 - `docs/appstore-metadata.md`（審査アカウント情報）
