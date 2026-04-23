@@ -31,6 +31,7 @@
 		65E5E0CD5DBC914A92B91130 /* ClientSelectViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */; };
 		6B0117657090C55B8D4A4A43 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0201FF49E15F02E9E9054426 /* Assets.xcassets */; };
 		6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2848993801DEF66A676C25D /* AppEnvironment.swift */; };
+		75D3B3D5ED8EB33EDC97B6D1 /* SwiftDataTestHelperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75F7694513195B13FC911A0 /* SwiftDataTestHelperTests.swift */; };
 		792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */; };
 		7CA851BF8A07B0D97F3903A3 /* RecordingConfirmViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */; };
 		8234CBC662F2FB30E1866158 /* AppleSignInCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E130263BC2FE596468916F /* AppleSignInCoordinator.swift */; };
@@ -133,6 +134,7 @@
 		B6C5DFB4EEA458F1AA1EB33F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C1773834D66185AC4FF05004 /* RecordingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingViewModel.swift; sourceTree = "<group>"; };
 		C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientRepository.swift; sourceTree = "<group>"; };
+		C75F7694513195B13FC911A0 /* SwiftDataTestHelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataTestHelperTests.swift; sourceTree = "<group>"; };
 		CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingConfirmViewModelTests.swift; sourceTree = "<group>"; };
@@ -327,6 +329,7 @@
 			children = (
 				95C67F09979A83A8D77ED023 /* MockURLProtocol.swift */,
 				96464007F869DAE0DA555BA3 /* SwiftDataTestHelper.swift */,
+				C75F7694513195B13FC911A0 /* SwiftDataTestHelperTests.swift */,
 			);
 			path = TestHelpers;
 			sourceTree = "<group>";
@@ -520,6 +523,7 @@
 				4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */,
 				ABDABE93CD6D0DB3B2820C5E /* StorageServiceTests.swift in Sources */,
 				C72A378B599300A331056288 /* SwiftDataTestHelper.swift in Sources */,
+				75D3B3D5ED8EB33EDC97B6D1 /* SwiftDataTestHelperTests.swift in Sources */,
 				B5FD3368DC82D3A7F025330E /* TemplateCreateViewModelTests.swift in Sources */,
 				FD8997F1B7751D73EDA8FD45 /* TemplateListViewModelTests.swift in Sources */,
 				CCA4CF007249D2BA99FD5315 /* TranscriptionServiceTests.swift in Sources */,

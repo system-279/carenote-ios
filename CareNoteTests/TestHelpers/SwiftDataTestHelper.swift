@@ -6,15 +6,16 @@ import SwiftData
 ///
 /// Reuses one container for all tests because SwiftData SIGTRAPs when the
 /// same `@Model` type is registered in multiple `ModelContainer`s within
-/// one process (Issue #141). `cleanup()` empties the store between tests
-/// instead of reallocating, which would re-trigger the SIGTRAP.
+/// one process (Issue #141). Per-test reallocation would re-trigger the
+/// crash.
 ///
-/// Diagnostic contract (Issue #170 H2/H3): container-init `fatalError` and
-/// per-model `cleanup()` failures both route through `formatNSError` so the
-/// `NSError` shape that names the offending `@Model` on schema drift is
-/// never lost. Without this, a partial cleanup or a drift crash surfaces
-/// only as `delete(model:)` / `ModelContainer(for:)` throwing — with no
-/// indication of which type is at fault.
+/// Diagnostic contract (Issue #170): on failure, container-init `fatalError`
+/// and `cleanup()` both route the offending `@Model` type name + full
+/// `NSError` shape through `formatNSError` — to `stderr` for `cleanup()`
+/// (before rethrow), and into the crash message for `fatalError`. Without
+/// this, a cleanup failure or schema-drift crash surfaces only as a bare
+/// `delete(model:)` / `ModelContainer(for:)` error, with no indication of
+/// which type is at fault.
 @MainActor
 enum SharedTestModelContainer {
     static let shared: ModelContainer = {
@@ -33,6 +34,10 @@ enum SharedTestModelContainer {
 
     static func cleanup() throws {
         let context = shared.mainContext
+        // fail-fast: the first failure rethrows and skips the rest, so a
+        // schema-drift surface cannot be buried under subsequent errors.
+        // Do not rewrite to "best-effort" — CLAUDE.md Debug Protocol wants
+        // the first diagnostic surfaced immediately.
         try delete(RecordingRecord.self, in: context)
         try delete(OutboxItem.self, in: context)
         try delete(ClientCache.self, in: context)
@@ -62,7 +67,10 @@ enum SharedTestModelContainer {
         FileHandle.standardError.write(Data(message.utf8))
     }
 
-    private static func formatNSError(_ error: Error) -> String {
+    // Exposed at file scope (not `private`) so `SwiftDataTestHelperTests`
+    // can pin the diagnostic string shape — a typo in this template would
+    // silently degrade exactly the signal the helper exists to provide.
+    static func formatNSError(_ error: Error) -> String {
         let ns = error as NSError
         return """
               domain: \(ns.domain)
