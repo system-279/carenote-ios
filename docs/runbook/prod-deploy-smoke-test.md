@@ -161,11 +161,17 @@ firebase deploy --only functions --project carenote-prod-279
   - エラー率: 0% (deploy 後 15 分観測)
   - p95 レイテンシ: deploy 直後のため有意な計測不可（12h 経過時点で Cloud Monitoring から取得して追記予定）
   - prod NOTICE (lifecycle): beforeSignIn / deleteAccount 各 2 件（container 起動ログ、15 分間観測、正常）
-- 24h ベースライン（Day 2 事前確認 L174 比較基準、Day 2 着手前 = 2026-04-23 15:51 JST 以降に追記）:
-  - エラー率平均: TBD
-  - p95 レイテンシ: TBD
-  - invocation count: TBD
-  - 備考: Day 2 着手可能時刻（deploy + 12h = 2026-04-23 15:51 JST）に再観測する。Day 1 checklist L126 が要求する「24h ベースライン」のうち、12h〜24h の差分は Day 2 実施ログで補足する運用とする。
+- 24h ベースライン（Day 2 事前確認 L174 比較基準、観測期間 = 2026-04-22 06:51 UTC → 2026-04-23 06:51 UTC / JST 15:51 → 15:51、取得 2026-04-23 JST 17:30）:
+  - **beforeSignIn**:
+    - invocation count: 2 件（`log_name=~"requests"`）
+    - エラー率平均: 0%（severity=ERROR / status≥500 なし）
+    - 内訳: status=200 × 1 件（latency 997ms、2026-04-22T19:03:36Z、User-Agent `Google-Firebase`）+ status=403 × 1 件（latency 1437ms、2026-04-22T21:56:59Z、User-Agent `Google-Firebase`、blocking function による拒否で仕様通り / WARNING severity）
+    - p95 レイテンシ: invocation=2 のため統計的に有意な p95 算出不可（max 1437ms / min 997ms を参考値として記録）
+  - **deleteAccount**:
+    - invocation count: 0 件（24h トラフィックなし）
+    - エラー率平均: N/A（invocation 0）
+    - p95 レイテンシ: N/A（invocation 0）
+  - 備考: prod は低トラフィック環境（24h invocation 計 2 件）で p95 は統計的比較に不向き。Day 2 Rules deploy 後の異常検知は「エラー率 > 0%（ERROR 発生）」「invocation 急増」「403 率の急変（現状 1/2 = blocking 動作）」で判定する。Day 1 checklist L126 が要求する「24h ベースライン」はこの段落で確定、12h〜24h の差分追跡は不要（変化なし）。
 - 異常時対応: なし
 - 次工程: Day 2 (Phase 0.5 Rules prod deploy) に **2026-04-23 15:51 JST 以降（deploy 完了から 12h 経過）** 着手可
 ```
