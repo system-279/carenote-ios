@@ -1,3 +1,78 @@
+# Handoff — 2026-04-23 午前セッション: #170 H1 実装完了 + #164 closed (PR #173 merged)
+
+## セッション成果サマリ（2026-04-23 午前セッション）
+
+前セッション (2026-04-23 早朝、PR #172) 直後に継続。`/catchup` で積み残し確認 → Day 2 prod deploy は着手可能時刻 (15:51 JST) より前のため、**#170 H1 (cross-suite race 構造的抑止) を着手・完了**。PR #173 merge で **Issue #164 を close し Issue Net -1 を達成**。
+
+| PR | 内容 | Issue |
+|----|------|-------|
+| #173 (merged) | scheme parallelizable=NO 強制 + lint-scheme-parallel.sh + OutboxSyncServiceTests を shared container に再合流 | **#164 closed (自動)** |
+
+### 主要判断のハイライト
+
+- **案 (b) scheme-level 強制を採用**: H1 対応案 (a) root @Suite(.serialized) / (b) scheme parallelizable=false / (c) actor-locked helper のうち (b) を選定。(a) は 17 ファイル変更で過大、(c) は test body atomic 化が技術的に不可能と判断。(b) は project.yml + lint 1 本の最小 diff で defense-in-depth
+- **Evaluator HIGH + review-pr HIGH で paths-ignore を二段削除**: `scripts/**` を paths-ignore から外して lint script 改ざんを CI で捕捉する改修に加え、review-pr silent-failure-hunter #4 指摘で `.github/**` も同時削除（workflow 改ざんの self-trigger 化）
+- **review-pr Important (rating 7+ conf 80+) は同 PR で修正**: Issue 起票 net +1 を避けるため、silent-failure-hunter #2 (regex を `<TestableReference>` に anchor) + #1 (空ファイル guard) + #3 (ALL assertion) + code-reviewer #1 (ディレクトリ走査) を同 PR 内で 1 commit に集約。PR description に follow-up 項目 (rating 6 以下) を明記し Issue 化回避
+- **CI fail から bash 3.2 互換性確保**: 初回 push で `mapfile: command not found` fail (macOS bash 3.2、GPLv3 回避でシステム bash 固定)。`while IFS= read -r` loop に置換し bash 3.2 (`/bin/bash --version`: 3.2.57) で self-test 再検証後 re-push → CI green
+
+### 実装実績
+
+- **変更ファイル**: 6 個 (+280/-35)
+  - `project.yml`: `schemes.CareNote.test.targets[].parallelizable: false` 追加
+  - `.github/workflows/test.yml`: lint-scheme-parallel.sh CI step 追加 + paths-ignore から `'scripts/**'` + `'.github/**'` 削除
+  - `CareNoteTests/OutboxSyncServiceTests.swift`: per-suite `makeContainer()` 削除 + 8 箇所を `makeTestModelContainer()` 化
+  - `scripts/lint-model-container.sh`: ALLOWED_TEST_FILES から `OutboxSyncServiceTests.swift` 削除
+  - `scripts/lint-scheme-parallel.sh` (新規 127 行): perl -0777 slurp で全 scheme 走査 + `<TestableReference>` anchored ALL assertion + 空ファイル guard + bash 3.2 互換
+  - `CareNote.xcodeproj/xcshareddata/xcschemes/CareNote.xcscheme` (新規 120 行): xcodegen 生成、pbxproj 同様 commit 化
+- **Acceptance Criteria**: AC1-AC7 全達成 (AC3 は AC4 で代替検証)
+- **検証**: 20 回連続実行 PASS (2700 tests / 360 suites / ~4.4s test time)、lint self-test 3 種 (NO→YES / NO 削除 / 空ファイル) bash 3.2 PASS
+- **CI**: 初回 fail (mapfile bash 3.2 非対応) → 修正 push → green (16m30s、main merge 後 20m48s)
+
+### レビュー運用
+
+- `/simplify` 3 並列 (reuse / quality / efficiency): Reuse Important × 1 (grep → perl -0777 slurp で lint-model-container.sh パターン統一) 修正
+- `/safe-refactor`: 検出問題 0 件
+- Evaluator 分離プロトコル (5+ ファイル該当): HIGH × 1 (paths-ignore に `scripts/**` 残存) 修正、MEDIUM × 1 (xcodegen → lint 順序依存) は #170 H6 follow-up
+- `/review-pr` 4 並列 (type-design skip): Critical 0、Important 1 (rating 7 conf 85) + 関連 5 件を同 PR で修正、rating 6 以下 3 件 (pr-test-analyzer fixture-based test / race 統計 / cross-contamination smoke test) は #170 H4/H5 に follow-up 集約（Issue 化せず PR description に記録）
+
+### Issue Net 変化
+
+セッション開始時 open 8 → 終了時 **7**（net **-1**、#164 close）。
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 8 |
+| PR #173 merge → #164 auto-close | -1 | **7** |
+
+> **CLAUDE.md KPI「Issue は net で減らすべき」達成 ✅**。review-pr rating 6 以下は Issue 化せず PR commit message + description に follow-up 記録（#170 H4/H5 scope）。review-pr Important (rating 7 conf 85) も Issue 起票せず同 PR 内修正で net 増を回避。
+
+### CI の現状
+
+- PR #173 merge 後の main `0ef50d7`: iOS Tests 20m48s green（2026-04-23T04:18:03Z）
+- cross-suite race の構造的抑止完了。CI は `-parallel-testing-enabled NO` (xcodebuild flag) + scheme `parallelizable=NO` (project.yml) + lint-scheme-parallel.sh (機械検証) の三重防御
+
+### 次セッション推奨アクション（優先順）
+
+1. **24h ベースライン追記**（2026-04-23 15:51 JST 以降、Day 2 着手前）: Cloud Monitoring から `beforeSignIn` / `deleteAccount` のエラー率平均 / p95 レイテンシ / invocation count を取得し、`docs/runbook/prod-deploy-smoke-test.md` Day 1 実施ログ TBD 欄を埋める
+2. **M2: Day 2 Phase 0.5 Rules prod deploy**（deploy + 12h = 15:51 JST 以降）: RUNBOOK § Day 2 に従い、dev 事前検証 → `firebase deploy --only firestore:rules --project carenote-prod-279` 明示承認 → 実機 smoke test → baseline 記録 → Issue #100 close 判定
+3. **M3: Day 3 transferOwnership prod deploy**（Day 2 +12h）: `docs/runbook/phase-1-admin-id-token.md` § 手順 A で dev dryRun → confirm、prod deploy → 24h 束ね監視
+4. **Issue #170 H2-H6 hardening**（H1 完了済、H2-H6 は independent follow-up）:
+   - H2: `cleanup()` per-model 失敗ログ (silent-failure-hunter Critical conf 95)
+   - H3: fatalError NSError userInfo 詳細化 (silent-failure-hunter High conf 80)
+   - H4: preflight fetch assertion (pr-test-analyzer Rating 8) + PR #173 review-pr 残 follow-up (fixture-based lint test, race rate documentation)
+   - H5: SharedTestModelContainer invariant test (pr-test-analyzer Rating 9) + cross-contamination smoke test (PR #173 follow-up)
+   - H6: lint-model-container.sh エラーメッセージ改善 + xcodegen → lint 順序依存対応 (Evaluator MEDIUM follow-up)
+5. **M5: Phase 0.9 allowedDomains 有効化**（審査通過 + whitelist 確認後）
+6. **Phase 0.9 前の審査アカウント whitelist 確認**（Firestore Console 手作業、`tenants/279/whitelist/demo-reviewer@carenote.jp`）
+
+### 参考資料（本セッション = 2026-04-23 午前）
+
+- [PR #173 merged](https://github.com/system-279/carenote-ios/pull/173) — scheme parallelizable=NO + lint + OutboxSync re-shared
+- [Issue #164 closed](https://github.com/system-279/carenote-ios/issues/164) — cross-suite race 真因確立 + 構造的抑止
+- [Issue #170 H1 完了、H2-H6 follow-up](https://github.com/system-279/carenote-ios/issues/170)
+
+---
+
 # Handoff — 2026-04-23 早朝セッション: Day 1 prod deploy 完了 + #164 真因候補確立 + #170 hardening 起票
 
 ## セッション成果サマリ（2026-04-23 早朝セッション）
