@@ -294,7 +294,7 @@ firebase deploy --only functions:transferOwnership --project carenote-prod-279
 - 判定: PASS
 - 実行スコープ: `firebase deploy --only functions:transferOwnership --project carenote-prod-279`（単独 function deploy、beforeSignIn / deleteAccount は触らない）
 - 事前確認:
-  - Day 2 Rules deploy (2026-04-23 19:25 JST) から 1h30m 経過、ERROR 0 維持（自社単独フェーズで 12h 待ち短縮、理由は ADR-009 + 本セッション handoff 参照）
+  - Day 2 Rules deploy (2026-04-23 19:25 JST) から 1h30m 経過、ERROR 0 維持（自社単独フェーズで 12h 待ち短縮をユーザー明示判断、根拠は `docs/handoff/LATEST.md` § 主要判断のハイライト「24h 監視ゲートの圧縮根拠」参照）
   - functions テスト: 2026-04-22 以降 `functions/` 変更なし、Day 2 実施時の 152 tests PASS 有効
   - dev 事前 dryRun: **skip**（transferOwnership は Callable、deploy 時点で発火ゼロ、実運用時に初回 dev smoke test を実施する方針に変更）
 - Deploy 結果: `functions[transferOwnership(asia-northeast1)] Successful create operation` / Runtime: Node.js 22 (2nd Gen) / Memory: 256 MiB

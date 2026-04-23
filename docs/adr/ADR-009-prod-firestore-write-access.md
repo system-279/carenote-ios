@@ -50,7 +50,7 @@ prod Firestore 直接書き込み作業は継続的に発生する見積もり:
 | 代替 | 却下理由 |
 |------|---------|
 | A. Firestore Console 手動 | 再現性・監査性なし、CLI 化の目的に反する |
-| B. `roles/datastore.user` をユーザーに直接付与 | 権限範囲が広すぎる（prod 全 Firestore 無条件操作可）。SA 単位 impersonation の方が最小権限 |
+| B. `roles/datastore.user` をユーザーに直接付与 | 権限範囲が広すぎる（prod 全 Firestore 無条件操作可、永続付与）。SA 単位 impersonation は「入口を access token 発行時点に絞れる」「revoke が早い」メリットがあるが、実効的には SA が持つ全権限を一時的に行使できるため、厳密な意味での最小権限ではない。Stage 2 で Firestore 書込み専用 SA + 最小権限 custom role の採用を検討 |
 | C. SA key (JSON) ローカル配布 | CLAUDE.md で禁止、鍵漏洩リスク |
 | D. 初回から GHA + WIF 一本 | 初期セットアップ 1-2h、緊急対応の即応性不足 |
 
@@ -69,13 +69,20 @@ prod Firestore 直接書き込み作業は継続的に発生する見積もり:
 TOKEN=$(gcloud auth print-access-token \
   --impersonate-service-account=firebase-adminsdk-fbsvc@carenote-prod-279.iam.gserviceaccount.com)
 
-# 2. Firestore REST API v1 で操作
-curl -s -X PATCH \
+# 2. Firestore REST API v1 で書き込み（4xx/5xx を失敗扱いに）
+curl -sS --fail-with-body -X PATCH \
   "https://firestore.googleapis.com/v1/projects/carenote-prod-279/databases/(default)/documents/<path>?updateMask.fieldPaths=<field>" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '<body>'
+
+# 3. 書き込み後 verify GET（期待値と比較）
+curl -sS --fail-with-body \
+  "https://firestore.googleapis.com/v1/projects/carenote-prod-279/databases/(default)/documents/<path>" \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+**注**: `curl -s` 単独は HTTP 4xx/5xx でも shell exit 0 となり成功扱いになる。`--fail-with-body` を付けることで 4xx/5xx を exit code 22 にしつつ body をエラー診断用に出力できる（curl 7.76+）。
 
 ### 実例: Phase 0.9 allowedDomains 設定（2026-04-23 実施）
 
