@@ -1,5 +1,6 @@
 @testable import CareNote
 import Foundation
+import SwiftData
 import Testing
 
 /// Pins the diagnostic string shape produced by `SharedTestModelContainer.formatNSError`.
@@ -46,5 +47,117 @@ struct SwiftDataTestHelperTests {
         #expect(formatted.contains("description:"))
         #expect(formatted.contains("userInfo:"))
         #expect(formatted.contains("raw:"))
+    }
+}
+
+/// Pins the behavioral invariants that the rest of the test suite relies on
+/// without stating them (Issue #170 H5):
+///   - `SharedTestModelContainer.shared` is a process-wide singleton —
+///     reallocating would reproduce the SIGTRAP from Issue #141.
+///   - `cleanup()` actually empties every `@Model` type, not just a subset —
+///     adding a new `@Model` without updating `cleanup()` fails
+///     `schemaRegistersAll4Models` or `cleanupEmptiesAll4Models`.
+///   - `makeTestModelContainer()` guarantees an empty store on every call,
+///     regardless of what the previous caller left behind.
+///
+/// **Requires suite-level serialization.** The shared container is mutated
+/// from every test context in the target, so concurrent mutation produces
+/// non-deterministic `fetchCount` results. Defense-in-depth:
+///   1. `.serialized` trait on this suite (belt).
+///   2. Scheme-level `parallelizable=NO` enforced by `lint-scheme-parallel.sh`
+///      (suspenders — see Issue #141 for the SIGTRAP this prevents).
+@MainActor
+@Suite("SharedTestModelContainer invariants (Issue #170 H5)", .serialized)
+struct SharedTestModelContainerInvariantsTests {
+
+    @Test("shared is a process-wide singleton (static-let stability)")
+    func sharedReturnsSameInstance() {
+        let first = SharedTestModelContainer.shared
+        let second = SharedTestModelContainer.shared
+        #expect(
+            first === second,
+            "shared must be a singleton; flipping `static let` to `static var`/factory reintroduces the Issue #141 SIGTRAP"
+        )
+    }
+
+    @Test("shared container registers exactly the 4 expected @Model types")
+    func schemaRegistersAll4Models() {
+        // Tripwire: if a 5th @Model is added to production without updating
+        // the shared container's initializer, this fails before the
+        // downstream cleanupEmptiesAll*Models test (which would otherwise
+        // silently pass by deleting only 4 types).
+        let entities = SharedTestModelContainer.shared.schema.entities
+        #expect(
+            entities.count == 4,
+            "Schema entity count changed to \(entities.count). If a new @Model was added, update SharedTestModelContainer + cleanup() + this invariant suite."
+        )
+    }
+
+    @Test("cleanup empties all 4 @Model types registered in the shared container")
+    func cleanupEmptiesAll4Models() async throws {
+        // Precondition (empty start) pinned by `makeTestModelContainerClearsLeftoverBeforeReturn`.
+        let container = try makeTestModelContainer()
+        let context = container.mainContext
+
+        let recordingId = UUID()
+        context.insert(RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: "/tmp/invariant-test.m4a"
+        ))
+        context.insert(OutboxItem(recordingId: recordingId))
+        context.insert(ClientCache(id: "client-1", name: "テスト利用者", furigana: "テスト"))
+        context.insert(OutputTemplate(name: "テストテンプレ", prompt: "要約して"))
+        try context.save()
+
+        try SharedTestModelContainer.cleanup()
+
+        try expectEmpty(RecordingRecord.self, in: context)
+        try expectEmpty(OutboxItem.self, in: context)
+        try expectEmpty(ClientCache.self, in: context)
+        try expectEmpty(OutputTemplate.self, in: context)
+    }
+
+    @Test("makeTestModelContainer returns an empty store regardless of prior caller's leftover data")
+    func makeTestModelContainerClearsLeftoverBeforeReturn() throws {
+        // 1st use: leave data behind without calling cleanup() — this is the
+        // exact state the shared container would be in if a previous suite
+        // forgot to tear down before the next suite started. Swift Testing
+        // does not provide deterministic ordering between `@Suite`s, so we
+        // simulate "the next consumer arrives" with a sequential round-trip
+        // inside a single test instead of a literal cross-suite fixture.
+        let firstContainer = SharedTestModelContainer.shared
+        firstContainer.mainContext.insert(OutboxItem(recordingId: UUID()))
+        try firstContainer.mainContext.save()
+
+        // 2nd use: a subsequent caller must get an empty store regardless of
+        // what the previous consumer left.
+        let secondContainer = try makeTestModelContainer()
+        #expect(
+            firstContainer === secondContainer,
+            "Must return the same process-wide singleton (reallocation would hit Issue #141)"
+        )
+        #expect(
+            try secondContainer.mainContext.fetchCount(FetchDescriptor<OutboxItem>()) == 0,
+            "makeTestModelContainer() must clean the store before returning"
+        )
+    }
+
+    /// Asserts the given `@Model` type has zero rows. Hoists the model name
+    /// from compile-time type info (avoiding a Stringly-typed failure message
+    /// that would silently rot on a model rename).
+    private func expectEmpty<Model: PersistentModel>(
+        _ type: Model.Type,
+        in context: ModelContext,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) throws {
+        let count = try context.fetchCount(FetchDescriptor<Model>())
+        #expect(
+            count == 0,
+            "cleanup() must delete \(String(describing: type)) (forgotten → cross-suite contamination)",
+            sourceLocation: sourceLocation
+        )
     }
 }
