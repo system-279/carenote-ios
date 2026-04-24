@@ -7,8 +7,10 @@ struct RecordingListView: View {
 
     /// Issue #193: delete 失敗時の state 更新を onDelete / retry 両経路で共通化する。
     /// `RecordingDeleteError` は専用 alert、それ以外は generic `errorMessage` alert へ流す。
+    /// 両 state を相互排他にして、同時に 2 つの alert が立ち上がる race を防ぐ。
     private func presentDeleteError(_ error: Error) {
         if let deleteError = error as? RecordingDeleteError {
+            viewModel.errorMessage = nil
             viewModel.deleteError = deleteError
         } else {
             viewModel.deleteError = nil
@@ -62,7 +64,6 @@ struct RecordingListView: View {
             presenting: viewModel.deleteError
         ) { error in
             // Issue #193: retryable case のみ再試行ボタンを表示する。
-            // Sendable 維持のため recordingId のみ保持しているので、VM の recordings から引き直す。
             if case let .retryable(recordingId, _) = error,
                let target = viewModel.recordings.first(where: { $0.id == recordingId }) {
                 Button("再試行") {

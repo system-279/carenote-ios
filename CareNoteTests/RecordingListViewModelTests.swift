@@ -352,6 +352,54 @@ struct RecordingListViewModelTests {
         }
     }
 
+    /// Issue #193: `FirestoreError.map` → `resolveDeleteError` の round-trip が
+    /// 実際の call site (`FirestoreService.deleteRecording`) と同じ経路で動くことを確認する。
+    /// map の fallthrough 動作が将来 refactor で壊れた場合に検知するための defense-in-depth。
+    @Test @MainActor
+    func mapResolve_roundTrip_transientCodeはRetryableに変換される() throws {
+        let ns = NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.unavailable.rawValue)
+        let mapped = FirestoreError.map(ns)  // .operationFailed(ns) (isTransient=true)
+
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                mapped,
+                recordingId: UUID(),
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let deleteError = error as? RecordingDeleteError,
+                  case .retryable = deleteError else {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Issue #193: `FirestoreError.map` → `resolveDeleteError` の round-trip で
+    /// permissionDenied が UI 層の `.permissionDenied` に正しく伝播することを確認する。
+    @Test @MainActor
+    func mapResolve_roundTrip_permissionDeniedはUI層まで伝播する() throws {
+        let ns = NSError(
+            domain: FirestoreErrorDomain,
+            code: FirestoreErrorCode.permissionDenied.rawValue
+        )
+        let mapped = FirestoreError.map(ns)  // .permissionDenied
+
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                mapped,
+                recordingId: UUID(),
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let deleteError = error as? RecordingDeleteError,
+                  case .permissionDenied = deleteError else {
+                return false
+            }
+            return true
+        }
+    }
+
     /// Issue #193: encodingFailed / decodingFailed / documentNotFound も permanent として rethrow される。
     @Test @MainActor
     func resolveDeleteError_FirestoreErrorの独自case群は各々そのままrethrowされる() throws {
