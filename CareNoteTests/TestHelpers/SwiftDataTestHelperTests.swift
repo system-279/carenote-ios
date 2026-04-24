@@ -83,9 +83,9 @@ struct SharedTestModelContainerInvariantsTests {
     @Test("shared container registers exactly the 4 expected @Model types")
     func schemaRegistersAll4Models() {
         // Tripwire: if a 5th @Model is added to production without updating
-        // the `ModelContainer(for:)` initializer in SharedTestModelContainer,
-        // this fails before the downstream `cleanupEmptiesAll*Models` test
-        // (which would otherwise silently pass by deleting only 4 types).
+        // the shared container's initializer, this fails before the
+        // downstream cleanupEmptiesAll*Models test (which would otherwise
+        // silently pass by deleting only 4 types).
         let entities = SharedTestModelContainer.shared.schema.entities
         #expect(
             entities.count == 4,
