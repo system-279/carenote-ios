@@ -1,3 +1,99 @@
+# Handoff — 2026-04-24 夜セッション: Issue #170 hardening bundle 完全 close（H1-H6 全項目）
+
+## ✅ #170 hardening bundle 最終項目（H5）merge で Issue #170 auto-close → Issue Net -1 達成
+
+前セッション（2026-04-24 昼）終了時の推奨アクション「#170 H2-H6 hardening（6-10h）」を本セッションで完遂。PR #173（先行 H1）と本セッション 4 PR（H2/H3, H6, H4, H5）で 6 項目すべて main 統合、**Issue #170 完全 close**。
+
+### セッション成果サマリ
+
+| PR | 項目 | 内容 | merge 順 |
+|----|------|------|----------|
+| #173 (前セッション) | H1 | scheme parallelizable=NO + lint-scheme-parallel.sh + 再合流 | ✅ 済 |
+| **#185 (merged)** | **H2/H3** | `cleanup()` per-model 失敗ログ + `fatalError` NSError unpack + `formatNSError` helper | 1 |
+| **#186 (merged)** | **H6** | lint-model-container.sh に Pre-flight 3（Issue 参照コメント強制）+ bash 3.2 silent failure 修正 + xcodegen→lint 順序 | 2 |
+| **#187 (merged)** | **H4** | OutboxSyncServiceTests 4 test に preflight assertion（`fetchCount`+`fileExists`）+ `Issue.record` 経由の fetch error context | 3 |
+| **#188 (merged)** | **H5** | SharedTestModelContainer invariant tests 4 件（singleton / schema tripwire / cleanup-empties-all / round-trip） | 4（#170 close） |
+
+### 主要判断のハイライト
+
+- **impl-plan v1/v2 で 4 PR 分割を設計**: H2/H3（同一ファイル）/ H6（shell+yml 独立）/ H4（OutboxSyncServiceTests）/ H5（新 invariant suite）に分解し、独立 merge で main 衝突リスク最小化
+- **逐次主義選択**（PM/PL 判断）: 「CI 16-20 分待ちに PR D 並列着手」を却下、1 PR 完了→次へで状態シンプル化、PR #173 時の bash 3.2 `mapfile` fail の教訓を活用
+- **fail-fast 契約維持** (PR #185): Issue 本文の「rethrow」を「best-effort loop」に誤拡張しない、元コード契約保持の pragmatic 判断
+- **bash 3.2 command substitution silent failure 防御** (PR #186): silent-failure-hunter Critical 指摘で `if ! missing_issue_refs=$(perl ...)` の明示 exit code check に変更、`set -e` が propagate しない構造を回避
+- **`fetchCount` 使用** (PR #187): SwiftData `fetch().count` の object hydration 回避（efficiency agent 指摘）+ `Issue.record` で fetch error 時の context 維持（silent-failure-hunter）
+- **Swift Testing の `@Suite` 間順序不保証を受容** (PR #188): cross-suite contamination smoke test を sequential round-trip で代替、doc comment で literal 不可の制約を明記、`.serialized` trait + scheme `parallelizable=NO` の defense-in-depth
+- **schema tripwire 追加** (PR #188 review 反映): `schema.entities.count == 4` で 5 番目の `@Model` 追加忘れを検知、pr-test-analyzer Rating 7 指摘
+
+### 実装実績
+
+- **変更ファイル合計**: 4 個 / 5 ファイル（+280 程度）
+  - `CareNoteTests/TestHelpers/SwiftDataTestHelper.swift` (#185、NSError unpack + cleanup per-model ログ)
+  - `scripts/lint-model-container.sh` (#186、Pre-flight 3 + meta-guard + 3-step ガイダンス)
+  - `.github/workflows/test.yml` (#186、xcodegen→lint 順序変更)
+  - `CareNoteTests/OutboxSyncServiceTests.swift` (#187、preflight + assertPreflightState helper)
+  - `CareNoteTests/TestHelpers/SwiftDataTestHelperTests.swift` (#185 新設 + #188 invariant suite 追加)
+- **テスト成長**: 135 → **141 tests / 20 suites**（+6 新規 test、+2 新 suites）
+  - 2 回の 20 回連続実行 × 4 PR = **合計 160 回連続実行で全 PASS**（race-free 検証）
+- **CI**: 4 回 green（PR #188 で lint false positive 1 件 → amend で即 fix）
+- **ローカル lint self-test**: lint-model-container.sh 8 種ケース全 PASS（PR #186、OK / Issue コメント欠落 / entry 削除 / 変数名 typo / blank line 分離 / 2 種の false positive 検証 / 違反ファイル挿入）
+
+### レビュー運用（3 層 + Quality Gate）
+
+- `/simplify` 3 並列: 4 回（reuse / quality / efficiency）
+- `/safe-refactor`: 1 回（PR #185）
+- **`/evaluator` (rules/quality-gate.md §2 発動)**: 1 回（PR #188、新機能追加）→ **APPROVE**（AC-C1〜C4/C6 PASS、AC-C5 UNTESTABLE [20 回実行で後検証済]）
+- `/review-pr` 4 並列: 4 回（code-reviewer / pr-test-analyzer / silent-failure-hunter / comment-analyzer、type-design は新規型なしで skip）
+- **API 529 Overloaded**: 1 回発生（PR #188 の simplify quality + evaluator）→ CLAUDE.md rules/workflow.md §3 プロトコル遵守、8 分待機で復旧・全 agent 完了、手動代替行動なし
+
+### Issue Net 変化
+
+セッション開始時 open **8** → #170 close (-1) → 終了時 open **7**（net **-1**）
+
+| 動き | 件数 | Open 数推移 |
+|------|------|------------|
+| 開始時 | — | 8 |
+| PR #188 merge → #170 auto-close | -1 | **7** |
+
+> **CLAUDE.md KPI「Issue は net で減らすべき」達成 ✅**。本セッションは review-pr Critical 0 件、Important 多数を PR 内修正で吸収（新規 Issue 起票ゼロ）。triage 基準 #4（rating ≥ 7 & confidence ≥ 80）を超える指摘も全て PR 内で解消、Issue net +0。
+
+### セッション内教訓（handoff 次世代向け）
+
+1. **lint regex の doc comment false positive** (PR #188 amend fix): `lint-model-container.sh` の perl slurp regex が doc 内の `` `ModelContainer(for:)` `` 文字列を誤検出。ローカル self-test でカバーされておらず CI で判明。次回 lint 改修時は「別ファイルの doc comment/string literal 内の API 名言及」ケースを self-test に含める（rating 6 enhancement として TODO 記録、Issue 化せず）
+2. **bash 3.2 + `set -e` + command substitution**: silent failure の典型パターン。`set -e` は command substitution 内の failure を propagate しない（macOS default の bash 3.2）。CI runner の bash が新しくても script は bash 3.2 互換で書く慣習を崩さないこと
+3. **Swift Testing `@Suite` 間順序不保証**: cross-suite 検証は literal 実装不可、sequential round-trip で代替可能。`.serialized` trait + scheme parallelizable=NO の defense-in-depth が必要
+4. **並列着手を避ける判断基準**: 2 PR 並列は「Agent Teams 閾値（3 独立タスク）未満」+ 「CI fail 時の原因切り分け困難」+ 「main 衝突」の 3 観点で ROI 負、本セッションは 4 PR 全て逐次着手で完遂
+
+### CI の現状
+
+- main `e5633e8` (PR #188 merge 後): iOS Tests CI 17m57s green、141 tests / 20 suites PASS
+- cross-suite race の四重防御完成:
+  1. scheme `parallelizable=NO` (#173)
+  2. `lint-scheme-parallel.sh` machine check (#173)
+  3. `SharedTestModelContainer.cleanup()` の NSError diagnostic (#185)
+  4. `assertPreflightState` diagnostic + `SharedTestModelContainerInvariantsTests` invariant 検証 (#187/#188)
+
+### 次セッション推奨アクション（優先順）
+
+Issue #170 hardening bundle 完了で test infra は安定化。次は application-side の bug fix / enhancement。
+
+1. **🔥 #182 iOS delete 機能の Firestore 同期実装**（bug, P2）: 前セッションから継続、impl-plan v1 は Issue #182 コメントに既記載（AC1-10 / RED-GREEN-REFACTOR / 変更ファイル予測 4 個 / 所要 2-3h）。**feature branch `fix/issue-182-ios-delete-firestore-sync` を切って RED フェーズから即着手**
+2. **#178 Stage 2 GitHub Actions + WIF 運用基盤**（enhancement, P2、ADR-009 follow-up）
+3. **#111 Phase 0.9 prod tenants/279.allowedDomains 有効化**（enhancement, P2、実機 smoke 後追い close 条件満たせば close 候補）
+4. **#105 deleteAccount E2E（Firebase Emulator Suite）**（enhancement, P2、I-Cdx-1）
+5. **#92 / #90 Guest Tenant 関連**（enhancement）
+6. **#65 Apple ID × Google account link**（enhancement）
+
+### 関連リンク
+
+- [Issue #170 CLOSED](https://github.com/system-279/carenote-ios/issues/170) — hardening bundle 6 項目完了
+- [PR #185 merged](https://github.com/system-279/carenote-ios/pull/185) — H2/H3
+- [PR #186 merged](https://github.com/system-279/carenote-ios/pull/186) — H6
+- [PR #187 merged](https://github.com/system-279/carenote-ios/pull/187) — H4
+- [PR #188 merged](https://github.com/system-279/carenote-ios/pull/188) — H5 (Closes #170)
+- impl-plan v1/v2（Issue #170 コメント）: https://github.com/system-279/carenote-ios/issues/170#issuecomment-4308689214
+
+---
+
 # Handoff — 2026-04-24 セッション: Issue #100 **恒久解消** (PR #181 merged) + iOS delete follow-up #182 起票
 
 ## ✅ 前セッション Phase 0.5 Rules rollback 判断ミスを GCP 側のみで根本解消
