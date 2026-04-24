@@ -32,11 +32,17 @@ cd "$ROOT"
 
 # Files allowed to construct `ModelContainer(for:)`. Keep this list minimal;
 # every entry MUST be preceded by an `# Issue #NNN:` justification comment
-# (enforced by Pre-flight 3 below) that points to the tracking Issue — when
-# someone hits a cross-suite regression like Issue #164 and is tempted to
-# whitelist a new file, the comment requirement forces them to first record
-# the investigation in a new Issue instead of silently expanding the allow-
-# list and losing the drift-guard coverage.
+# (enforced by Pre-flight 3 below).
+#
+# Cross-suite regression pattern (the reason this comment policy exists):
+# when a test fails only because it shares a `ModelContainer` with the rest
+# of the suite — e.g. its `cleanup()` races with a sibling suite's state, or
+# its `@Model` relationship semantics conflict with another test's fixtures
+# — an engineer may be tempted to silently add the file to this allow-list.
+# That would erase the drift-guard coverage (Issue #141, SIGTRAP on
+# duplicate registration) with no audit trail. Issue #164 is the canonical
+# example of this pattern. The `# Issue #NNN:` requirement forces the
+# investigation to be recorded in a new Issue before the allow-list expands.
 ALLOWED_TEST_FILES=(
   # Issue #141: Canonical shared container (PR #163 root-cause fix).
   "CareNoteTests/TestHelpers/SwiftDataTestHelper.swift"
@@ -72,15 +78,29 @@ for allowed in "${ALLOWED_TEST_FILES[@]}"; do
   fi
 done
 
+# Pre-flight 3 meta-guard: the `ALLOWED_TEST_FILES=(` declaration must exist
+# in this script, otherwise a future refactor that renames the array (typo
+# or reorg) would silently disable the whole whitelist audit — the perl
+# parser below would find no entries and report "clean".
+if ! grep -q '^ALLOWED_TEST_FILES=(' "$0"; then
+  echo "::error::ALLOWED_TEST_FILES=( declaration not found in $0 — audit broken."
+  echo "If the array was renamed, update Pre-flight 3's grep + perl pattern in sync."
+  exit 1
+fi
+
 # Pre-flight 3: each allowed entry must be preceded by an `# Issue #NNN:`
-# comment. Without this, a future engineer hitting a cross-suite regression
-# (Issue #164 style) can silently expand the allow-list with a vague `# TODO`
-# comment, erasing the drift-guard coverage without leaving an investigation
-# trail. The check scans this very script so the policy is self-enforcing.
+# comment (see the cross-suite regression pattern note above the array).
+# The check scans this very script so the policy is self-enforcing.
 # Pattern: find the ALLOWED_TEST_FILES=( block, then assert every quoted
-# entry's preceding non-blank line starts with `# Issue #`.
-missing_issue_refs=$(
-  perl -0777 -ne '
+# entry's immediately preceding non-blank line starts with `# Issue #NNN:`.
+# Accepted: `# Issue #141: justification text` (case-insensitive, colon required)
+# Rejected: `# See issue 141`, `# TODO: fix later`, `# NOTE: issue #141`
+#
+# bash 3.2 note: `set -e` does NOT propagate failures from command
+# substitution, so a perl invocation that aborts silently would leave
+# $missing_issue_refs empty and Pre-flight 3 would pass. Run perl through
+# an explicit exit-code check instead of relying on pipefail semantics.
+if ! missing_issue_refs=$(perl -0777 -ne '
     my @lines = split /\n/;
     my $in_list = 0;
     my $prev_comment = "";
@@ -95,14 +115,18 @@ missing_issue_refs=$(
             print "$entry\n";
           }
         }
-        # Track the last non-blank comment line for the next entry
+        # Strict adjacency: only the IMMEDIATELY preceding comment line
+        # counts. Blank lines reset prev_comment so a far-away comment
+        # cannot be mistakenly paired with a new entry.
         if ($line =~ /^\s*#/) { $prev_comment = $line; }
-        elsif ($line =~ /^\s*$/) { } # blank: keep prev_comment
         else { $prev_comment = ""; }
       }
     }
-  ' "$0"
-)
+  ' "$0" 2>&1); then
+  echo "::error::Pre-flight 3 perl parser failed (exit status $?). Audit not enforced."
+  echo "Output: $missing_issue_refs"
+  exit 1
+fi
 if [ -n "$missing_issue_refs" ]; then
   echo "::error::ALLOWED_TEST_FILES entries must be preceded by an '# Issue #NNN:' comment."
   echo ""
