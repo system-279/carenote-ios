@@ -55,21 +55,19 @@ struct SwiftDataTestHelperTests {
 ///   - `SharedTestModelContainer.shared` is a process-wide singleton —
 ///     reallocating would reproduce the SIGTRAP from Issue #141.
 ///   - `cleanup()` actually empties every `@Model` type, not just a subset —
-///     adding a new `@Model` without updating `cleanup()` fails `cleanupEmptiesAll4Models`.
+///     adding a new `@Model` without updating `cleanup()` fails
+///     `schemaRegistersAll4Models` or `cleanupEmptiesAll4Models`.
 ///   - `makeTestModelContainer()` guarantees an empty store on every call,
 ///     regardless of what the previous caller left behind.
 ///
-/// These tests act as a regression net for PR #185's cleanup hardening and
-/// for any future refactor of the helper.
-///
-/// **Requires non-parallelized test execution** (PR #173 pins
-/// `parallelizable=NO` on the scheme + `lint-scheme-parallel.sh`). If that
-/// setting is removed, `cleanupEmptiesAll4Models` and
-/// `makeTestModelContainerClearsLeftoverBeforeReturn` will produce race-
-/// induced false positives because the shared container is mutated from
-/// multiple test contexts concurrently.
+/// **Requires suite-level serialization.** The shared container is mutated
+/// from every test context in the target, so concurrent mutation produces
+/// non-deterministic `fetchCount` results. Defense-in-depth:
+///   1. `.serialized` trait on this suite (belt).
+///   2. Scheme-level `parallelizable=NO` enforced by `lint-scheme-parallel.sh`
+///      (suspenders — see Issue #141 for the SIGTRAP this prevents).
 @MainActor
-@Suite("SharedTestModelContainer invariants (Issue #170 H5)")
+@Suite("SharedTestModelContainer invariants (Issue #170 H5)", .serialized)
 struct SharedTestModelContainerInvariantsTests {
 
     @Test("shared is a process-wide singleton (static-let stability)")
@@ -82,11 +80,22 @@ struct SharedTestModelContainerInvariantsTests {
         )
     }
 
+    @Test("shared container registers exactly the 4 expected @Model types")
+    func schemaRegistersAll4Models() {
+        // Tripwire: if a 5th @Model is added to production without updating
+        // the `ModelContainer(for:)` initializer in SharedTestModelContainer,
+        // this fails before the downstream `cleanupEmptiesAll*Models` test
+        // (which would otherwise silently pass by deleting only 4 types).
+        let entities = SharedTestModelContainer.shared.schema.entities
+        #expect(
+            entities.count == 4,
+            "Schema entity count changed to \(entities.count). If a new @Model was added, update SharedTestModelContainer + cleanup() + this invariant suite."
+        )
+    }
+
     @Test("cleanup empties all 4 @Model types registered in the shared container")
     func cleanupEmptiesAll4Models() async throws {
-        // `makeTestModelContainer()` internally calls cleanup(), so this test
-        // always starts from an empty store regardless of what the previous
-        // test inside this process left behind.
+        // Precondition (empty start) pinned by `makeTestModelContainerClearsLeftoverBeforeReturn`.
         let container = try makeTestModelContainer()
         let context = container.mainContext
 
@@ -111,7 +120,7 @@ struct SharedTestModelContainerInvariantsTests {
         try expectEmpty(OutputTemplate.self, in: context)
     }
 
-    @Test("makeTestModelContainer returns an empty store even when the previous caller left data (sequential round-trip)")
+    @Test("makeTestModelContainer returns an empty store regardless of prior caller's leftover data")
     func makeTestModelContainerClearsLeftoverBeforeReturn() throws {
         // 1st use: leave data behind without calling cleanup() — this is the
         // exact state the shared container would be in if a previous suite
