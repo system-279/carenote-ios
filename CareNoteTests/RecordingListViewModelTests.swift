@@ -132,7 +132,8 @@ struct RecordingListViewModelTests {
 
     // MARK: - Issue #182 delete Firestore sync
 
-    /// AC4/AC9-1: firestoreId == nil (Outbox 未処理の新規録音) は Firestore を呼ばず local のみ削除する
+    /// AC4/AC9-1: firestoreId == nil (Outbox 未処理の新規録音) は Firestore を呼ばず local のみ削除する。
+    /// AC6: 関連 OutboxItem も cascade で削除されること（RecordingRepository.delete の既存挙動）を検証。
     @Test @MainActor
     func deleteRecording_firestoreIdなしなら_ローカルのみ削除されFirestoreは呼ばれない() async throws {
         let container = try makeTestModelContainer()
@@ -143,6 +144,8 @@ struct RecordingListViewModelTests {
 
         let recordingId = UUID()
         _ = Self.makeRecording(id: recordingId, context: context, firestoreId: nil)
+        // AC6: OutboxItem を同時投入し、cascade 削除されることを検証
+        context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
 
         await vm.loadRecordings()
@@ -155,11 +158,18 @@ struct RecordingListViewModelTests {
         // ローカルから削除されている
         #expect(vm.recordings.isEmpty)
         #expect(try repo.findById(recordingId) == nil)
+
+        // AC6: 関連 OutboxItem も削除されている（RecordingRepository.delete の cascade）
+        let outboxDescriptor = FetchDescriptor<OutboxItem>(
+            predicate: #Predicate { $0.recordingId == recordingId }
+        )
+        #expect(try context.fetch(outboxDescriptor).isEmpty)
     }
 
     /// AC5/AC9-2: firestoreId != nil で firestoreService == nil の場合、
     /// local-only 削除を行わず fail させる（Issue #182 再発防止）。
     /// 同期済み録音を local だけ消すと「再読込で復活」が再発するため。
+    /// AC6: guard 発動時は OutboxItem も削除せず保持されること。
     @Test @MainActor
     func deleteRecording_同期済みなのにfirestoreServiceなしならエラー投げローカルは残す() async throws {
         let container = try makeTestModelContainer()
@@ -180,6 +190,8 @@ struct RecordingListViewModelTests {
             transcription: "文字起こし結果",
             transcriptionStatus: .done
         )
+        // AC6: guard throw 時に cascade 削除が走らないことを検証するため OutboxItem も投入
+        context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
 
         await #expect(throws: RecordingDeleteError.self) {
@@ -188,17 +200,25 @@ struct RecordingListViewModelTests {
 
         // ローカル側は削除されずに残っている（再読込復活防止のガード）
         #expect(try repo.findById(recordingId) != nil)
+
+        // AC6: 関連 OutboxItem も残っている（guard throw は cascade 削除も止める）
+        let outboxDescriptor = FetchDescriptor<OutboxItem>(
+            predicate: #Predicate { $0.recordingId == recordingId }
+        )
+        #expect(try context.fetch(outboxDescriptor).count == 1)
     }
 
-    /// AC5/AC9-3: firestoreId != nil で tenantId 欠落時も fail。
+    /// AC5/AC9-3: firestoreId != nil で tenantId == nil の場合も fail。
     @Test @MainActor
     func deleteRecording_同期済みなのにtenantIdなしならエラー投げローカルは残す() async throws {
         let container = try makeTestModelContainer()
         let context = container.mainContext
         let repo = RecordingRepository(modelContext: context)
         // firestoreService は non-nil だが tenantId == nil のケース。
-        // guard は firestoreService より先に tenantId の empty check に到達するため
-        // FirestoreService().init() は呼ぶが、`db` は lazy で Firebase 接続は行わない。
+        // guard は `let firestoreService, let tenantId, !tenantId.isEmpty` の順で左から
+        // 評価されるため、firestoreService の non-nil check は通り、tenantId の non-nil
+        // check で fail する。この test path では `db` プロパティへアクセスしないため
+        // Firebase の接続は発生しない（FirestoreService.init は _firestore の格納のみ）。
         let firestore = FirestoreService()
         let vm = RecordingListViewModel(
             recordingRepository: repo,
@@ -211,6 +231,36 @@ struct RecordingListViewModelTests {
             id: recordingId,
             context: context,
             firestoreId: "firestore-doc-xyz",
+            uploadStatus: .done
+        )
+        try context.save()
+
+        await #expect(throws: RecordingDeleteError.self) {
+            try await vm.deleteRecording(recording)
+        }
+
+        #expect(try repo.findById(recordingId) != nil)
+    }
+
+    /// AC5: firestoreId != nil で tenantId が空文字列の場合も fail。
+    /// Firebase Auth の custom claim 未反映 / signin 直後の race 対策。
+    @Test @MainActor
+    func deleteRecording_同期済みなのにtenantIdが空文字ならエラー投げローカルは残す() async throws {
+        let container = try makeTestModelContainer()
+        let context = container.mainContext
+        let repo = RecordingRepository(modelContext: context)
+        let firestore = FirestoreService()
+        let vm = RecordingListViewModel(
+            recordingRepository: repo,
+            firestoreService: firestore,
+            tenantId: ""
+        )
+
+        let recordingId = UUID()
+        let recording = Self.makeRecording(
+            id: recordingId,
+            context: context,
+            firestoreId: "firestore-doc-empty-tenant",
             uploadStatus: .done
         )
         try context.save()

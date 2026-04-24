@@ -55,7 +55,13 @@ private actor StubRecordingStore: RecordingStoring {
     }
 
     func deleteRecording(tenantId: String, recordingId: String) async throws {
-        // OutboxSync 系テストでは使われない（Issue #182 の RecordingListViewModel 経路のみ）
+        // OutboxSync 系テストからは呼ばれない想定。将来 OutboxSyncService が deleteRecording
+        // を呼ぶ実装変更（例: retry 枯渇で Firestore から削除）が入った時、silent pass せずに
+        // test を落として挙動変更を検知するため fail-fast で Issue を記録する。
+        Issue.record("StubRecordingStore.deleteRecording called unexpectedly from OutboxSync tests")
+        throw FirestoreError.operationFailed(
+            NSError(domain: "StubRecordingStore", code: -1, userInfo: [NSLocalizedDescriptionKey: "unexpected call"])
+        )
     }
 }
 
