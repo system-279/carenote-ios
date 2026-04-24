@@ -338,6 +338,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         try await service.processQueueImmediately()
 
@@ -383,6 +384,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         await #expect(throws: OutboxSyncError.self) {
             try await service.processQueueImmediately()
@@ -424,6 +426,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         await #expect(throws: OutboxSyncError.self) {
             try await service.processQueueImmediately()
@@ -469,6 +472,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         // OutboxSyncService は原因 error を `OutboxSyncError.uploadFailed(_)` で wrap して throw する。
         await #expect(throws: OutboxSyncError.self) {
@@ -499,5 +503,39 @@ struct OutboxSyncServiceTests {
             .appendingPathComponent("test-audio-\(UUID().uuidString).m4a").path
         try Data().write(to: URL(fileURLWithPath: audioPath))
         return (container, audioPath)
+    }
+
+    /// processQueueImmediately 直前の不変条件を確認する preflight 検査（Issue #170 H4）。
+    /// 呼び出しは `try context.save()` の直後、`service.processQueueImmediately()` の直前。
+    ///
+    /// Fail したら test infra 側（cleanup 残留 / save 未 flush / audio file 欠落）の問題で、
+    /// service 実装は無関係と切り分けられる — service 呼出後の assertion が fail した場合は
+    /// service 実装（uid 分岐 / upload 順序 / throw 経路）側に絞り込める。
+    ///
+    /// - Throws: `fetchCount` の失敗時のみ。assertion 失敗は `#expect` 経由で報告されるため
+    ///   call site の `try` は fetch error 伝播のみを意味する。
+    @MainActor
+    private static func assertPreflightState(
+        context: ModelContext,
+        audioPath: String,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) throws {
+        let outboxCount = try context.fetchCount(FetchDescriptor<OutboxItem>())
+        let recordingCount = try context.fetchCount(FetchDescriptor<RecordingRecord>())
+        #expect(
+            outboxCount == 1,
+            "Preflight: OutboxItem count == 1 expected, got \(outboxCount) (cleanup 残留 / save 未 flush)",
+            sourceLocation: sourceLocation
+        )
+        #expect(
+            recordingCount == 1,
+            "Preflight: RecordingRecord count == 1 expected, got \(recordingCount) (cleanup 残留 / save 未 flush)",
+            sourceLocation: sourceLocation
+        )
+        #expect(
+            FileManager.default.fileExists(atPath: audioPath),
+            "Preflight: audio file must exist at \(audioPath) (stale-item guard を通過させるため必須)",
+            sourceLocation: sourceLocation
+        )
     }
 }
