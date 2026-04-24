@@ -1,4 +1,5 @@
 @testable import CareNote
+import FirebaseFirestore
 import Foundation
 import SwiftData
 import Testing
@@ -270,5 +271,153 @@ struct RecordingListViewModelTests {
         }
 
         #expect(try repo.findById(recordingId) != nil)
+    }
+
+    // MARK: - Issue #193: delete error classification (resolveDeleteError)
+
+    /// Issue #193 AC6: Firestore notFound は idempotent success (throw せず return)。
+    /// 他端末で先に削除済のケースを想定。
+    @Test @MainActor
+    func resolveDeleteError_notFoundは例外を投げず即return() throws {
+        try RecordingListViewModel.resolveDeleteError(
+            .notFound,
+            recordingId: UUID(),
+            firestoreId: "doc-1"
+        )
+        // ここに到達すれば pass (throw されないこと自体が期待)
+    }
+
+    /// Issue #193 AC7: Firestore permissionDenied は RecordingDeleteError.permissionDenied に変換される。
+    @Test @MainActor
+    func resolveDeleteError_permissionDeniedはRecordingDeleteErrorにマップされる() throws {
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                .permissionDenied,
+                recordingId: UUID(),
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let deleteError = error as? RecordingDeleteError,
+                  case .permissionDenied = deleteError else {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Issue #193 AC8: transient error (unavailable 等) は RecordingDeleteError.retryable にマップされ、
+    /// 渡した recordingId がそのまま保持される（View で再試行対象を引き直すため）。
+    @Test @MainActor
+    func resolveDeleteError_transientはRetryableにマップされrecordingIdを保持する() throws {
+        let recordingId = UUID()
+        let transientUnderlying = FirestoreError.operationFailed(
+            NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.unavailable.rawValue)
+        )
+
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                transientUnderlying,
+                recordingId: recordingId,
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let deleteError = error as? RecordingDeleteError,
+                  case let .retryable(retryRecordingId, _) = deleteError else {
+                return false
+            }
+            return retryRecordingId == recordingId
+        }
+    }
+
+    /// Issue #193: non-classified FirestoreError (permanent かつ notFound/permissionDenied でない)
+    /// は原 error をそのまま re-throw する。呼び出し側の既存ハンドリングに委ねる。
+    @Test @MainActor
+    func resolveDeleteError_未分類permanentはそのままrethrowされる() throws {
+        let internalError = FirestoreError.operationFailed(
+            NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.internal.rawValue)
+        )
+
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                internalError,
+                recordingId: UUID(),
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let firestoreError = error as? FirestoreError,
+                  case .operationFailed = firestoreError else {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Issue #193: `FirestoreError.map` → `resolveDeleteError` の round-trip が
+    /// 実際の call site (`FirestoreService.deleteRecording`) と同じ経路で動くことを確認する。
+    /// map の fallthrough 動作が将来 refactor で壊れた場合に検知するための defense-in-depth。
+    @Test @MainActor
+    func mapResolve_roundTrip_transientCodeはRetryableに変換される() throws {
+        let ns = NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.unavailable.rawValue)
+        let mapped = FirestoreError.map(ns)  // .operationFailed(ns) (isTransient=true)
+
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                mapped,
+                recordingId: UUID(),
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let deleteError = error as? RecordingDeleteError,
+                  case .retryable = deleteError else {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Issue #193: `FirestoreError.map` → `resolveDeleteError` の round-trip で
+    /// permissionDenied が UI 層の `.permissionDenied` に正しく伝播することを確認する。
+    @Test @MainActor
+    func mapResolve_roundTrip_permissionDeniedはUI層まで伝播する() throws {
+        let ns = NSError(
+            domain: FirestoreErrorDomain,
+            code: FirestoreErrorCode.permissionDenied.rawValue
+        )
+        let mapped = FirestoreError.map(ns)  // .permissionDenied
+
+        #expect {
+            try RecordingListViewModel.resolveDeleteError(
+                mapped,
+                recordingId: UUID(),
+                firestoreId: "doc-1"
+            )
+        } throws: { error in
+            guard let deleteError = error as? RecordingDeleteError,
+                  case .permissionDenied = deleteError else {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Issue #193: encodingFailed / decodingFailed / documentNotFound も permanent として rethrow される。
+    @Test @MainActor
+    func resolveDeleteError_FirestoreErrorの独自case群は各々そのままrethrowされる() throws {
+        let cases: [FirestoreError] = [
+            .encodingFailed(NSError(domain: "Test", code: 0)),
+            .decodingFailed(NSError(domain: "Test", code: 0)),
+            .documentNotFound("path"),
+        ]
+        for firestoreError in cases {
+            #expect {
+                try RecordingListViewModel.resolveDeleteError(
+                    firestoreError,
+                    recordingId: UUID(),
+                    firestoreId: "doc-1"
+                )
+            } throws: { error in
+                error is FirestoreError
+            }
+        }
     }
 }

@@ -11,14 +11,26 @@ enum RecordingDeleteError: LocalizedError, Sendable {
     ///
     /// 注意: case 名は "Unavailable" だが、実態は DI wiring bug または未サインイン状態。
     /// ネットワーク起因ではないため、ユーザーへは「再サインイン / アプリ再起動」を案内する。
-    /// 将来 Firestore 側の transient 失敗を別 case として分けるなら、本 case はそのまま
-    /// DI 欠落専用として残す（Issue #182 follow-up）。
     case remoteServiceUnavailable
+
+    /// Issue #193: Firestore security rules で拒否された（例: `createdBy=""` legacy record を
+    /// 管理者以外が削除しようとした）。local も削除しない（Firestore を primary truth として整合を維持）。
+    case permissionDenied
+
+    /// Issue #193: transient な Firestore 障害 (deadlineExceeded / resourceExhausted / unavailable)。
+    /// `recordingId` のみ保持する理由: `RecordingRecord` は SwiftData `@Model` で non-Sendable、
+    /// `any Error` も non-Sendable のため enum の Sendable 準拠を崩す。UUID + FirestoreError なら安全。
+    /// View 側は `viewModel.recordings.first(where: { $0.id == recordingId })` で対象を引き直す。
+    case retryable(recordingId: UUID, underlying: FirestoreError)
 
     var errorDescription: String? {
         switch self {
         case .remoteServiceUnavailable:
             return "削除できませんでした。アプリを再起動するか、再度サインインしてください。"
+        case .permissionDenied:
+            return "この録音は管理者権限が必要です。管理者に削除を依頼してください。"
+        case .retryable:
+            return "通信が不安定なため削除できませんでした。時間をおいて再試行してください。"
         }
     }
 }
@@ -30,6 +42,9 @@ final class RecordingListViewModel {
     var recordings: [RecordingRecord] = []
     var isLoading: Bool = false
     var errorMessage: String?
+    /// Issue #193: 削除専用のエラー state。`.retryable` の場合に View が「再試行」ボタンを出す。
+    /// `errorMessage` とは別 state にして、polling 等の generic エラーと混同しないようにする。
+    var deleteError: RecordingDeleteError?
 
     private let recordingRepository: RecordingRepository
     // TODO(Issue #182 follow-up): migrate to `any RecordingStoring` for testability.
@@ -146,6 +161,12 @@ final class RecordingListViewModel {
                 try await firestoreService.deleteRecording(
                     tenantId: tenantId,
                     recordingId: firestoreId
+                )
+            } catch let firestoreError as FirestoreError {
+                try Self.resolveDeleteError(
+                    firestoreError,
+                    recordingId: recording.id,
+                    firestoreId: firestoreId
                 )
             } catch {
                 Self.logger.error(
@@ -270,6 +291,45 @@ final class RecordingListViewModel {
 
     /// polling save 失敗時に UI へ出す errorMessage リテラル（成功時 clear のため定数化）。
     private static let pollingSaveFailureMessage = "録音の更新を保存できませんでした"
+
+    /// Issue #193: Firestore delete 失敗を分類し、UI 層へ見せる形 (RecordingDeleteError) に変換する。
+    ///
+    /// - `.notFound`: 他端末で既に削除済 → `return` で idempotent success。caller は local 削除を続行。
+    /// - `.permissionDenied`: rules で拒否 → `RecordingDeleteError.permissionDenied` を throw、local は消さない。
+    /// - `.operationFailed` かつ `isTransient`: 再試行可能 → `.retryable` を throw。
+    /// - その他 (非 transient `.operationFailed` / `.encodingFailed` / `.decodingFailed` / `.documentNotFound`):
+    ///   原因特定が難しいため、原 `FirestoreError` をそのまま re-throw して上位に委ねる。
+    ///
+    /// `static` かつ純粋関数として公開しているのは、concrete `FirestoreService` actor を
+    /// stub できない現状（Issue #182 follow-up）でも分類ロジックだけは単体テストできるようにするため。
+    static func resolveDeleteError(
+        _ firestoreError: FirestoreError,
+        recordingId: UUID,
+        firestoreId: String
+    ) throws {
+        switch firestoreError {
+        case .notFound:
+            Self.logger.info(
+                "Recording already removed on Firestore, proceeding with local cleanup: \(firestoreId, privacy: .public)"
+            )
+            return
+        case .permissionDenied:
+            Self.logger.warning(
+                "Firestore deleteRecording denied by rules for \(firestoreId, privacy: .public)"
+            )
+            throw RecordingDeleteError.permissionDenied
+        case .operationFailed where firestoreError.isTransient:
+            Self.logger.info(
+                "Firestore deleteRecording transient failure for \(firestoreId, privacy: .public): \(firestoreError.localizedDescription, privacy: .public)"
+            )
+            throw RecordingDeleteError.retryable(recordingId: recordingId, underlying: firestoreError)
+        case .operationFailed, .encodingFailed, .decodingFailed, .documentNotFound:
+            Self.logger.error(
+                "Firestore deleteRecording failed for \(firestoreId, privacy: .public): \(firestoreError.localizedDescription, privacy: .public)"
+            )
+            throw firestoreError
+        }
+    }
 
     /// polling 中の Firestore fetch エラーを transient/permanent に分類してログする。
     ///

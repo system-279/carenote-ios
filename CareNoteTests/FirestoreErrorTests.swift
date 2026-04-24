@@ -79,3 +79,97 @@ struct FirestoreErrorTests {
         #expect(error.isTransient == false)
     }
 }
+
+/// FirestoreError.map (Issue #193) の分類ロジックを検証する。
+///
+/// Firestore SDK が throw した NSError を `permissionDenied` / `notFound` /
+/// `operationFailed` にマップする。UI 層で permissionDenied=管理者依頼、
+/// notFound=idempotent success、transient=再試行ボタン付き alert、
+/// その他 permanent=generic alert と分岐させる前提。
+@Suite("FirestoreError.map classification (Issue #193)")
+struct FirestoreErrorMapTests {
+    // MARK: - Classified cases
+
+    @Test("FirestoreErrorDomain + permissionDenied (7) → .permissionDenied")
+    func map_permissionDenied() {
+        let ns = NSError(
+            domain: FirestoreErrorDomain,
+            code: FirestoreErrorCode.permissionDenied.rawValue
+        )
+        let mapped = FirestoreError.map(ns)
+        if case .permissionDenied = mapped {
+            // pass
+        } else {
+            Issue.record("Expected .permissionDenied, got \(mapped)")
+        }
+    }
+
+    @Test("FirestoreErrorDomain + notFound (5) → .notFound")
+    func map_notFound() {
+        let ns = NSError(
+            domain: FirestoreErrorDomain,
+            code: FirestoreErrorCode.notFound.rawValue
+        )
+        let mapped = FirestoreError.map(ns)
+        if case .notFound = mapped {
+            // pass
+        } else {
+            Issue.record("Expected .notFound, got \(mapped)")
+        }
+    }
+
+    // MARK: - Fallthrough to operationFailed
+
+    @Test(
+        "FirestoreErrorDomain + transient code → .operationFailed (isTransient=true)",
+        arguments: [
+            FirestoreErrorCode.deadlineExceeded.rawValue,
+            FirestoreErrorCode.resourceExhausted.rawValue,
+            FirestoreErrorCode.unavailable.rawValue,
+        ]
+    )
+    func map_transientCode_fallsThroughToOperationFailed(code: Int) {
+        let ns = NSError(domain: FirestoreErrorDomain, code: code)
+        let mapped = FirestoreError.map(ns)
+        guard case .operationFailed = mapped else {
+            Issue.record("Expected .operationFailed for transient code \(code), got \(mapped)")
+            return
+        }
+        #expect(mapped.isTransient == true)
+    }
+
+    @Test(
+        "FirestoreErrorDomain + permanent non-classified code → .operationFailed (isTransient=false)",
+        arguments: [
+            FirestoreErrorCode.internal.rawValue,
+            FirestoreErrorCode.invalidArgument.rawValue,
+            FirestoreErrorCode.unauthenticated.rawValue,
+        ]
+    )
+    func map_permanentCode_fallsThroughToOperationFailed(code: Int) {
+        let ns = NSError(domain: FirestoreErrorDomain, code: code)
+        let mapped = FirestoreError.map(ns)
+        guard case .operationFailed = mapped else {
+            Issue.record("Expected .operationFailed for permanent code \(code), got \(mapped)")
+            return
+        }
+        #expect(mapped.isTransient == false)
+    }
+
+    // MARK: - Wrong domain (load-bearing for typo-guard)
+
+    @Test("FirestoreErrorDomain 以外のドメインは code に関わらず .operationFailed 扱い")
+    func map_wrongDomain_fallsThroughToOperationFailed() {
+        // permissionDenied に該当するコード (7) でも、ドメインが違えば .permissionDenied にしない
+        let ns = NSError(
+            domain: NSURLErrorDomain,
+            code: FirestoreErrorCode.permissionDenied.rawValue
+        )
+        let mapped = FirestoreError.map(ns)
+        if case .operationFailed = mapped {
+            // pass
+        } else {
+            Issue.record("Expected .operationFailed for wrong domain, got \(mapped)")
+        }
+    }
+}

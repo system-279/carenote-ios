@@ -5,6 +5,19 @@ import SwiftUI
 struct RecordingListView: View {
     @Bindable var viewModel: RecordingListViewModel
 
+    /// Issue #193: delete 失敗時の state 更新を onDelete / retry 両経路で共通化する。
+    /// `RecordingDeleteError` は専用 alert、それ以外は generic `errorMessage` alert へ流す。
+    /// 両 state を相互排他にして、同時に 2 つの alert が立ち上がる race を防ぐ。
+    private func presentDeleteError(_ error: Error) {
+        if let deleteError = error as? RecordingDeleteError {
+            viewModel.errorMessage = nil
+            viewModel.deleteError = deleteError
+        } else {
+            viewModel.deleteError = nil
+            viewModel.errorMessage = error.localizedDescription
+        }
+    }
+
     var body: some View {
         List {
             ForEach(viewModel.recordings, id: \.id) { recording in
@@ -22,10 +35,7 @@ struct RecordingListView: View {
                         do {
                             try await viewModel.deleteRecording(recording)
                         } catch {
-                            // Issue #182 AC5: 同期済み録音の local-only 削除ガード失敗等を
-                            // ユーザーに見せる。複数件中 1 件目が失敗したら以降を中断（データ
-                            // 整合性優先、エラーメッセージの上書きも回避）。
-                            viewModel.errorMessage = error.localizedDescription
+                            presentDeleteError(error)
                             break
                         }
                     }
@@ -44,6 +54,32 @@ struct RecordingListView: View {
             Button("OK", role: .cancel) { viewModel.errorMessage = nil }
         } message: { message in
             Text(message)
+        }
+        .alert(
+            "削除できませんでした",
+            isPresented: Binding(
+                get: { viewModel.deleteError != nil },
+                set: { if !$0 { viewModel.deleteError = nil } }
+            ),
+            presenting: viewModel.deleteError
+        ) { error in
+            // Issue #193: retryable case のみ再試行ボタンを表示する。
+            if case let .retryable(recordingId, _) = error,
+               let target = viewModel.recordings.first(where: { $0.id == recordingId }) {
+                Button("再試行") {
+                    Task {
+                        do {
+                            try await viewModel.deleteRecording(target)
+                            viewModel.deleteError = nil
+                        } catch {
+                            presentDeleteError(error)
+                        }
+                    }
+                }
+            }
+            Button("OK", role: .cancel) { viewModel.deleteError = nil }
+        } message: { error in
+            Text(error.errorDescription ?? "削除に失敗しました。")
         }
         .overlay {
             if viewModel.isLoading {
