@@ -1,3 +1,116 @@
+# Handoff — 2026-04-24 夜 → 2026-04-25 未明セッション: Issue #182 delete Firestore sync 完全解消 + Build 36 / v0.1.1 TestFlight リリース
+
+## ✅ Issue #182 auto-close（PR #191 merge） + Build 36 uploaded（v0.1.1 patch bump）
+
+前セッション handoff の推奨 #1「🔥 #182 iOS delete 機能の Firestore 同期実装」を impl-plan v2 で完遂。Codex セカンドオピニオンで v1 の事実誤認 2 件（存在しない `recording.audioStoragePath` / `StorageService.delete`）を検出し、AC を抜本改訂。TDD (RED→GREEN→REFACTOR) + `/simplify` + `/review-pr` 5 agent 並列レビューで Critical 2 件 + Important 6 件を完全対応して merge → TestFlight Build 36 (v0.1.1) uploaded。
+
+### セッション成果サマリ
+
+| PR | 内容 | merge 順 |
+|----|------|----------|
+| **#191 (merged)** | iOS 録音削除の Firestore 同期 (Issue #182 close) | 1 |
+| **#195 (merged)** | Build 36 / v0.1.1 に project.yml / pbxproj 同期 | 2 |
+
+### 主要判断のハイライト
+
+- **Codex plan レビューで v1 の事実誤認を検出**: impl-plan v1 は `recording.audioStoragePath` (SwiftData `RecordingRecord` に存在しない、Firestore DTO のみ) と `storageService.delete(gsPath:)` (未実装) を参照していた。実コード調査で実装前に発見、AC 抜本改訂で Storage 削除を follow-up Issue に切り出し。
+- **Storage 削除を本 PR スコープ外に**: Codex 推奨 (a) 案「Firestore のみ削除、Storage orphan cleanup は server-side Cloud Function 化」を採用。既存 `functions/scripts/delete-empty-createdby.mjs` の思想転用で #192 起票。
+- **AC5 guard 新設**: `firestoreId != nil` + `firestoreService == nil` / `tenantId` 欠落時は local-only 削除を拒否して throw（再発防止）。`RecordingDeleteError.remoteServiceUnavailable` enum で type 安全に表現。
+- **View 層の `try?` swallow を撤廃**: `.alert` binding で delete 失敗をユーザーに可視化（silent failure 原則遵守）。
+- **5 agent 並列レビューで Critical 2 + Important 6 を即時修正**:
+  1. `.onDelete` IndexSet stale index → snapshot 化 + 失敗時 break
+  2. local audio 削除の silent swallow → `logger.warning` 追加
+  3. `deleteRecording` logging 皆無 → guard / Firestore 失敗で `logger.error`
+  4. エラーメッセージ「ネットワーク確認」誤誘導 → 「アプリ再起動 / 再サインイン」
+  5. AC9-3 test コメント guard 評価順説明誤り → 訂正
+  6. OutboxItem cascade の VM test 欠如 (rating 7) → AC9-1/9-2 に assertion 追加
+  7. `tenantId == ""` 境界値テスト欠如 (rating 6-7) → +1 テスト
+  8. StubRecordingStore silent no-op → `Issue.record + throw` fail-fast
+- **MARKETING_VERSION 0.1.0 が App Store Connect で closed**: 初回 upload で `Invalid Pre-Release Train` エラー。semver patch bump (0.1.0 → 0.1.1) で再 upload 成功。build 番号は 35 → 36。
+- **main 直接 push が hook で block**（CLAUDE.md 準拠）→ PR #195 で project.yml / pbxproj の sync を feature branch 経由で merge。
+
+### 実装実績
+
+- **変更ファイル合計**: PR #191 で 5 個 / +301/-21 行、PR #195 で 2 個 / +6/-6 行（version bump）
+  - `CareNote/Services/FirestoreService.swift` (#191、protocol + impl 追加)
+  - `CareNote/Features/RecordingList/RecordingListViewModel.swift` (#191、`RecordingDeleteError` + deleteRecording 書き換え)
+  - `CareNote/Features/RecordingList/RecordingListView.swift` (#191、alert binding + IndexSet snapshot)
+  - `CareNoteTests/RecordingListViewModelTests.swift` (#191、新規 4 test + helper + cascade assertion)
+  - `CareNoteTests/OutboxSyncServiceTests.swift` (#191、StubRecordingStore fail-fast)
+  - `project.yml` / `CareNote.xcodeproj/project.pbxproj` (#195、version sync)
+- **テスト成長**: 141 → **145 tests / 20 suites** (+4 新規: firestoreId==nil / firestoreService==nil / tenantId==nil / tenantId 空文字列)
+- **CI**: PR #191 Pre-merge 25m4s PASS、PR #195 Pre-merge 26m26s PASS
+- **TestFlight upload**: Build 36 / v0.1.1、`** EXPORT SUCCEEDED **` (Firebase Firestore 系 dSYM 欠損 warning は既知で blocker ではない)
+
+### レビュー運用（Generator-Evaluator 分離 + 3 層）
+
+- `/codex plan` (設計段階、MCP 版 timeout 後 Bash 版で成功): AC1-10 改訂案を提示、Storage スコープ外判断、Firestore→local 順、`firestoreId == nil` 分岐の妥当性を確認、High/Medium/Low リスク分類
+- `/simplify` 1 回 (REFACTOR 段階): S1 `#expect(throws:)` idiom、S2 fixture helper、S3 doc wording、S4 DI TODO コメントの 4 項目全反映
+- **`/review-pr` 5 agent 並列** (code-reviewer / pr-test-analyzer / silent-failure-hunter / comment-analyzer / type-design-analyzer、code-simplifier は REFACTOR で実行済のため除外): Critical 2 + Important 6 + Suggestion 多数 → commit `846e001` で全 Critical/Important 修正、Suggestion は採否を選別 (一部 follow-up Issue 化)
+
+### Issue Net 変化
+
+セッション開始時 open **7** → #182 close (-1) → 起票 #192/#193/#194 (+3) → 終了時 open **9**（net **+2**）
+
+| 動き | Issue | 件数 | Open 数推移 |
+|------|------|------|------------|
+| 開始時 | — | — | 7 |
+| PR #191 merge → #182 auto-close | -1 | -1 | 6 |
+| follow-up 起票 #192 (Cloud Storage cleanup) | +1 | +1 | 7 |
+| follow-up 起票 #193 (Firestore error 分類) | +1 | +1 | 8 |
+| follow-up 起票 #194 (polling silent catch) | +1 | +1 | 9 |
+| **終了時** | — | **+2 net** | **9** |
+
+> **Net +2 の理由**: CLAUDE.md 「Issue は net で減らすべき KPI」に対し進捗不足の数値ではあるが、**実害ある user-facing bug (#182) を production TestFlight リリースまで完遂**した成果に対して、`/review-pr` で rating ≥ 7 の legitimate な silent failure リスクが 3 件表面化したため triage 基準 #4 (rating ≥ 7 & confidence ≥ 80) に該当する起票を行った。3 件とも **既存の silent failure の可視化**であり新規バグ導入ではない。
+> - #192 audio orphan: Cloud Storage 蓄積 (real harm over time)
+> - #193 Firestore error 分類: AC10 UX 化の完遂に必要
+> - #194 polling silent catch: CLAUDE.md 「silent failure 禁止」違反の明示化
+>
+> 仮にこれらを起票しなかった場合、PR コメントに埋もれて忘れ去られるリスクが高く、triage 基準 rating ≥ 7 の明示要件に該当。起票が rating 5-6 の任意改善を機械的に Issue 化した結果ではないことを確認済 (Codex + review-pr 両方での確認)。
+
+### セッション内教訓（handoff 次世代向け）
+
+1. **impl-plan は実コード検証を伴うべき**: v1 は 2 件の存在しない API 参照を含んでいた (Codex の plan review で検出)。plan 段階で grep で API 実在確認する手順を `impl-plan` スキルに追記候補 (TODO)。
+2. **TestFlight MARKETING_VERSION は bump 必須**: 既存 `0.1.0` で再 upload 試行 → Apple 側で "train is closed" エラー。今後 Build 番号だけでなく MARKETING_VERSION も release 時に semver bump 方針を明示化すべき (upload-testflight.sh に option 追加 or runbook に明記)。
+3. **main 直接 push hook は常に発火する**: Build 番号 bump も PR 経由必須。upload-testflight.sh は project.yml の変更を sed で書き換えるが、commit/push は別手順。今後は upload 前に feature branch 切り替え、upload 後に PR 作成の順で運用すると hook 衝突を避けられる。
+4. **5 agent 並列レビューは Critical を確実に拾う**: 今回 IndexSet stale index は silent-failure-hunter + code-reviewer で独立に検出、安全策の相互チェックが効いた。単一 agent 依存だと見逃しリスクがある。
+5. **Generator-Evaluator 分離の TDD 活用**: Codex plan review → 自身 TDD → simplifier → review-pr の 4 段階で品質を積み上げた。Codex の sanbox: read-only モードはコード読み取りに有効。MCP 版は 300s timeout あるので長尺の review は Bash 版が安全。
+
+### CI の現状
+
+- main `9194f84` (PR #195 merge 後): iOS Tests CI push 経由で in_progress（post-merge の re-verify、blocker ではない）
+- Pre-merge CI は両 PR とも PASS 済 (PR #191: 25m4s / PR #195: 26m26s)
+
+### 次セッション推奨アクション（優先順）
+
+Issue #182 の production リリースは完了。次は実機 smoke と follow-up の ROI 評価。
+
+1. **🔥 Build 36 / v0.1.1 実機 smoke (最優先)**:
+   - TestFlight で Build 36 配布 → 録音作成 → スワイプ削除 → Firebase Console で `tenants/279/recordings/{id}` が消滅確認 → pull-to-refresh で復活しないこと
+   - PR #156 の deleteAccount local purge も Build 36 初リリースなので同時確認
+   - smoke PASS 後、`handoff` で成功記録 + #111 close 判断 (自録音 CRUD / Guest 振分 / allowedDomains 3 条件同時確認できる)
+2. **#192 Cloud Storage orphan cleanup** (enhancement, P2): Cloud Function 化。`functions/scripts/delete-empty-createdby.mjs` の思想転用。所要 2-3h 見積もり、Firestore emulator でのテスト含む。
+3. **#193 Firestore error 分類** (enhancement, P2): AC10 UX 化の完遂。`FirestoreErrorCode` cast + permissionDenied / notFound / transient の 3 分類。所要 1-2h。
+4. **#194 polling silent catch 可視化** (bug, P2): `pollProcessingRecordings` + `try? save` を logger で surface。CLAUDE.md silent failure 禁止違反の解消。所要 30min-1h。
+5. **#111 実機 smoke 後追い close**: Build 36 配布時に条件揃えば即 close (Apple ID × Google 連携を除く CRUD / Guest / allowedDomains 3 点確認)。
+6. **#178 Stage 2 GHA + WIF 運用基盤** (enhancement, P2、ADR-009 follow-up)
+7. **#105 deleteAccount E2E (Firebase Emulator Suite)** (enhancement, P2、I-Cdx-1)
+8. **#92 / #90 Guest Tenant 関連** (enhancement)、**#65 Apple × Google account link** (enhancement)
+
+### 関連リンク
+
+- [Issue #182 CLOSED](https://github.com/system-279/carenote-ios/issues/182) — iOS delete Firestore 同期
+- [PR #191 merged](https://github.com/system-279/carenote-ios/pull/191) — Issue #182 修正 (Firestore→local 順 + AC5 guard)
+- [PR #195 merged](https://github.com/system-279/carenote-ios/pull/195) — Build 36 / v0.1.1 project.yml sync
+- [Issue #192 (follow-up)](https://github.com/system-279/carenote-ios/issues/192) — Cloud Storage orphan cleanup
+- [Issue #193 (follow-up)](https://github.com/system-279/carenote-ios/issues/193) — Firestore error 分類
+- [Issue #194 (follow-up)](https://github.com/system-279/carenote-ios/issues/194) — polling silent catch
+- impl-plan v2 (Issue #182 コメント): https://github.com/system-279/carenote-ios/issues/182#issuecomment-4313520262
+- Codex plan review: [`codex exec ...`](https://github.com/system-279/carenote-ios/pull/191) の PR description に反映
+- /review-pr 5 agent レビュー反映: [PR #191 comment](https://github.com/system-279/carenote-ios/pull/191#issuecomment-4313729400)
+
+---
+
 # Handoff — 2026-04-24 夜セッション: Issue #170 hardening bundle 完全 close（H1-H6 全項目）
 
 ## ✅ #170 hardening bundle 最終項目（H5）merge で Issue #170 auto-close → Issue Net -1 達成
