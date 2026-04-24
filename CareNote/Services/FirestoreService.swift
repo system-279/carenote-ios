@@ -8,6 +8,12 @@ enum FirestoreError: Error, Sendable {
     case encodingFailed(Error)
     case decodingFailed(Error)
     case documentNotFound(String)
+    /// Firestore security rules 等によるアクセス拒否 (`FirestoreErrorCode.permissionDenied` = 7)。
+    /// メンバー権限では削除できない legacy document (例: `createdBy=""`) を検知するのに使う。
+    case permissionDenied
+    /// 対象 document が Firestore 側で既に存在しない (`FirestoreErrorCode.notFound` = 5)。
+    /// 他端末での先行削除など、idempotent success として扱うのが望ましい。
+    case notFound
     case operationFailed(Error)
 
     /// エラーが transient (自動リトライで回復しうる) かを判定する。
@@ -33,6 +39,30 @@ enum FirestoreError: Error, Sendable {
             return true
         default:
             return false
+        }
+    }
+
+    /// Firestore SDK が throw した NSError を `FirestoreError` にマップする。
+    ///
+    /// - `FirestoreErrorDomain` + `permissionDenied` (code 7) → `.permissionDenied`
+    /// - `FirestoreErrorDomain` + `notFound` (code 5) → `.notFound`
+    /// - その他 (transient / 未分類 / 異なる domain) → `.operationFailed(error)` で保持
+    ///
+    /// transient 判定は `.operationFailed` の `isTransient` プロパティで確認する。
+    /// 基準はグローバル `~/.claude/rules/error-handling.md` §3 の
+    /// transient/permanent プロトコルに準拠。
+    static func map(_ error: Error) -> FirestoreError {
+        let nsError = error as NSError
+        guard nsError.domain == FirestoreErrorDomain else {
+            return .operationFailed(error)
+        }
+        switch nsError.code {
+        case FirestoreErrorCode.permissionDenied.rawValue:
+            return .permissionDenied
+        case FirestoreErrorCode.notFound.rawValue:
+            return .notFound
+        default:
+            return .operationFailed(error)
         }
     }
 }
@@ -373,7 +403,9 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
         do {
             try await recordingsCollection(tenantId: tenantId).document(recordingId).delete()
         } catch {
-            throw FirestoreError.operationFailed(error)
+            // Issue #193: permissionDenied / notFound / transient を UI で区別できるよう分類する。
+            // updateTranscription / deleteClient / deleteTemplate は本 Issue では YAGNI で見送り。
+            throw FirestoreError.map(error)
         }
     }
 
