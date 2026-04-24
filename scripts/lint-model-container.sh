@@ -31,9 +31,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 # Files allowed to construct `ModelContainer(for:)`. Keep this list minimal;
-# every entry must be justified in a comment that points to the tracking Issue.
+# every entry MUST be preceded by an `# Issue #NNN:` justification comment
+# (enforced by Pre-flight 3 below) that points to the tracking Issue — when
+# someone hits a cross-suite regression like Issue #164 and is tempted to
+# whitelist a new file, the comment requirement forces them to first record
+# the investigation in a new Issue instead of silently expanding the allow-
+# list and losing the drift-guard coverage.
 ALLOWED_TEST_FILES=(
-  # Canonical shared container (PR #163 root-cause fix for Issue #141).
+  # Issue #141: Canonical shared container (PR #163 root-cause fix).
   "CareNoteTests/TestHelpers/SwiftDataTestHelper.swift"
 )
 
@@ -67,6 +72,50 @@ for allowed in "${ALLOWED_TEST_FILES[@]}"; do
   fi
 done
 
+# Pre-flight 3: each allowed entry must be preceded by an `# Issue #NNN:`
+# comment. Without this, a future engineer hitting a cross-suite regression
+# (Issue #164 style) can silently expand the allow-list with a vague `# TODO`
+# comment, erasing the drift-guard coverage without leaving an investigation
+# trail. The check scans this very script so the policy is self-enforcing.
+# Pattern: find the ALLOWED_TEST_FILES=( block, then assert every quoted
+# entry's preceding non-blank line starts with `# Issue #`.
+missing_issue_refs=$(
+  perl -0777 -ne '
+    my @lines = split /\n/;
+    my $in_list = 0;
+    my $prev_comment = "";
+    for my $line (@lines) {
+      if ($line =~ /^ALLOWED_TEST_FILES=\(/) { $in_list = 1; next; }
+      if ($in_list && $line =~ /^\)/) { last; }
+      if ($in_list) {
+        # Quoted entry line (whitelisted file path)
+        if ($line =~ /^\s*"([^"]+)"/) {
+          my $entry = $1;
+          if ($prev_comment !~ /^\s*#\s*Issue\s*#\d+:/i) {
+            print "$entry\n";
+          }
+        }
+        # Track the last non-blank comment line for the next entry
+        if ($line =~ /^\s*#/) { $prev_comment = $line; }
+        elsif ($line =~ /^\s*$/) { } # blank: keep prev_comment
+        else { $prev_comment = ""; }
+      }
+    }
+  ' "$0"
+)
+if [ -n "$missing_issue_refs" ]; then
+  echo "::error::ALLOWED_TEST_FILES entries must be preceded by an '# Issue #NNN:' comment."
+  echo ""
+  echo "Entries without an Issue reference (add '# Issue #NNN: <justification>' above each):"
+  printf '%s\n' "$missing_issue_refs" | sed 's/^/  - /'
+  echo ""
+  echo "If you are whitelisting a new file because of a cross-suite regression"
+  echo "(Issue #164-style failure), FIRST open a new Issue with the investigation,"
+  echo "then reference that Issue number here. Silent expansion of the allow-list"
+  echo "erases the drift-guard coverage with no audit trail."
+  exit 1
+fi
+
 # Scan for violations: any *.swift under CareNoteTests/ (except allowed
 # ones) that contains the banned pattern. `perl -0777` slurps each file
 # so the pattern matches across newlines.
@@ -95,6 +144,16 @@ if [ -n "$violations" ]; then
   printf '%s\n' "$violations" | sed 's/^/  - /'
   echo ""
   echo "Fix: route tests through SharedTestModelContainer.shared instead."
+  echo ""
+  echo "If the offending file genuinely CANNOT use the shared container due to"
+  echo "a cross-suite regression (Issue #164-style failure where the shared"
+  echo "container's cleanup interacts badly with a specific test's timing):"
+  echo "  1. Open a new Issue documenting the regression investigation"
+  echo "     (repro steps, shared-container hypotheses tried, root cause)."
+  echo "  2. Add the file to ALLOWED_TEST_FILES in this script with a"
+  echo "     preceding '# Issue #NNN: <one-line justification>' comment."
+  echo "  3. Do NOT add a file to the whitelist without an Issue reference —"
+  echo "     Pre-flight 3 will reject it."
   exit 1
 fi
 

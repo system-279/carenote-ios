@@ -37,6 +37,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # XcodeGen must run BEFORE the lint steps so the schemes they audit
+      # reflect what xcodebuild will actually consume (Issue #170 H6).
+      # Running lint on the committed .xcscheme before regeneration would
+      # miss a case where project.yml and the committed scheme diverge —
+      # the lint could pass on a stale scheme that xcodegen then rewrites.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Lint - SwiftData schema drift guard (Issue #165)
         run: bash scripts/lint-model-container.sh
 
@@ -70,9 +81,6 @@ jobs:
           echo "::error::Failed to install iOS simulator runtime after $MAX_ATTEMPTS attempts"
           exit 1
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
       - name: Cache SPM packages
         uses: actions/cache@v4
         with:
@@ -82,9 +90,6 @@ jobs:
           key: ${{ runner.os }}-spm-${{ hashFiles('project.yml') }}
           restore-keys: |
             ${{ runner.os }}-spm-
-
-      - name: Generate Xcode project
-        run: xcodegen generate
 
       - name: Boot Simulator
         run: |
