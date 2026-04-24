@@ -248,12 +248,17 @@ final class RecordingListViewModel {
                     recording.transcription = remote.transcription
                     do {
                         try recordingRepository.save()
+                        // 過去の polling save 失敗警告をクリア（成功 iteration で回復と判定）。
+                        // 他のエラー源との混同を防ぐためリテラル一致でのみクリアする。
+                        if errorMessage == Self.pollingSaveFailureMessage {
+                            errorMessage = nil
+                        }
                     } catch {
                         // SwiftData save 失敗は DB 整合性破壊の可能性 → permanent 扱いで UI surface
                         Self.logger.error(
                             "Polling save failed for recording \(recording.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
                         )
-                        errorMessage = "録音の更新を保存できませんでした"
+                        errorMessage = Self.pollingSaveFailureMessage
                     }
                 }
             } catch {
@@ -263,14 +268,19 @@ final class RecordingListViewModel {
         }
     }
 
+    /// polling save 失敗時に UI へ出す errorMessage リテラル（成功時 clear のため定数化）。
+    private static let pollingSaveFailureMessage = "録音の更新を保存できませんでした"
+
     /// polling 中の Firestore fetch エラーを transient/permanent に分類してログする。
     ///
     /// - transient: 次回 polling (5s 間隔) で自動リトライされるため info レベル。
     /// - permanent: DI 設定 / 権限 / スキーマ drift 等、開発者の介入が必要なため error レベル。
     ///
-    /// 分類基準は `rules/error-handling.md` §3 の transient/permanent プロトコルに準拠。
+    /// 分類ロジックは `FirestoreError.isTransient` を使用（Firestore SDK 知識を service 層に集約）。
+    /// 基準はグローバル `~/.claude/rules/error-handling.md` §3 の transient/permanent プロトコル準拠。
     private func logPollingFetchError(recordingId: String, error: Error) {
-        if isTransientFirestoreError(error) {
+        let isTransient = (error as? FirestoreError)?.isTransient ?? false
+        if isTransient {
             Self.logger.info(
                 "Polling fetchRecording transient error for \(recordingId, privacy: .public), will retry: \(error.localizedDescription, privacy: .public)"
             )
@@ -278,29 +288,6 @@ final class RecordingListViewModel {
             Self.logger.error(
                 "Polling fetchRecording permanent error for \(recordingId, privacy: .public): \(error.localizedDescription, privacy: .public)"
             )
-        }
-    }
-
-    /// Firestore エラーが transient（自動リトライで回復しうる）かを判定する。
-    ///
-    /// Firestore SDK のエラーコード (`FIRFirestoreErrorDomain`) のうち以下を transient 扱い:
-    /// - `4` deadlineExceeded: ネットワーク timeout
-    /// - `8` resourceExhausted: quota / rate limit
-    /// - `14` unavailable: Firestore backend 一時障害
-    ///
-    /// それ以外 (permissionDenied / unauthenticated / notFound / decoding 失敗等) は permanent。
-    private func isTransientFirestoreError(_ error: Error) -> Bool {
-        guard case let FirestoreError.operationFailed(underlying) = error else {
-            // FirestoreError 以外（decodingFailed 等、独自定義分）はすべて permanent 扱い
-            return false
-        }
-        let nsError = underlying as NSError
-        guard nsError.domain == "FIRFirestoreErrorDomain" else { return false }
-        switch nsError.code {
-        case 4, 8, 14:
-            return true
-        default:
-            return false
         }
     }
 }

@@ -26,6 +26,7 @@
 		4E553F6607752AD117DCE2E6 /* RecordingViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E51986CBBEC3607B0256C7A /* RecordingViewModelTests.swift */; };
 		4FF4C8E0919F05FD11606327 /* MockTemplateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39111C77F72B0E1CD982EBF3 /* MockTemplateService.swift */; };
 		53F062DE9A557C10ABC064D2 /* ClientCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97707E72915C49324CCC7394 /* ClientCacheServiceTests.swift */; };
+		5446D73FA2434C379F792573 /* FirestoreErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4868BF643DA1BB50626AEF76 /* FirestoreErrorTests.swift */; };
 		55BE8768F641C64BE1837884 /* ClientRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCF73C9C8E3E2C08DD50815 /* ClientRepositoryTests.swift */; };
 		577059F7C878462433B3DC11 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED7A610D0269818D75C76641 /* SignInView.swift */; };
 		65E5E0CD5DBC914A92B91130 /* ClientSelectViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */; };
@@ -108,6 +109,7 @@
 		43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServiceTests.swift; sourceTree = "<group>"; };
 		47604C61474A5EA44EABDF67 /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
+		4868BF643DA1BB50626AEF76 /* FirestoreErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreErrorTests.swift; sourceTree = "<group>"; };
 		4A269AFC38F3097F4CDCF8DF /* SceneSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneSelectView.swift; sourceTree = "<group>"; };
 		4D437E580EA429317272B4F9 /* WIFAuthServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIFAuthServiceTests.swift; sourceTree = "<group>"; };
 		5145C7CB43880EF7C55A94B3 /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
@@ -298,6 +300,7 @@
 				6CCF73C9C8E3E2C08DD50815 /* ClientRepositoryTests.swift */,
 				2DD7DBB99EAE4823CA33FA82 /* ClientSelectViewModelTests.swift */,
 				7BD5333C19B8D05EBA8B140B /* EnumStableIdentifierTests.swift */,
+				4868BF643DA1BB50626AEF76 /* FirestoreErrorTests.swift */,
 				39111C77F72B0E1CD982EBF3 /* MockTemplateService.swift */,
 				042E6E584A73ED207A24A590 /* OutboxSyncServiceTests.swift */,
 				E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */,
@@ -514,6 +517,7 @@
 				55BE8768F641C64BE1837884 /* ClientRepositoryTests.swift in Sources */,
 				EE6FD95E89E69854891FD11C /* ClientSelectViewModelTests.swift in Sources */,
 				F816CF04479CE47B08176B58 /* EnumStableIdentifierTests.swift in Sources */,
+				5446D73FA2434C379F792573 /* FirestoreErrorTests.swift in Sources */,
 				4FF4C8E0919F05FD11606327 /* MockTemplateService.swift in Sources */,
 				1BCD8566873712BD882EEFB3 /* MockURLProtocol.swift in Sources */,
 				C6072255D88F74D009713EF5 /* OutboxSyncServiceTests.swift in Sources */,

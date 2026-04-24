@@ -9,6 +9,32 @@ enum FirestoreError: Error, Sendable {
     case decodingFailed(Error)
     case documentNotFound(String)
     case operationFailed(Error)
+
+    /// エラーが transient (自動リトライで回復しうる) かを判定する。
+    ///
+    /// `operationFailed` が `FirestoreErrorDomain` 内の以下コードを包む場合のみ transient:
+    /// - `deadlineExceeded`: ネットワーク timeout
+    /// - `resourceExhausted`: quota / rate limit
+    /// - `unavailable`: Firestore backend 一時障害
+    ///
+    /// それ以外 (`encodingFailed` / `decodingFailed` / `documentNotFound`、及び
+    /// permissionDenied / unauthenticated / notFound 等のコード) はすべて permanent 扱い。
+    ///
+    /// 分類基準はグローバル `~/.claude/rules/error-handling.md` §3 の
+    /// transient/permanent プロトコルに準拠。
+    var isTransient: Bool {
+        guard case let .operationFailed(underlying) = self else { return false }
+        let nsError = underlying as NSError
+        guard nsError.domain == FirestoreErrorDomain else { return false }
+        switch nsError.code {
+        case FirestoreErrorCode.deadlineExceeded.rawValue,
+             FirestoreErrorCode.resourceExhausted.rawValue,
+             FirestoreErrorCode.unavailable.rawValue:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - RecordingStoring
