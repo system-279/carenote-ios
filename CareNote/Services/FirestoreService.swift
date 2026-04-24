@@ -16,6 +16,7 @@ enum FirestoreError: Error, Sendable {
 protocol RecordingStoring: Sendable {
     func createRecording(tenantId: String, recording: FirestoreRecording) async throws -> String
     func updateTranscription(tenantId: String, recordingId: String, transcription: String, status: TranscriptionStatus) async throws
+    func deleteRecording(tenantId: String, recordingId: String) async throws
 }
 
 // MARK: - ClientManaging
@@ -333,6 +334,18 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                 "transcriptionStatus": status.rawValue,
                 "updatedAt": Timestamp(date: Date()),
             ])
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    /// Delete a recording document at `tenants/{tenantId}/recordings/{recordingId}`.
+    /// Audio files in Cloud Storage are intentionally left intact in this change —
+    /// orphan cleanup is tracked as an Issue #182 follow-up and will be handled
+    /// server-side (Cloud Function, TBD).
+    func deleteRecording(tenantId: String, recordingId: String) async throws {
+        do {
+            try await recordingsCollection(tenantId: tenantId).document(recordingId).delete()
         } catch {
             throw FirestoreError.operationFailed(error)
         }

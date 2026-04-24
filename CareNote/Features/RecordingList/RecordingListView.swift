@@ -13,15 +13,38 @@ struct RecordingListView: View {
                 }
             }
             .onDelete { indexSet in
+                // 削除対象を先に snapshot 化する（deleteRecording 成功時に vm.recordings が
+                // 縮むため、for-loop 中の index は stale になる。SwiftUI の onDelete は通常
+                // 単一 index だが、edit mode や accessibility 経由で複数来る API 契約）。
+                let targets = indexSet.map { viewModel.recordings[$0] }
                 Task {
-                    for index in indexSet {
-                        let recording = viewModel.recordings[index]
-                        try? await viewModel.deleteRecording(recording)
+                    for recording in targets {
+                        do {
+                            try await viewModel.deleteRecording(recording)
+                        } catch {
+                            // Issue #182 AC5: 同期済み録音の local-only 削除ガード失敗等を
+                            // ユーザーに見せる。複数件中 1 件目が失敗したら以降を中断（データ
+                            // 整合性優先、エラーメッセージの上書きも回避）。
+                            viewModel.errorMessage = error.localizedDescription
+                            break
+                        }
                     }
                 }
             }
         }
         .navigationTitle("録音一覧")
+        .alert(
+            "エラー",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            ),
+            presenting: viewModel.errorMessage
+        ) { _ in
+            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        } message: { message in
+            Text(message)
+        }
         .overlay {
             if viewModel.isLoading {
                 ProgressView()

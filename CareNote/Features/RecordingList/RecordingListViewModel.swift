@@ -3,6 +3,26 @@ import Observation
 import os.log
 import SwiftData
 
+// MARK: - RecordingDeleteError
+
+enum RecordingDeleteError: LocalizedError, Sendable {
+    /// Issue #182 AC5: 同期済み録音で FirestoreService / tenantId が欠落しているため
+    /// local-only 削除を拒否した（再読込での復活を防ぐため）。
+    ///
+    /// 注意: case 名は "Unavailable" だが、実態は DI wiring bug または未サインイン状態。
+    /// ネットワーク起因ではないため、ユーザーへは「再サインイン / アプリ再起動」を案内する。
+    /// 将来 Firestore 側の transient 失敗を別 case として分けるなら、本 case はそのまま
+    /// DI 欠落専用として残す（Issue #182 follow-up）。
+    case remoteServiceUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .remoteServiceUnavailable:
+            return "削除できませんでした。アプリを再起動するか、再度サインインしてください。"
+        }
+    }
+}
+
 // MARK: - RecordingListViewModel
 
 @Observable @MainActor
@@ -12,6 +32,10 @@ final class RecordingListViewModel {
     var errorMessage: String?
 
     private let recordingRepository: RecordingRepository
+    // TODO(Issue #182 follow-up): migrate to `any RecordingStoring` for testability.
+    //   Currently the concrete `FirestoreService` actor blocks stubbing Firestore calls
+    //   in ViewModel tests. Requires adding fetchRecordings/fetchRecording to the
+    //   protocol too (both used from loadRecordings and retry path).
     private let firestoreService: FirestoreService?
     private let tenantId: String?
 
@@ -97,14 +121,57 @@ final class RecordingListViewModel {
         try recordingRepository.save()
     }
 
-    /// 録音を削除する
+    /// 録音を削除する（Issue #182）
+    ///
+    /// 同期済み録音（`firestoreId` あり）は Firestore delete 成功後に local を削除する。
+    /// Firestore 側を先に消さないと、local-only 削除は再読込で復活する。
+    /// Cloud Storage の音声ファイル削除は server-side で行うため本 method のスコープ外
+    /// （Issue #182 follow-up）。
     func deleteRecording(_ recording: RecordingRecord) async throws {
-        let audioPath = recording.localAudioPath
-        if FileManager.default.fileExists(atPath: audioPath) {
-            try? FileManager.default.removeItem(atPath: audioPath)
+        // 1. 同期済み録音なら Firestore delete を先に実行
+        if let firestoreId = recording.firestoreId {
+            guard let firestoreService, let tenantId, !tenantId.isEmpty else {
+                // AC5: firestoreId あり + DI 欠落は local-only 削除禁止。
+                // DI wiring bug / 未サインインの検知性を上げるため error レベルで記録。
+                Self.logger.error(
+                    """
+                    deleteRecording blocked by AC5 guard: firestoreId=\(firestoreId, privacy: .public) \
+                    firestoreService=\(self.firestoreService == nil ? "nil" : "set", privacy: .public) \
+                    tenantId=\(self.tenantId ?? "nil", privacy: .public)
+                    """
+                )
+                throw RecordingDeleteError.remoteServiceUnavailable
+            }
+            do {
+                try await firestoreService.deleteRecording(
+                    tenantId: tenantId,
+                    recordingId: firestoreId
+                )
+            } catch {
+                Self.logger.error(
+                    "Firestore deleteRecording failed for \(firestoreId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+                throw error
+            }
         }
 
+        // 2. SwiftData + 関連 OutboxItem を削除（Repository cascade）
         try recordingRepository.delete(recording)
+
+        // 3. local audio file を best-effort で削除（Firestore 成功後なので致命扱いしない）。
+        //    try? で完全 swallow はせず、orphan ファイル調査のため warning ログは必ず残す。
+        let audioPath = recording.localAudioPath
+        if FileManager.default.fileExists(atPath: audioPath) {
+            do {
+                try FileManager.default.removeItem(atPath: audioPath)
+            } catch {
+                Self.logger.warning(
+                    "Best-effort audio file removal failed for recording \(recording.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
+
+        // 4. 画面上のリストから除去
         recordings.removeAll { $0.id == recording.id }
     }
 
