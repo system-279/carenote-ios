@@ -16,12 +16,30 @@ struct RecordingListView: View {
                 Task {
                     for index in indexSet {
                         let recording = viewModel.recordings[index]
-                        try? await viewModel.deleteRecording(recording)
+                        do {
+                            try await viewModel.deleteRecording(recording)
+                        } catch {
+                            // Issue #182 AC5: 同期済み録音の local-only 削除ガード失敗等を
+                            // ユーザーに見せる。errorMessage は alert binding で表示。
+                            viewModel.errorMessage = error.localizedDescription
+                        }
                     }
                 }
             }
         }
         .navigationTitle("録音一覧")
+        .alert(
+            "エラー",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            ),
+            presenting: viewModel.errorMessage
+        ) { _ in
+            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        } message: { message in
+            Text(message)
+        }
         .overlay {
             if viewModel.isLoading {
                 ProgressView()

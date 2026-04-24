@@ -53,6 +53,10 @@ private actor StubRecordingStore: RecordingStoring {
     ) async throws {
         updateTranscriptionCalls.append((recordingId, status))
     }
+
+    func deleteRecording(tenantId: String, recordingId: String) async throws {
+        // OutboxSync 系テストでは使われない（Issue #182 の RecordingListViewModel 経路のみ）
+    }
 }
 
 /// 呼び出し履歴を記録する Transcribing stub。

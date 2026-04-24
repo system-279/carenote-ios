@@ -23,6 +23,31 @@ struct RecordingListViewModelTests {
         return recording
     }
 
+    /// Issue #182 delete sync のテストで使う柔軟な fixture。
+    /// `firestoreId` / `uploadStatus` / `transcriptionStatus` を test ごとに変える必要がある。
+    private static func makeRecording(
+        id: UUID = UUID(),
+        context: ModelContext,
+        firestoreId: String? = nil,
+        uploadStatus: UploadStatus = .pending,
+        transcription: String? = nil,
+        transcriptionStatus: TranscriptionStatus = .pending
+    ) -> RecordingRecord {
+        let recording = RecordingRecord(
+            id: id,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: "/tmp/test.m4a",
+            firestoreId: firestoreId,
+            uploadStatus: uploadStatus.rawValue,
+            transcription: transcription,
+            transcriptionStatus: transcriptionStatus.rawValue
+        )
+        context.insert(recording)
+        return recording
+    }
+
     @Test @MainActor
     func retryRecordingでステータスがpendingにリセットされる() async throws {
         let container = try makeTestModelContainer()
@@ -103,5 +128,97 @@ struct RecordingListViewModelTests {
         // 削除
         try await vm.deleteRecording(recording)
         #expect(vm.recordings.isEmpty)
+    }
+
+    // MARK: - Issue #182 delete Firestore sync
+
+    /// AC4/AC9-1: firestoreId == nil (Outbox 未処理の新規録音) は Firestore を呼ばず local のみ削除する
+    @Test @MainActor
+    func deleteRecording_firestoreIdなしなら_ローカルのみ削除されFirestoreは呼ばれない() async throws {
+        let container = try makeTestModelContainer()
+        let context = container.mainContext
+        let repo = RecordingRepository(modelContext: context)
+        // firestoreService 未指定 = nil。firestoreId == nil パスなので Firestore は呼ばれない
+        let vm = RecordingListViewModel(recordingRepository: repo)
+
+        let recordingId = UUID()
+        _ = Self.makeRecording(id: recordingId, context: context, firestoreId: nil)
+        try context.save()
+
+        await vm.loadRecordings()
+        #expect(vm.recordings.count == 1)
+
+        // fetch and delete the same instance from the test's view (loadRecordings may replace)
+        let target = try #require(try repo.findById(recordingId))
+        try await vm.deleteRecording(target)
+
+        // ローカルから削除されている
+        #expect(vm.recordings.isEmpty)
+        #expect(try repo.findById(recordingId) == nil)
+    }
+
+    /// AC5/AC9-2: firestoreId != nil で firestoreService == nil の場合、
+    /// local-only 削除を行わず fail させる（Issue #182 再発防止）。
+    /// 同期済み録音を local だけ消すと「再読込で復活」が再発するため。
+    @Test @MainActor
+    func deleteRecording_同期済みなのにfirestoreServiceなしならエラー投げローカルは残す() async throws {
+        let container = try makeTestModelContainer()
+        let context = container.mainContext
+        let repo = RecordingRepository(modelContext: context)
+        let vm = RecordingListViewModel(
+            recordingRepository: repo,
+            firestoreService: nil,
+            tenantId: "tenant-1"
+        )
+
+        let recordingId = UUID()
+        let recording = Self.makeRecording(
+            id: recordingId,
+            context: context,
+            firestoreId: "firestore-doc-abc",
+            uploadStatus: .done,
+            transcription: "文字起こし結果",
+            transcriptionStatus: .done
+        )
+        try context.save()
+
+        await #expect(throws: RecordingDeleteError.self) {
+            try await vm.deleteRecording(recording)
+        }
+
+        // ローカル側は削除されずに残っている（再読込復活防止のガード）
+        #expect(try repo.findById(recordingId) != nil)
+    }
+
+    /// AC5/AC9-3: firestoreId != nil で tenantId 欠落時も fail。
+    @Test @MainActor
+    func deleteRecording_同期済みなのにtenantIdなしならエラー投げローカルは残す() async throws {
+        let container = try makeTestModelContainer()
+        let context = container.mainContext
+        let repo = RecordingRepository(modelContext: context)
+        // firestoreService は non-nil だが tenantId == nil のケース。
+        // guard は firestoreService より先に tenantId の empty check に到達するため
+        // FirestoreService().init() は呼ぶが、`db` は lazy で Firebase 接続は行わない。
+        let firestore = FirestoreService()
+        let vm = RecordingListViewModel(
+            recordingRepository: repo,
+            firestoreService: firestore,
+            tenantId: nil
+        )
+
+        let recordingId = UUID()
+        let recording = Self.makeRecording(
+            id: recordingId,
+            context: context,
+            firestoreId: "firestore-doc-xyz",
+            uploadStatus: .done
+        )
+        try context.save()
+
+        await #expect(throws: RecordingDeleteError.self) {
+            try await vm.deleteRecording(recording)
+        }
+
+        #expect(try repo.findById(recordingId) != nil)
     }
 }

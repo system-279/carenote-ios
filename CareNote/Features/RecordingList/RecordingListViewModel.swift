@@ -3,6 +3,21 @@ import Observation
 import os.log
 import SwiftData
 
+// MARK: - RecordingDeleteError
+
+enum RecordingDeleteError: LocalizedError, Sendable {
+    /// Issue #182 AC5: 同期済み録音で FirestoreService / tenantId が欠落しているため
+    /// local-only 削除を拒否した（再読込での復活を防ぐため）。
+    case remoteServiceUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .remoteServiceUnavailable:
+            return "削除できませんでした。ネットワーク接続とアカウント状態を確認してください。"
+        }
+    }
+}
+
 // MARK: - RecordingListViewModel
 
 @Observable @MainActor
@@ -12,6 +27,10 @@ final class RecordingListViewModel {
     var errorMessage: String?
 
     private let recordingRepository: RecordingRepository
+    // TODO(Issue #182 follow-up): migrate to `any RecordingStoring` for testability.
+    //   Currently the concrete `FirestoreService` actor blocks stubbing Firestore calls
+    //   in ViewModel tests. Requires adding fetchRecordings/fetchRecording to the
+    //   protocol too (both used from loadRecordings and retry path).
     private let firestoreService: FirestoreService?
     private let tenantId: String?
 
@@ -97,14 +116,36 @@ final class RecordingListViewModel {
         try recordingRepository.save()
     }
 
-    /// 録音を削除する
+    /// 録音を削除する（Issue #182）
+    ///
+    /// 同期済み録音（`firestoreId` あり）は Firestore delete 成功後に local を削除する。
+    /// Firestore 側を先に消さないと、local-only 削除は再読込で復活する。
+    /// Cloud Storage の音声ファイル削除は server-side Cloud Function で行うため
+    /// 本 method のスコープ外（Issue #182 follow-up）。
     func deleteRecording(_ recording: RecordingRecord) async throws {
+        // 1. 同期済み録音なら Firestore delete を先に実行
+        if let firestoreId = recording.firestoreId {
+            guard let firestoreService, let tenantId, !tenantId.isEmpty else {
+                // AC5: firestoreId あり + DI 欠落は local-only 削除禁止。
+                // Issue #182 再発（再読込で復活）を防ぐため、呼び出し元にエラーを返す。
+                throw RecordingDeleteError.remoteServiceUnavailable
+            }
+            try await firestoreService.deleteRecording(
+                tenantId: tenantId,
+                recordingId: firestoreId
+            )
+        }
+
+        // 2. SwiftData + 関連 OutboxItem を削除（Repository cascade）
+        try recordingRepository.delete(recording)
+
+        // 3. local audio file を best-effort で削除（Firestore 成功後なので失敗は致命扱いしない）
         let audioPath = recording.localAudioPath
         if FileManager.default.fileExists(atPath: audioPath) {
             try? FileManager.default.removeItem(atPath: audioPath)
         }
 
-        try recordingRepository.delete(recording)
+        // 4. 画面上のリストから除去
         recordings.removeAll { $0.id == recording.id }
     }
 
