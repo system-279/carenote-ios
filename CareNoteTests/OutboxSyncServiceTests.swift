@@ -338,6 +338,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        // H4 preflight (Issue #170) — removing this weakens diagnostic for #164-style regressions.
         try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         try await service.processQueueImmediately()
@@ -384,6 +385,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        // H4 preflight (Issue #170) — removing this weakens diagnostic for #164-style regressions.
         try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         await #expect(throws: OutboxSyncError.self) {
@@ -426,6 +428,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        // H4 preflight (Issue #170) — removing this weakens diagnostic for #164-style regressions.
         try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         await #expect(throws: OutboxSyncError.self) {
@@ -472,6 +475,7 @@ struct OutboxSyncServiceTests {
         ))
         context.insert(OutboxItem(recordingId: recordingId))
         try context.save()
+        // H4 preflight (Issue #170) — removing this weakens diagnostic for #164-style regressions.
         try Self.assertPreflightState(context: context, audioPath: audioPath)
 
         // OutboxSyncService は原因 error を `OutboxSyncError.uploadFailed(_)` で wrap して throw する。
@@ -512,16 +516,30 @@ struct OutboxSyncServiceTests {
     /// service 実装は無関係と切り分けられる — service 呼出後の assertion が fail した場合は
     /// service 実装（uid 分岐 / upload 順序 / throw 経路）側に絞り込める。
     ///
+    /// `SharedTestModelContainer.cleanup()` の stderr diagnostic（PR #185）が CI 環境で
+    /// 埋もれても、ここの count 検証で cleanup 残留（count > 1）を捕捉できる backup 経路。
+    ///
     /// - Throws: `fetchCount` の失敗時のみ。assertion 失敗は `#expect` 経由で報告されるため
-    ///   call site の `try` は fetch error 伝播のみを意味する。
+    ///   call site の `try` は fetch error 伝播のみを意味する。fetch error の場合も
+    ///   `Issue.record` で「preflight が fetch 段階で壊れた」旨を残してから rethrow する。
     @MainActor
     private static func assertPreflightState(
         context: ModelContext,
         audioPath: String,
         sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
-        let outboxCount = try context.fetchCount(FetchDescriptor<OutboxItem>())
-        let recordingCount = try context.fetchCount(FetchDescriptor<RecordingRecord>())
+        let outboxCount: Int
+        let recordingCount: Int
+        do {
+            outboxCount = try context.fetchCount(FetchDescriptor<OutboxItem>())
+            recordingCount = try context.fetchCount(FetchDescriptor<RecordingRecord>())
+        } catch {
+            Issue.record(
+                "Preflight fetch failed — test infra broken (ModelContext unusable before service call): \(error)",
+                sourceLocation: sourceLocation
+            )
+            throw error
+        }
         #expect(
             outboxCount == 1,
             "Preflight: OutboxItem count == 1 expected, got \(outboxCount) (cleanup 残留 / save 未 flush)",
