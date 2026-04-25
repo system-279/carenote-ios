@@ -1,6 +1,7 @@
 const { beforeUserSignedIn } = require("firebase-functions/v2/identity");
 const { HttpsError } = require("firebase-functions/v2/identity");
 const { onCall, HttpsError: CallableHttpsError } = require("firebase-functions/v2/https");
+const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
@@ -109,6 +110,10 @@ function parseGsUri(uri) {
 // Auth deletion runs even if Firestore/Storage cleanup partially fails, so the
 // identity is always removed (preferred for App Store compliance). Orphan blobs
 // can be reaped by Storage lifecycle rules.
+//
+// NOTE: doc.ref.delete() の発行で `onRecordingDeleted` trigger が発火し、同じ
+// audioStoragePath に対して二重削除が走るが、Storage delete は `ignoreNotFound: true`
+// なので冪等。Issue #192。
 exports.deleteAccount = onCall(
   { region: REGION, timeoutSeconds: 540 },
   async (request) => {
@@ -205,3 +210,78 @@ exports.deleteAccount = onCall(
 // recordings / templates / whitelist を書換える Callable Function。
 // 詳細は functions/src/transferOwnership.js および ADR-008 参照。
 exports.transferOwnership = require("./src/transferOwnership").transferOwnership;
+
+// Issue #192: 録音 doc が削除されたら関連の Cloud Storage audio object も削除する
+// Firestore trigger。iOS swipe delete (PR #191 / Issue #182) では Firestore doc のみ
+// 消えるため、この trigger がないと Storage が orphan blob で圧迫されていく。
+//
+// 既存の `deleteAccount` Callable も同じ Storage delete を呼ぶが、`ignoreNotFound: true`
+// で冪等。trigger 発火時に既に object が消えていても no-op で完走する。
+//
+// trigger 内では throw しない: trigger が throw すると Firebase は exponential backoff で
+// retry し続け、永久ループ + log spam になる。Storage delete 失敗は orphan として記録し、
+// `functions/scripts/delete-empty-createdby.mjs` 系の手動 cleanup スクリプトで回収する。
+//
+// handler を別関数で定義 + `_handleRecordingDeleted` として named export しているのは
+// `firebase-functions-test` の `makeDocumentSnapshot` が他テストの `getFirestore` mock と
+// 干渉するため、test では event 互換オブジェクトを直接渡して handler を call する設計のため。
+async function handleRecordingDeleted(event) {
+  const tenantId = event.params.tenantId;
+  const recordingId = event.params.recordingId;
+  const data = event.data?.data() || {};
+  const audioStoragePath = data.audioStoragePath;
+
+  if (!audioStoragePath) {
+    console.info("[onRecordingDeleted] no audioStoragePath, skipping", {
+      tenantId,
+      recordingId,
+    });
+    return;
+  }
+
+  const gs = parseGsUri(audioStoragePath);
+  if (!gs) {
+    console.warn("[onRecordingDeleted] unparseable audioStoragePath, skipping", {
+      tenantId,
+      recordingId,
+      audioStoragePath,
+    });
+    return;
+  }
+
+  try {
+    await getStorage()
+      .bucket(gs.bucket)
+      .file(gs.object)
+      .delete({ ignoreNotFound: true });
+    console.info("[onRecordingDeleted] storage object deleted", {
+      tenantId,
+      recordingId,
+      bucket: gs.bucket,
+      object: gs.object,
+    });
+  } catch (err) {
+    // throw すると trigger が retry backoff に入る。orphan は許容して log のみ残す。
+    console.error("[onRecordingDeleted] storage delete failed (orphan possible)", {
+      tenantId,
+      recordingId,
+      bucket: gs.bucket,
+      object: gs.object,
+      code: err.code,
+      message: err.message,
+    });
+  }
+}
+
+exports.onRecordingDeleted = onDocumentDeleted(
+  {
+    region: REGION,
+    document: "tenants/{tenantId}/recordings/{recordingId}",
+  },
+  handleRecordingDeleted
+);
+
+// Test 用: handler を直接呼べるよう named export する（v2 trigger は wrap 経由だと
+// 他テストの admin SDK mock と干渉するため）。production は `exports.onRecordingDeleted`
+// 経由で発火するので影響なし。
+exports._handleRecordingDeleted = handleRecordingDeleted;
