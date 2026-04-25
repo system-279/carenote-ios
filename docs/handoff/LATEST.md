@@ -1,3 +1,102 @@
+# Handoff — 2026-04-25 朝〜午後セッション: PR #191 follow-up 3 件 (#194 / #193 / #192) 完遂 + Cloud Function dev deploy
+
+## ✅ Issue #194 / #193 close (PR #197 / #198 merge) + Issue #192 Phase A merge (PR #199) + dev deploy ACTIVE
+
+前セッション (2026-04-25 未明) handoff の推奨 follow-up 3 件すべてを完遂。各 PR で Quality Gate 3 層（`/simplify` 該当時 + `/review-pr` 5-6 agent 並列 + Evaluator 分離プロトコル）通過。Issue #192 は Phase A (impl + test) を merge し dev deploy も成功させ、Phase B/C tracking のため Issue を再 open 維持。
+
+### セッション成果サマリ
+
+| PR | Issue | 内容 | merge 順 |
+|----|-------|------|----------|
+| **#197 (merged)** | **#194** | RecordingListViewModel polling の silent catch を transient/permanent 分類で logger 可視化 | 1 |
+| **#198 (merged)** | **#193** | Firestore delete error 分類 (permissionDenied / notFound / retryable) + UI alert 分岐 (再試行ボタン) | 2 |
+| **#199 (merged)** | **#192 (Phase A)** | Cloud Function `onRecordingDeleted` (Firestore trigger) で Cloud Storage orphan audio cleanup | 3 |
+
+### 主要判断のハイライト
+
+- **#194 polling silent catch**: PR #197 で `FirestoreError.isTransient` を service 層に追加 (gRPC code 4/8/14 = deadlineExceeded / resourceExhausted / unavailable で transient 判定)。`pollProcessingRecordings` の `// ポーリングエラーは静かに無視` を撤廃し、transient → `logger.info` (silent retry 維持)、permanent → `logger.error` (DI/権限/schema drift 等の actionable failure)、save 失敗 → `logger.error` + `errorMessage` で UI surface に分類。`/review-pr` で SDK 公開定数 (`FirestoreErrorDomain` + `FirestoreErrorCode.<name>.rawValue`) 使用と `isTransient` 集約を採用、ハードコード `"FIRFirestoreErrorDomain"` + magic 4/8/14 を排除。
+- **#193 delete error 分類**: PR #198 で `FirestoreError` に `.permissionDenied` / `.notFound` case 追加、`static func map(_:)` で NSError → case 変換。`RecordingDeleteError` に `.permissionDenied` / `.retryable(recordingId: UUID, underlying: FirestoreError)` 追加。`recording: RecordingRecord` ではなく `UUID` を保持するのは SwiftData `@Model` が non-Sendable で enum の Sendable 準拠を崩すため。VM の `static func resolveDeleteError` で notFound → idempotent success (return) / permissionDenied → throw `.permissionDenied` / transient → throw `.retryable` / その他 → 原 FirestoreError rethrow に分岐。View で 2 つの alert (errorMessage 用 + deleteError 用) を併置、retryable のみ「再試行」ボタン。`presentDeleteError(_:)` helper で onDelete / retry 両経路の state 更新を統合 + 相互排他化 (alert 同時表示 race 防止)。
+- **#192 Phase A Cloud Function**: PR #199 で `exports.onRecordingDeleted = onDocumentDeleted("tenants/{tenantId}/recordings/{recordingId}", handleRecordingDeleted)` 追加。既存 `parseGsUri` helper を再利用、`getStorage().bucket().file().delete({ ignoreNotFound: true })` で Storage object 削除。**失敗時は throw せず error log のみ** (Firebase v2 trigger は throw すると exponential backoff 退避ループに入る、orphan は手動 cleanup script で回収可能)。`deleteAccount` Callable との二重実行は `ignoreNotFound: true` で冪等。handler を `_handleRecordingDeleted` として named export (test 用、`firebase-functions-test` の `makeDocumentSnapshot` が他 test の `getFirestore` mock と干渉する問題を回避するため)。`/review-pr` 反映で parseGsUri null log を warn → error に昇格 (data corruption は actionable)。
+- **#192 Phase B dev deploy**: `firebase deploy --only functions:onRecordingDeleted -P default` 成功 (carenote-dev-279 / asia-northeast1 / nodejs22 2nd Gen / state ACTIVE / event type `google.cloud.firestore.document.v1.deleted` / path pattern `tenants/{tenantId}/recordings/{recordingId}`)。
+- **Phase B 実 trigger smoke 残**: ADC user (system@279279.net) は dev Firestore の test tenant で member 権限を持たないため admin SDK での test doc create が `PERMISSION_DENIED` (code 7)。SA key 同梱は CLAUDE.md「禁止」事項。`gcloud firestore documents create` も subcommand 不在で不可。実 trigger 発火確認は次セッションで (a) gcloud admin token + REST API、(b) dev TestFlight build を別途用意して実機操作、(c) prod TestFlight Build 37 配布後に Cloud Console で確認のいずれかを選択。
+- **Issue #192 reopen**: PR #199 commit message の `Closes #192 (Phase A only; ...)` で GitHub が auto-close したが、Phase B/C 残のため `gh issue reopen 192` で再 open。Phase C 完了後に手動で close する方針。
+
+### 実装実績
+
+- **変更ファイル合計**: 9 ファイル (PR #197: 1+1=2 / PR #198: 5 / PR #199: 2)
+  - PR #197: `CareNote/Features/RecordingList/RecordingListViewModel.swift` (`pollProcessingRecordings` 改修 + `logPollingFetchError` helper) / `CareNote/Services/FirestoreService.swift` (`FirestoreError.isTransient` 追加) / `CareNoteTests/FirestoreErrorTests.swift` (新規 7 ケース)
+  - PR #198: `FirestoreService.swift` (FirestoreError case 追加 + `map(_:)`) / `RecordingListViewModel.swift` (RecordingDeleteError case 追加 + `resolveDeleteError`) / `RecordingListView.swift` (alert 分岐 + `presentDeleteError`) / `FirestoreErrorTests.swift` (FirestoreErrorMapTests suite + 7 ケース) / `RecordingListViewModelTests.swift` (resolveDeleteError 5 + round-trip 2 ケース)
+  - PR #199: `functions/index.js` (handleRecordingDeleted + onRecordingDeleted export + deleteAccount docstring) / `functions/test/on-recording-deleted.test.js` (新規 9 ケース、console spy + 非 string test 含む)
+- **テスト成長**: iOS 145 → **173** (+28、PR #197: +12 / PR #198: +14 (round-trip 2 含む) / 既存 retryable 関連 +2) / functions 36 → **44** (+9 - 1 = +8、PR #199 で 9 追加)
+- **CI**: 3 PR 全 pass (iOS Tests + Functions & Rules Tests)
+
+### Quality Gate 運用 (Generator-Evaluator 分離 3 層 + 6 agent 並列レビュー)
+
+- **/simplify** (3 ファイル以上時): 3 agent (reuse / quality / efficiency) 並列で改善提案
+  - PR #197: 5 ファイル変更で実行 → SDK 定数化、isTransient 集約、errorMessage clear、コメント整理を採用
+  - PR #198: 5 ファイル変更で実行 → resolveDeleteError signature 簡素化、alert helper 統合、switch 明示 case 化、未使用 isRetryable 削除を採用
+  - PR #199: 2 ファイル変更で skip
+- **/review-pr** 5-6 agent 並列 (code-reviewer / pr-test-analyzer / silent-failure-hunter / comment-analyzer / type-design-analyzer / code-simplifier): 全 PR で実行、Important / Rating 7+ を反映、Rating 5-6 は triage 基準 (rating ≥ 7 + confidence ≥ 80) 未達のため見送り。
+- **Evaluator 分離** (5 ファイル以上 or 新機能、`rules/quality-gate.md` 発動条件):
+  - PR #198: APPROVE (全 AC PASS、HIGH 問題なし、MEDIUM 2 + LOW 1 は別 PR refactor / Evaluator 理解誤り)
+  - PR #199: APPROVE (全 AC PASS、HIGH 問題なし、LOW 3 件はすべて反映済)
+
+### Issue Net 変化
+
+セッション開始時 open **9** → close #194/#193 (-2) → reopen #192 (+1 net 0) → 終了時 open **7**（net **-2**）
+
+| 動き | Issue | 件数 | Open 数推移 |
+|------|------|------|------------|
+| 開始時 | — | — | 9 |
+| PR #197 merge → #194 auto-close | -1 | -1 | 8 |
+| PR #198 merge → #193 auto-close | -1 | -1 | 7 |
+| PR #199 merge → #192 commit message で auto-close | -1 | -1 | 6 |
+| #192 reopen (Phase B/C tracking) | +1 | +1 | 7 |
+| **終了時** | — | **net -2** | **7** |
+
+> **Net -2 達成**: CLAUDE.md「Issue は net で減らすべき KPI」を満たす。新規 Issue 起票なし。triage 基準 (rating ≥ 7 + confidence ≥ 80) 未達の review agent 提案 (Q1 dual-state / Q8 classify placement / type-design phantom type / etc.) は PR コメント / 見送り判断で処理し、Issue 化していない。
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **`firebase-functions-test` の `makeDocumentSnapshot` は他 test の admin SDK mock と干渉する**: `delete-account.test.js` が `getFirestore` を上書きする状態で `makeDocumentSnapshot` を呼ぶと `firestoreService.snapshot_ is not a function` で fail。回避策は handler を `_handleRecordingDeleted` として named export し、test では event 互換オブジェクト (`{ data: { data: () => ... }, params: ... }`) を直接渡して handler を call。`firebase deploy` は `CloudFunction` wrap 済 export のみ trigger 登録するため、plain function の named export はデプロイ対象外で安全。
+2. **Sendable 維持のため enum associated value に `RecordingRecord` (SwiftData @Model) を持たせない**: PR #198 初回実装で `.retryable(recording: RecordingRecord, underlying: any Error)` としたら build error。`UUID + FirestoreError` (Sendable) に変更、View 側で `recordings.first(where: { $0.id == recordingId })` で対象を引き直す pattern が安全。
+3. **`/review-pr` Evaluator の指摘は「実装の前提知識なし」評価のため誤認も含む**: PR #198 で Evaluator が「outer catch で FirestoreError 二重ログ発生」と指摘したが、Swift do-catch 仕様では `catch let firestoreError as FirestoreError` 内の throw は外側の `catch {}` に再 match しない (call site は呼び出し元へ propagate)。指摘を鵜呑みにせず Swift 仕様で検証してから採否判断。
+4. **Cloud Function trigger 内では throw しない**: Firebase v2 trigger は throw すると exponential backoff で retry し続け、永久ループ + log spam + コスト増。Storage delete 失敗は `console.error` でログのみ残し、orphan は `scripts/delete-empty-createdby.mjs` 系で手動回収する設計が pragmatic。
+5. **dev での実 trigger smoke は ADC user 権限の壁で困難**: `gcloud auth application-default login` で得た user credentials は Firestore security rules 適用下で member 権限なしテナントへの書き込み不可。SA key 同梱禁止の制約下で smoke する手段は (a) admin token + REST API、(b) dev iOS build 用意、(c) prod 配布後 Cloud Console 確認のいずれか。次セッションで判断。
+6. **Issue close trigger としての commit message `Closes #X` は強力**: PR 本文から `Closes` を外しても commit message に残っていれば auto-close する。Phase 分割タスクで「auto-close したくない」場合は commit message から `Closes` を抜き、PR 本文には `Refs #X` のみ記載するのが正解 (本セッション #192 で auto-close → reopen 対応が発生)。
+
+### CI の現状
+
+- main `d5e20dc` (PR #199 merge 後): Functions & Rules Tests pass (1m3s)
+- 直近 3 PR 全 CI pass
+
+### 次セッション推奨アクション (優先順)
+
+Issue #192 Phase B/C 完遂が最優先。dev deploy 済 + smoke 残のため、smoke 経路と prod deploy 順序の判断から再開。
+
+1. **🔥 #192 Phase B 実 trigger smoke** (最優先): 以下のいずれかで dev `onRecordingDeleted` の発火確認
+   - (a) gcloud admin token + Firestore REST API (`firestore.googleapis.com/v1/.../documents:commit`) で test doc create + delete、Cloud Function log で `[onRecordingDeleted] storage object deleted` を確認 (10-15 分、不確実)
+   - (b) dev TestFlight build を用意 → 実機録音 + 削除で smoke (1-2h、build/upload 含む)
+   - (c) Phase C を先行し prod TestFlight Build 37 配布後に Cloud Console で audio object 消滅確認 (Phase B/C 順序入替、prod risk あり)
+2. **#192 Phase C: prod deploy + runbook** (Phase B smoke 後): `firebase deploy --only functions:onRecordingDeleted -P prod` + `docs/runbooks/` に Cloud Function 失敗時の手動 cleanup 手順 (`scripts/delete-empty-createdby.mjs` の使い方) を追記。完了後 Issue #192 を手動 close。
+3. **TestFlight Build 36 / v0.1.1 ユーザーフィードバック反映**: 前セッション uploaded、本セッション削除動作確認 OK 報告済。新規バグ発覚時は triage 後に対応。
+4. **#178 Stage 2 GHA + WIF 運用基盤** (enhancement, P2、ADR-009 follow-up): prod Firestore CI/CD 自動化基盤。#105 / #111 の前提にもなる。
+5. **#105 deleteAccount E2E テスト** (Firebase Emulator Suite、I-Cdx-1)
+6. **#111 Phase 0.9 prod tenants/279.allowedDomains 有効化**: TestFlight Build 36 ユーザー確認後に Apple ID × Google 連携を除く CRUD / Guest / allowedDomains 3 点確認できれば close 判断
+7. **#92 / #90 Guest Tenant 関連** (enhancement)、**#65 Apple × Google account link** (enhancement)
+
+### 関連リンク
+
+- [PR #197 merged](https://github.com/system-279/carenote-ios/pull/197) — Issue #194 polling silent catch logger 可視化
+- [PR #198 merged](https://github.com/system-279/carenote-ios/pull/198) — Issue #193 Firestore delete error 分類 + UI alert
+- [PR #199 merged](https://github.com/system-279/carenote-ios/pull/199) — Issue #192 Phase A Cloud Function impl
+- [Issue #192 reopened](https://github.com/system-279/carenote-ios/issues/192) — Phase B/C tracking
+- [dev Firebase Console](https://console.firebase.google.com/project/carenote-dev-279/overview) — onRecordingDeleted ACTIVE 確認
+- [Issue #194 CLOSED](https://github.com/system-279/carenote-ios/issues/194)
+- [Issue #193 CLOSED](https://github.com/system-279/carenote-ios/issues/193)
+
+---
+
 # Handoff — 2026-04-24 夜 → 2026-04-25 未明セッション: Issue #182 delete Firestore sync 完全解消 + Build 36 / v0.1.1 TestFlight リリース
 
 ## ✅ Issue #182 auto-close（PR #191 merge） + Build 36 uploaded（v0.1.1 patch bump）
