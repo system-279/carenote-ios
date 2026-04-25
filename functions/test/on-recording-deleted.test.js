@@ -6,10 +6,40 @@ const test = functionsTest();
 // ---- Mock state ----
 let storageDeleteCalls = [];
 let storageDeleteFailureMode = null; // null | { code, message }
+let consoleWarnCalls = [];
+let consoleErrorCalls = [];
+let consoleInfoCalls = [];
+
+const originalConsole = {
+  warn: console.warn,
+  error: console.error,
+  info: console.info,
+};
 
 function resetState() {
   storageDeleteCalls = [];
   storageDeleteFailureMode = null;
+  consoleWarnCalls = [];
+  consoleErrorCalls = [];
+  consoleInfoCalls = [];
+}
+
+function installConsoleSpies() {
+  console.warn = (...args) => {
+    consoleWarnCalls.push(args);
+  };
+  console.error = (...args) => {
+    consoleErrorCalls.push(args);
+  };
+  console.info = (...args) => {
+    consoleInfoCalls.push(args);
+  };
+}
+
+function restoreConsole() {
+  console.warn = originalConsole.warn;
+  console.error = originalConsole.error;
+  console.info = originalConsole.info;
 }
 
 // ---- Admin SDK mock ----
@@ -38,8 +68,21 @@ function initializeAdminMocks() {
   });
 }
 
+// `before` フックは定義順に実行される。**順序必須**:
+// 1. `initializeAdminMocks` で `getStorage` 等の SDK を差し替える
+// 2. その後で `require("../index")` を実行 → handler closure が差し替え後の SDK を参照
+// 順序を入れ替えると handler が production の getStorage を bind してしまい test が壊れる。
+let handleRecordingDeleted;
+
 before(() => {
   initializeAdminMocks();
+  installConsoleSpies();
+});
+
+before(() => {
+  delete require.cache[require.resolve("../index")];
+  const functions = require("../index");
+  handleRecordingDeleted = functions._handleRecordingDeleted;
 });
 
 afterEach(() => {
@@ -47,14 +90,8 @@ afterEach(() => {
 });
 
 after(() => {
+  restoreConsole();
   test.cleanup();
-});
-
-let handleRecordingDeleted;
-before(() => {
-  delete require.cache[require.resolve("../index")];
-  const functions = require("../index");
-  handleRecordingDeleted = functions._handleRecordingDeleted;
 });
 
 // ---- Helpers ----
@@ -116,7 +153,7 @@ describe("onRecordingDeleted Firestore trigger", () => {
     assert.deepStrictEqual(storageDeleteCalls, []);
   });
 
-  it("audioStoragePath が gs:// 形式でない場合は Storage を呼ばず warn で完走する", async () => {
+  it("audioStoragePath が gs:// 形式でない場合は Storage を呼ばず error log で完走する", async () => {
     await invokeTrigger({
       data: {
         createdBy: "alice",
@@ -127,6 +164,35 @@ describe("onRecordingDeleted Firestore trigger", () => {
     });
 
     assert.deepStrictEqual(storageDeleteCalls, []);
+    // 不正 URI は data corruption / writer-side bug の signal なので error level
+    const matched = consoleErrorCalls.find((args) =>
+      typeof args[0] === "string" &&
+      args[0].includes("[onRecordingDeleted] unparseable audioStoragePath")
+    );
+    assert.ok(matched, "error log が emit されるはず");
+  });
+
+  it("audioStoragePath が非 string (number / object) の場合は parseGsUri が null を返し error log で skip", async () => {
+    await invokeTrigger({
+      data: { createdBy: "alice", audioStoragePath: 42 },
+      tenantId: "279",
+      recordingId: "r1",
+    });
+    assert.deepStrictEqual(storageDeleteCalls, []);
+
+    await invokeTrigger({
+      data: { createdBy: "alice", audioStoragePath: { foo: "bar" } },
+      tenantId: "279",
+      recordingId: "r2",
+    });
+    assert.deepStrictEqual(storageDeleteCalls, []);
+
+    // 両方とも error log で記録される
+    const errorLogs = consoleErrorCalls.filter((args) =>
+      typeof args[0] === "string" &&
+      args[0].includes("[onRecordingDeleted] unparseable audioStoragePath")
+    );
+    assert.strictEqual(errorLogs.length, 2);
   });
 
   it("audioStoragePath が空文字列の場合は Storage を呼ばず no-op", async () => {
@@ -159,6 +225,12 @@ describe("onRecordingDeleted Firestore trigger", () => {
 
     // Storage は1回呼ばれた上で error をのみ込んだ
     assert.strictEqual(storageDeleteCalls.length, 1);
+    // failure は error log で観測可能でなければならない (silent failure 禁止)
+    const matched = consoleErrorCalls.find((args) =>
+      typeof args[0] === "string" &&
+      args[0].includes("[onRecordingDeleted] storage delete failed (orphan possible)")
+    );
+    assert.ok(matched, "error log が emit されるはず");
   });
 
   it("Storage delete が generic エラーで失敗しても trigger は throw しない", async () => {

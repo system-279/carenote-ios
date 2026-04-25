@@ -159,7 +159,9 @@ exports.deleteAccount = onCall(
           getStorage().bucket(gs.bucket).file(gs.object).delete({ ignoreNotFound: true })
         );
       } else if (data.audioStoragePath) {
-        console.warn("[deleteAccount] unparseable audioStoragePath", {
+        // Issue #193 review: writer-side のバグ / data corruption の可能性があるため
+        // error level (warn は「気にする必要のない」シグナル、これは actionable)。
+        console.error("[deleteAccount] unparseable audioStoragePath", {
           uid, docId: doc.id, audioStoragePath: data.audioStoragePath,
         });
       }
@@ -241,7 +243,9 @@ async function handleRecordingDeleted(event) {
 
   const gs = parseGsUri(audioStoragePath);
   if (!gs) {
-    console.warn("[onRecordingDeleted] unparseable audioStoragePath, skipping", {
+    // writer-side のバグ / data corruption が原因。orphan を作る silent failure に
+    // しないよう error level で記録 (warn は「気にする必要のない」シグナル)。
+    console.error("[onRecordingDeleted] unparseable audioStoragePath, skipping", {
       tenantId,
       recordingId,
       audioStoragePath,
@@ -284,4 +288,9 @@ exports.onRecordingDeleted = onDocumentDeleted(
 // Test 用: handler を直接呼べるよう named export する（v2 trigger は wrap 経由だと
 // 他テストの admin SDK mock と干渉するため）。production は `exports.onRecordingDeleted`
 // 経由で発火するので影響なし。
+//
+// Firebase は `onCall` / `onDocumentDeleted` などで wrap された `CloudFunction` オブジェクト
+// のみを trigger / function として登録するため、plain な async function である
+// `_handleRecordingDeleted` は `firebase deploy` の対象外（デプロイ後の Cloud Console にも
+// 表示されない）。テスト目的の export であり攻撃面の追加にはならない。
 exports._handleRecordingDeleted = handleRecordingDeleted;
