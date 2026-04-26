@@ -1,3 +1,83 @@
+# Handoff — 2026-04-27 続報セッション: Build 38 / v1.0.1 APPROVED → Unlisted 配信開始
+
+## ✅ Build 38 / v1.0.1 が App Review 通過 → Unlisted release 完了 + memory に Unlisted 新版仕様を整理
+
+前 handoff で「Build 38 / v1.0.1 を App Review 提出済 (Submission ID `736694f6-01af-4b69-8d28-8420cba31aa6`)、審査待ち最大 48 時間」と記録した状態から、本セッション開始時点で **APPROVED → デベロッパによるリリース待ち** に進行していたことをユーザー画面共有で確認。「価格および配信状況」で Unlisted 設定が v1.0 から自動継承されていることを確認し、「このバージョンをリリース」押下で **同一 Unlisted URL で v1.0.1 配信開始**。提出から約 24h で APPROVED → 同日 release という最速ペース（リジェクト履歴 4 回ありにも関わらず）。あわせて memory に Unlisted 新版リリース手順（再申請不要・公式仕様）を整理し、Claude の誤案内を自戒として記録した。
+
+### セッション成果サマリ
+
+| PR | リポジトリ | 内容 | 状態 |
+|----|----------|------|------|
+| **#157 (commit 603fc68)** | `yasushi-honda/claude-code-config` | `memory/project_carenote_app_review.md` に Build 38 配信開始反映 + Unlisted 新版リリース手順（再申請不要・公式仕様）追加 + Unlisted URL 明示記載 | 🔵 open（既存 PR に追加コミット） |
+| **本 PR** | `system-279/carenote-ios` | `docs/handoff/LATEST.md` に 2026-04-27 続報セッション追記 | 🔵 open |
+
+App Review 結果: **APPROVED**（Submission ID `736694f6-01af-4b69-8d28-8420cba31aa6`、提出 2026-04-26 → APPROVED 2026-04-27、所要約 24h）
+配信状態: **Build 38 / v1.0.1 Unlisted 配信中**（URL: `https://apps.apple.com/us/app/carenote-ai/id6760607218`、Build 35 / v1.0 から自動更新で配布範囲継承）
+
+### 主要判断のハイライト
+
+- **「Unlisted release = 別フロー / 申請メール必要」は誤り**: Claude が catchup 直後に「Unlisted は Apple へ申請メール送信が必要、ワンクリックでは切り替えできない」と誤って案内。ユーザー指示で WebSearch + Apple 公式 ([Unlisted App Distribution](https://developer.apple.com/support/unlisted-app-distribution/)) を確認 → **同 App ID 配下の新版は自動的に Unlisted のまま配信される**（既に v1.0 で許可取得済なら v1.0.1 も継承）。rules/tech-selection.md §1「外部サービスの手順を答える前に必ず公式ドキュメント確認」の遵守不足
+- **「価格および配信状況」で Unlisted 設定の自動継承を画面確認**: 「アプリの配信方法」欄に「リンクにアクセス可能なユーザのみが App Store でアプリを見つけたり、ダウンロードできます。」と表示 + 「非表示アプリのURL」欄に v1.0 と同じ URL が表示されていれば継承成功。「保存」ボタンが grey-out なら設定変更不要
+- **リリース操作は外部影響 hard-to-reverse のため Claude は押さず、ユーザー手動押下**: 「このバージョンをリリース」は押下時刻が公開時刻になる、取り下げは別フローという特性のため、最終操作はユーザー承認のうえユーザーが押下
+- **memory PR #157 への追加コミットで継続**: 同 PR が「Build 38 提出反映」として open のまま残っていた → 「配信開始反映」も同 PR の趣旨に含まれるため新規 PR を作らず追加コミット (`docs/memory-build-38-submission` branch、commit 603fc68)
+- **Apple Vision Pro 配信もチェック済**: 「価格および配信状況」画面で「このアプリを Apple Vision Pro で配信可能にする」がチェック済を確認、v1.0 から自動継承（v1.0.1 も互換性ありとマーク）
+
+### 実装実績
+
+- **変更ファイル**: 2 ファイル / +36/-10（PR #157 追加コミット、`memory/project_carenote_app_review.md` + `memory/MEMORY.md`）+ 本 PR の handoff 追記
+- **memory 追加内容**:
+  - 「Unlisted 新版リリース手順（再申請不要・公式仕様）」セクション新設（5 段階手順 + 公式引用 + 過去の誤解を自戒として記録）
+  - Build 38 行を「審査中」→「APPROVED → Unlisted 配信中 (2026-04-27)」に更新
+  - 配布方式セクション: 現在配布中を Build 38 / v1.0.1 に、Unlisted URL 明示、Apple Vision Pro 配信継承を追記
+  - 「完全着地」フローを Unlisted 仕様準拠に再番号（6→6/7/8）
+  - 関連リンクに Apple 公式 Unlisted Distribution ページ + Unlisted URL を追加
+- **MEMORY.md 索引**: Build 21-37 → 21-38、配布運用記述を「Unlisted 配布運用 + 新版手順（再申請不要）」に拡充
+- **iOS コード変更**: なし（本セッションは memory + handoff のみ）
+
+### Issue Net 計測
+
+| 開始時 | 終了時 | Net |
+|--------|--------|-----|
+| 7 件 (#192/#178/#111/#105/#92/#90/#65) | 7 件（同上） | **0** |
+
+> **Net 0 の意味**: 本セッションは Build 38 / v1.0.1 の Unlisted release 操作 + memory 整理のみ。実装系 Issue 着手なし、新規 Issue 起票なし（triage 基準を満たす新規バグ発見なし）。Issue #111 (Phase 0.9 close 判断) は配信後 smoke test 待ち、現状維持
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **Unlisted 新版は再申請不要・自動継承（公式仕様）**: 一度 Unlisted 配布許可を取得した App ID 配下の新版は、特別な操作なしに Unlisted のまま配信される。`AppStoreUnlisted@apple.com` への申請メール送信は **不要**。「価格および配信状況」で Unlisted 設定が維持されているか確認 → 「このバージョンをリリース」を押すだけ
+2. **外部サービスの手順を答える前に公式ドキュメント確認 (rules/tech-selection.md §1 再確認)**: Claude が「Unlisted は別フロー、申請メール必要」と誤案内した直接原因は、最新の Apple 公式仕様を確認せずに記憶ベースで答えたこと。Apple のような頻繁に仕様が変わる外部サービスは特に WebSearch + 公式 URL で確認必須
+3. **リリース操作 (hard-to-reverse + 外部影響) は Claude が押さない**: 「このバージョンをリリース」は押下時刻が公開時刻になり、取り下げは別フロー。最終操作はユーザー承認のうえユーザーが押下するのが原則。Claude は手順案内 + 確認サポートに留める
+4. **memory PR が open なら同趣旨の続報は追加コミットで継続**: 新規 PR を乱立させず、既存 PR の趣旨範囲内なら追加コミットで継続。今回 PR #157 の「Build 38 提出反映 + 提出 runbook」に「配信開始反映 + Unlisted 新版手順」を追加するのは自然な継続
+5. **画面共有スクリーンショットからの状態判定が確実**: ユーザーの「審査通過した？」のような曖昧な質問より、ユーザー画面のスクリーンショットを直接見て「1.0.1 デベロッパによるリリース待ち」「1.0.1 配信準備完了」のような UI 表示から状態を確定する方が確実。memory 等のテキスト情報と画面表示が乖離している事例あり (Build 35 v0.1.0 vs 実態 v1.0)
+
+### CI の現状
+
+- main `69a3ba0` (PR #208 merge 後): 前回 commit (`3bd38ad`、Build 38 / v1.0.1 bump) の iOS Tests CI は green (22m42s)
+- 本 PR は handoff のみのため CI 影響なし
+
+### 次セッション推奨アクション (優先順)
+
+1. **~/.claude PR #157 review + merge** (追加コミット 603fc68 込み): memory への Build 38 配信開始反映 + Unlisted 新版手順整理を main 反映
+2. **Build 38 配信後の smoke test**:
+   - 既存メンバー (`@279279.net`) 1 名で App Store 自動更新確認
+   - admin UI でアカウント引き継ぎ self-service 実機確認 (Phase B 機能の本番検証)
+   - **Issue #111 close 判断**: allowedDomains 自動加入 + admin UI smoke 完了 → close
+3. **`pre-push-quality-check.sh` の cwd 認識 bug 修正 (別 PR)**: `tool_input.command` から `cd <path> && git push` パターンを抽出 → そのディレクトリで `git branch --show-current` 判定する logic に修正
+4. **Build 37 (v0.1.2) 取り扱い**: 提出されないまま 90 日で TestFlight 自動 expire（明示削除不要）
+5. **Info.plist `ITSAppUsesNonExemptEncryption: false` 追加** (任意、別 PR): 次回 upload 以降の暗号化質問省略
+6. **既存 Issue 群** (#192 / #178 / #105 / #92 / #90 / #65): 当面は配信後 smoke 結果次第、優先度低
+
+### 関連リンク
+
+- [PR #157 (yasushi-honda/claude-code-config)](https://github.com/yasushi-honda/claude-code-config/pull/157) — memory に Build 38 配信開始反映 + Unlisted 新版手順追加（追加コミット 603fc68）
+- [Apple Developer Support — Unlisted App Distribution](https://developer.apple.com/support/unlisted-app-distribution/) — 公式仕様: 同 App ID 配下の新版は自動 Unlisted 継承、再申請不要
+- App Store Connect Submission ID: `736694f6-01af-4b69-8d28-8420cba31aa6` (Build 38 / v1.0.1、2026-04-26 提出 → 2026-04-27 APPROVED → 同日 release)
+- Unlisted URL: `https://apps.apple.com/us/app/carenote-ai/id6760607218`
+- 現行配信: **Build 38 / v1.0.1**（2026-04-27 開始）
+- `~/.claude/memory/project_carenote_app_review.md` (グローバル) — Build 38 配信開始反映 + Unlisted 新版手順追加 (PR #157 追加コミット)
+
+---
+
 # Handoff — 2026-04-26 夕〜2026-04-27 早朝セッション: Build 38 / v1.0.1 App Review 提出 + 提出 runbook 化
 
 ## ✅ Build 38 / v1.0.1 を App Review 提出（Submission ID `736694f6-01af-4b69-8d28-8420cba31aa6`、審査中）+ docs/memory に提出 runbook 集約
