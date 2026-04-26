@@ -29,6 +29,21 @@ struct SettingsView: View {
                 }
             }
 
+            if authViewModel.authState.isAdmin {
+                Section {
+                    NavigationLink {
+                        AccountTransferView()
+                    } label: {
+                        Label("アカウント引き継ぎ", systemImage: "arrow.right.arrow.left")
+                    }
+                } header: {
+                    Text("管理者メニュー")
+                } footer: {
+                    Text("メンバーが改姓等で uid が変わった際、旧アカウントの録音・テンプレートを新アカウントに引き継ぎます。")
+                        .font(.caption2)
+                }
+            }
+
             Section("アカウント") {
                 Button(role: .destructive) {
                     showSignOutConfirmation = true
