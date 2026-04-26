@@ -145,8 +145,9 @@ struct AccountTransferView: View {
     }
 
     /// `TransferOwnershipError` をユーザー向け文言にマップする。
-    /// テスト容易性のため static func で外部から検証可能にする。
-    static func message(for error: TransferOwnershipError) -> String {
+    /// SwiftUI `View` は `@MainActor` 隔離されるが、本関数は pure function (state 非依存) のため
+    /// `nonisolated` で外部 (テスト等) から MainActor 跨ぎでも呼び出せるようにする。
+    nonisolated static func message(for error: TransferOwnershipError) -> String {
         switch error {
         case .unauthenticated:
             return "ログインが必要です。再ログインしてください。"
