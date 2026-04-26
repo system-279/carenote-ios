@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os.log
 
 /// admin 専用「アカウント引き継ぎ」UI の状態機械。
 ///
@@ -26,6 +27,7 @@ final class AccountTransferViewModel {
     /// `confirmTransfer()` の実行が許可される。
     var confirmCheckboxChecked: Bool = false
 
+    private static let logger = Logger(subsystem: "jp.carenote.app", category: "AccountTransferVM")
     private let service: any TransferOwnershipServicing
 
     init(service: any TransferOwnershipServicing) {
@@ -71,9 +73,13 @@ final class AccountTransferViewModel {
     }
 
     /// preview 状態 + checkbox チェック済の場合のみ confirm を呼ぶ。
-    /// それ以外で呼ばれた場合は no-op (UI 制約からの呼び出し漏れを構造的に無害化)。
+    /// それ以外で呼ばれた場合は no-op + notice ログ (UI 制約からの呼び出し漏れを構造的に無害化、
+    /// race condition / 連打を silent に飲み込まないため Logger に痕跡を残す)。
     func confirmTransfer() async {
-        guard case let .preview(dryRunId, _) = state, confirmCheckboxChecked else { return }
+        guard case let .preview(dryRunId, _) = state, confirmCheckboxChecked else {
+            Self.logger.notice("confirmTransfer called outside valid context: state=\(String(describing: self.state), privacy: .public), checkbox=\(self.confirmCheckboxChecked, privacy: .public)")
+            return
+        }
         state = .confirmInFlight(dryRunId: dryRunId)
         do {
             let result = try await service.confirm(dryRunId: dryRunId)

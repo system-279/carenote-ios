@@ -95,7 +95,7 @@ struct AccountTransferViewModelTests {
         vm.fromUidInput = "sameUid"
         vm.toUidInput = "sameUid"
         await vm.runDryRun()
-        // AC-B4 の文言を明示的に assert (Issue #201 受け入れ基準)
+        // 文言は admin への直接的なフィードバック。リファクタで揺れさせない。
         #expect(vm.state == .failed(.invalidArgument("同一 uid は指定できません")))
         #expect(stub.dryRunCalls.isEmpty)
     }
@@ -216,9 +216,10 @@ struct AccountTransferViewModelTests {
 
     // MARK: - Two-step confirm safety: re-run dryRun must reset checkbox
 
-    /// Evaluator 検出 (#201): preview 状態で checkbox を true にした後、入力を変えて
-    /// 再 dryRun した時、checkbox が true のまま残ると新しい preview で confirm ボタンが
-    /// 即時 enabled になり二段階 confirm の安全性が崩れる。dryRun 開始時にリセット必須。
+    /// preview 状態で checkbox を true にした後、入力を変えて再 dryRun した時、
+    /// checkbox が true のまま残ると新しい preview で confirm ボタンが即時 enabled になり
+    /// 二段階 confirm の不変条件 (preview ∧ checkbox=true) が崩れる。
+    /// dryRun 開始時に必ずリセットすることを構造的に固定する。
     @Test @MainActor
     func dryRunを再実行するとconfirmCheckboxはリセットされる() async {
         let stub = StubTransferOwnershipService()

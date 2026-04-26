@@ -132,13 +132,15 @@ struct AccountTransferView: View {
 
     // MARK: - Helpers
 
-    /// 実行中状態は入力編集を禁止して race condition を防ぐ。
+    /// 実行中・preview/completed/failed 状態では入力ロック。
+    /// 特に preview 状態で uid を編集できると、表示中の counts と confirm 実行内容が
+    /// ズレる (二段階 confirm の安全性違反)。idle に戻すには「最初からやり直す」/「画面をリセット」を経由させる。
     private var isInputDisabled: Bool {
         switch viewModel.state {
-        case .dryRunInFlight, .confirmInFlight:
-            return true
-        default:
+        case .idle:
             return false
+        case .dryRunInFlight, .confirmInFlight, .preview, .completed, .failed:
+            return true
         }
     }
 
@@ -157,13 +159,16 @@ struct AccountTransferView: View {
         case .notFound:
             return "対象の dryRunId が見つかりません。最初からやり直してください。"
         case .alreadyExists:
-            return "同じ操作が既に実行中または完了済みです。少し時間をおいて再度お試しください。"
+            return "この dryRun は既に処理されています。「最初からやり直す」を選んで新しい操作として再開してください。"
         case let .internal(message):
-            return "サーバー内部エラーが発生しました。\(message ?? "") \nしばらく時間をおいて再度お試しください。"
+            let detail = (message?.isEmpty == false) ? "\n\(message!)" : ""
+            return "サーバー内部エラーが発生しました。\(detail)\nしばらく時間をおいて再度お試しください。"
         case .malformedResponse:
             return "サーバーからの応答が不正です。アプリを最新版にアップデートしてください。"
+        case .transient:
+            return "ネットワークまたはサーバーが一時的に応答していません。電波状況を確認のうえ、少し時間をおいて再度お試しください。"
         case let .unknown(nsError):
-            return "想定外のエラーが発生しました (code: \(nsError.code))。"
+            return "想定外のエラーが発生しました (\(nsError.domain) code: \(nsError.code))。"
         }
     }
 }

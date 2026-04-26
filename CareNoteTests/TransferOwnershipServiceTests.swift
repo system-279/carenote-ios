@@ -68,6 +68,60 @@ struct TransferOwnershipErrorMapTests {
         }
     }
 
+    // MARK: - Transient classification (network / quota / SDK unavailable)
+
+    @Test(
+        "transient な FunctionsErrorCode は .transient に分類される",
+        arguments: [
+            FunctionsErrorCode.deadlineExceeded.rawValue,
+            FunctionsErrorCode.unavailable.rawValue,
+            FunctionsErrorCode.resourceExhausted.rawValue,
+            FunctionsErrorCode.cancelled.rawValue,
+        ]
+    )
+    func map_transientFunctionsCode(code: Int) {
+        let error = NSError(
+            domain: FunctionsErrorDomain,
+            code: code,
+            userInfo: [NSLocalizedDescriptionKey: "transient"]
+        )
+        let mapped = TransferOwnershipError.map(error)
+        if case .transient = mapped {
+            #expect(mapped.isTransient == true)
+        } else {
+            Issue.record("Expected .transient, got \(mapped)")
+        }
+    }
+
+    @Test("NSURLErrorDomain (オフライン等) は .transient に分類される")
+    func map_urlErrorIsTransient() {
+        let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
+        let mapped = TransferOwnershipError.map(error)
+        if case .transient = mapped {
+            #expect(mapped.isTransient == true)
+        } else {
+            Issue.record("Expected .transient, got \(mapped)")
+        }
+    }
+
+    @Test("permanent エラーは isTransient == false")
+    func permanentErrorsAreNotTransient() {
+        let cases: [TransferOwnershipError] = [
+            .unauthenticated,
+            .permissionDenied,
+            .failedPrecondition,
+            .invalidArgument("x"),
+            .notFound,
+            .alreadyExists,
+            .internal("y"),
+            .malformedResponse,
+            .unknown(NSError(domain: "d", code: 1)),
+        ]
+        for c in cases {
+            #expect(c.isTransient == false, "Expected \(c) to be non-transient")
+        }
+    }
+
     // MARK: - Helpers
 
     /// `Functions.functions().httpsCallable(...).call(...)` が throw する形式の

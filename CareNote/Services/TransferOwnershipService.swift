@@ -45,14 +45,29 @@ enum TransferOwnershipError: Error, Sendable, Equatable {
     case `internal`(String?)
     /// レスポンス JSON の decode 失敗。
     case malformedResponse
-    /// 想定外のエラー (ネットワーク / Functions 以外の domain 等)。
+    /// transient エラー (network timeout / SDK unavailable / quota 超過 等)。
+    /// 分類基準は `~/.claude/rules/error-handling.md` §3 transient/permanent プロトコル準拠、
+    /// `FirestoreError.isTransient` (PR #198) と整合させる。
+    case transient(NSError)
+    /// 想定外のエラー (Functions 以外の未分類 domain 等)。
     case unknown(NSError)
 
+    /// transient エラーは指数バックオフでリトライ可能と判定する目安。
+    /// UI 側のリトライ誘導文言の出し分けに使う。
+    var isTransient: Bool {
+        if case .transient = self { return true }
+        return false
+    }
+
     /// `Functions.functions().httpsCallable(...).call(...)` が throw した Error を
-    /// 内部エラー型にマップする。`FunctionsErrorDomain` のもののみコード分類し、
-    /// それ以外は `.unknown` で包む。
+    /// 内部エラー型にマップする。`FunctionsErrorDomain` のコードを分類し、
+    /// transient な network/quota 系は `.transient`、未マップは `.unknown` で包む。
+    /// `NSURLErrorDomain` (オフライン等) も transient 扱い。
     static func map(_ error: Error) -> TransferOwnershipError {
         let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return .transient(nsError)
+        }
         guard nsError.domain == FunctionsErrorDomain else {
             return .unknown(nsError)
         }
@@ -72,13 +87,18 @@ enum TransferOwnershipError: Error, Sendable, Equatable {
             return .alreadyExists
         case FunctionsErrorCode.internal.rawValue:
             return .internal(message)
+        case FunctionsErrorCode.deadlineExceeded.rawValue,
+             FunctionsErrorCode.unavailable.rawValue,
+             FunctionsErrorCode.resourceExhausted.rawValue,
+             FunctionsErrorCode.cancelled.rawValue:
+            return .transient(nsError)
         default:
             return .unknown(nsError)
         }
     }
 
-    /// `.unknown(NSError)` の同値判定は domain + code のみで行う (userInfo は含めない)。
-    /// userInfo は呼出毎に異なるメタ情報 (タイムスタンプ等) を含みうるため、
+    /// `.unknown(NSError)` / `.transient(NSError)` の同値判定は domain + code のみで行う
+    /// (userInfo は含めない)。userInfo は呼出毎に異なるメタ情報 (タイムスタンプ等) を含みうるため、
     /// 比較対象に入れると同じエラー種別が偽陽性で differ 扱いになる。
     static func == (lhs: TransferOwnershipError, rhs: TransferOwnershipError) -> Bool {
         switch (lhs, rhs) {
@@ -93,6 +113,8 @@ enum TransferOwnershipError: Error, Sendable, Equatable {
             return l == r
         case let (.internal(l), .internal(r)):
             return l == r
+        case let (.transient(l), .transient(r)):
+            return l.domain == r.domain && l.code == r.code
         case let (.unknown(l), .unknown(r)):
             return l.domain == r.domain && l.code == r.code
         default:

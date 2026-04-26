@@ -70,6 +70,7 @@
 		D500243B9B526706E3BCE5AF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DA628FEE8E8929DE6D2651EC /* GoogleService-Info.plist */; };
 		D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */; };
 		DEA5BEF6533AC992CA56ACE1 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 780EB4E4898BE568D7C4B343 /* FirebaseAuth */; };
+		EB0C70705D8374EAD17EAFE3 /* AccountTransferViewMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140C07CE41F695D5C8F29472 /* AccountTransferViewMessageTests.swift */; };
 		ED47579B2EE6DA52E42AD34D /* TransferOwnershipServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D98898DABD5809A475A0C0 /* TransferOwnershipServiceTests.swift */; };
 		EE6FD95E89E69854891FD11C /* ClientSelectViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD7DBB99EAE4823CA33FA82 /* ClientSelectViewModelTests.swift */; };
 		F059E67D489FA04FC0A4A455 /* TransferOwnershipService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD847659B578124282BC38DB /* TransferOwnershipService.swift */; };
@@ -98,6 +99,7 @@
 		11F7A54E6C83AA0B51126525 /* TemplateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateListView.swift; sourceTree = "<group>"; };
 		139399ACF89F42E029CD0CB1 /* AccountTransferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTransferView.swift; sourceTree = "<group>"; };
 		13ED2870967AA1A35CE8FA37 /* RecordingRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingRepositoryTests.swift; sourceTree = "<group>"; };
+		140C07CE41F695D5C8F29472 /* AccountTransferViewMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTransferViewMessageTests.swift; sourceTree = "<group>"; };
 		19852073B5385852F328F281 /* StorageServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageServiceTests.swift; sourceTree = "<group>"; };
 		1CEEA689FBC6B94B6C315907 /* CareNote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CareNote.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D1751BC835BB28519295961 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
@@ -306,6 +308,7 @@
 		716AE9A177EA66220562BECC /* CareNoteTests */ = {
 			isa = PBXGroup;
 			children = (
+				140C07CE41F695D5C8F29472 /* AccountTransferViewMessageTests.swift */,
 				85290DC06C806F0EEF4298F0 /* AccountTransferViewModelTests.swift */,
 				9BD36BBA888E8960D96DC910 /* AuthViewModelTests.swift */,
 				97707E72915C49324CCC7394 /* ClientCacheServiceTests.swift */,
@@ -527,6 +530,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EB0C70705D8374EAD17EAFE3 /* AccountTransferViewMessageTests.swift in Sources */,
 				FC4E77C1A7F0C3B6376F93DE /* AccountTransferViewModelTests.swift in Sources */,
 				C60B40FD6A5D17715EAE0AD4 /* AuthViewModelTests.swift in Sources */,
 				53F062DE9A557C10ABC064D2 /* ClientCacheServiceTests.swift in Sources */,
