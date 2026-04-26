@@ -1,3 +1,81 @@
+# Handoff — 2026-04-26 早朝セッション: 「完全着地」フロー Phase B 完遂 + Build 37 / v0.1.2 TestFlight upload
+
+## ✅ Issue #201 close (PR #202 merge) + Build 37 release bump (PR #203 merge) + TestFlight upload 完了
+
+ユーザー要件「テナント内ドメイン自動加入 + admin UI でアカウント引き継ぎ」の完全着地ルートを実行。Apple App Review 経緯を memory に集約 (`project_carenote_app_review.md` 新設) し、Phase 2 admin UI を実装、Build 37 / v0.1.2 として TestFlight upload まで完遂。残作業はユーザーの App Store Connect での App Review 提出と Unlisted release のみ。
+
+### セッション成果サマリ
+
+| PR | Issue | 内容 | merge 順 |
+|----|-------|------|----------|
+| **#202 (merged)** | **#201** | transferOwnership iOS admin UI (ADR-008 Phase 2): Service / ViewModel / View / SettingsView edit + テスト 38 ケース | 1 |
+| **#203 (merged)** | — | Build 37 / v0.1.2 bump (project.yml + pbxproj sync) | 2 |
+
+### 主要判断のハイライト
+
+- **Apple App Review 経緯の memory 化** (ユーザー指摘「プロジェクトで最も重要なことの 1 つ、ちゃんと正しく理解と把握しといて」): Build 21-22 リジェクト (Sign in with Apple 未実装 / 赤字エラー判定) → Build 33 設計転換 (ADR-007 Guest Tenant 自動プロビジョニング) → Build 35 Unlisted 配布中 → Build 37 提出予定の全経緯を `~/.claude/memory/project_carenote_app_review.md` に集約。再発防止チェックリストと完全着地フローの正確な依存関係も記述
+- **TestFlight ≠ 永続配布の認識**: TestFlight 90 日 expire のため社員全員配布には不向きと判明 → App Store Unlisted Distribution (CareNote 既存運用) ルートで「完全着地」を再定義
+- **Phase B 実装パターン**: AuthViewModel.deleteAccount の Functions Callable パターン踏襲、`TransferOwnershipServicing` protocol で SDK 抽象化、`@Observable @MainActor` ViewModel + state machine (`idle → dryRunInFlight → preview → confirmInFlight → completed / failed`)、Sendable 維持で SwiftData `@Model` を associated value に持たせない (PR #198 教訓)
+- **Quality Gate 3 層 + Evaluator バグ検出**: `/simplify` 3 並列 → callable 名/region constant 化 + Equatable コメント。Evaluator (5 ファイル + 新機能で発動) → **checkbox リセット欠落バグ** (preview 状態で再 dryRun 時に二段階 confirm 安全性違反) を検出、修正 + 専用回帰テスト追加。`/review-pr` 6 agent → triage 基準 (rating ≥ 7 + confidence ≥ 80) 6 件全反映 (transient エラー分類 / preview 中 uid 編集禁止 / silent guard logger / alreadyExists 文言誤誘導 / message(for:) 12 文言テスト / PR/Issue 番号コメント削除)
+- **CI Xcode 16.3 strict concurrency**: ローカル Xcode (iOS 26.2 SDK) では警告のみだったが CI で error 化 → `nonisolated static func message(for:)` で SwiftUI View 内 pure function を MainActor 跨ぎから呼び出し可能化
+- **upload-testflight.sh の運用実証**: project.yml の MARKETING_VERSION のみ手動更新、Build 番号は引数で指定 (`./scripts/upload-testflight.sh 37`)、entitlements lint + xcodegen + archive + export + ASC upload を自動化、Build 37 / v0.1.2 が `Upload succeeded` で App Store Connect 到達
+
+### 実装実績
+
+- **変更ファイル合計**: 9 ファイル (PR #202: 7 / PR #203: 2)
+  - PR #202 新規 6 ファイル: `CareNote/Services/TransferOwnershipService.swift` (Service + Error mapping、198 行) / `CareNote/Features/Settings/AccountTransferViewModel.swift` (state machine、94 行) / `CareNote/Features/Settings/AccountTransferView.swift` (UI、195 行) / `CareNoteTests/TransferOwnershipServiceTests.swift` (mapping + transient 14 ケース) / `CareNoteTests/AccountTransferViewModelTests.swift` (state machine + 二段階 confirm 13 ケース) / `CareNoteTests/AccountTransferViewMessageTests.swift` (UI 文言 12 ケース)
+  - PR #202 編集: `CareNote/Features/Settings/SettingsView.swift` (admin 限定 NavigationLink 追加)
+  - PR #203: `project.yml` / `CareNote.xcodeproj/project.pbxproj` (MARKETING_VERSION 0.1.1 → 0.1.2 + CURRENT_PROJECT_VERSION 36 → 37)
+- **テスト成長**: iOS 173 → **211** (+38)、新 suite 3 件 (TransferOwnershipError.map mapping / AccountTransferViewModel state machine / AccountTransferView.message(for:) mapping)
+- **CI**: PR #202 初回 fail (Xcode 16.3 strict concurrency) → fix commit で green / PR #203 green
+- **TestFlight upload**: Build 37 / v0.1.2、`Upload succeeded` + `EXPORT SUCCEEDED` (Firebase Firestore 系 dSYM 欠損 warning は既知)
+
+### Quality Gate 運用 (Generator-Evaluator 分離 3 層 + 6 agent 並列レビュー)
+
+- **`/simplify` 3 並列** (PR #202、5 ファイル以上): 採用 = callable 名 + region constant 化、`Equatable` `==` の `unknown` 比較規則コメント追加。見送り = dryRun/confirm DRY 化 (2 箇所のみ ROI 負)、Functions cache (SDK 内部 cache 済)、@ViewBuilder 統合 (admin 低頻度 UI で hot path でない)
+- **Evaluator 分離プロトコル** (PR #202、5 ファイル + 新機能、`rules/quality-gate.md` 発動): HIGH 1 = checkbox リセット欠落 (機能バグ、本 PR 内修正 + 回帰テスト)、文言を AC に揃え、Sendable 明示、accessibilityLabel 追加。`runDryRun()` 開始時に `confirmCheckboxChecked = false` で二段階 confirm 安全性回復
+- **`/review-pr` 6 agent 並列** (PR #202): code-reviewer / pr-test-analyzer / silent-failure-hunter / comment-analyzer / type-design-analyzer / code-simplifier。triage 基準 6 件全反映。保留 = ローカル invalidArgument semantics (rating 7/80 だが enum case 拡張で複雑化)、parseCounts internal 化テスト (本 PR スコープ拡大)
+
+### Issue Net 変化
+
+セッション開始時 open **7** → 起票 #201 (+1、CLAUDE.md triage 基準 #5 ユーザー明示指示) → close #201 (-1、PR #202 merge で auto-close) → 終了時 open **7** (net **0**)
+
+> **Net 0 の意味**: ユーザー要請「テナント内ドメイン自動加入 + アカウント引き継ぎ self-service」を起票 (#201)・実装 (PR #202)・close を**1 セッション内で完遂**したパターン。memory `feedback_issue_triage.md` 基準では Net ≤ 0 は進捗ゼロ扱いだが、本セッションは「Issue 化された機能要件の起票→完遂」+「Build 37 リリース upload まで実行」で実質的進捗あり。CLAUDE.md「Issue は net で減らすべき KPI」は「未解消 Issue を放置・量産しない」精神であり、起票即完遂はこの精神に反しない
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **Apple App Review 経緯の memory 化が必須**: 過去のリジェクト経緯 (Build 21-22 赤字エラー判定 → Guest Tenant 設計転換) は CareNote プロジェクトの設計判断の根本にあり、これを把握せず「TestFlight で全員配布すれば OK」「審査不要で即配布」と短絡判断する危険があった。`memory/project_carenote_app_review.md` で Build 別経緯 + 配布方式 + デモアカウント + 再発防止チェックリスト + 完全着地フロー (実装 → version bump → TestFlight upload → App Review 1-3 日 → Unlisted release) を集約
+2. **SwiftUI View 内 static func は最初から `nonisolated`**: SwiftUI View struct は暗黙的に `@MainActor` 隔離 → static func も MainActor 隔離 → 非 MainActor テストから呼べない。ローカル Xcode (iOS 26.2 SDK) は警告のみで通るが CI Xcode 16.3 は error 化。pure function (state 非依存) には `nonisolated static func` を最初から明示する
+3. **Evaluator は機能バグも検出する**: `/review-pr` の前段で Evaluator (`rules/quality-gate.md` 発動条件) を回したことで、preview 状態で再 dryRun 時の checkbox リセット欠落 (二段階 confirm 安全性違反) を実装の前提知識なしで検出。実装者の盲点を補正する効果。修正 + 回帰テストを同 PR 内で吸収
+4. **TestFlight 90 日 expire は社員全員配布に不向き**: TestFlight Internal Testing は審査不要で即配布できるが 90 日で expire するため永続運用には不適切。CareNote のような社内 B2B アプリは App Store Unlisted Distribution (URL 招待制、App Review あり) が正解。ユーザー指摘「Testフライトなんかで社員全員に配布しないですよ。だってずっとつかえないでしょ」が正論
+5. **PR/Issue 番号コメントの陳腐化リスク**: テストコメントに「Evaluator 検出 (#201)」「(Issue #201 受け入れ基準)」と書くと、Issue close 後・PR merge 後に文脈が失われる。CLAUDE.md「Don't reference current task/fix/callers」遵守、不変条件ベースの記述 (例: 「二段階 confirm の不変条件 (preview ∧ checkbox=true) が崩れる」) に書き換える
+6. **upload-testflight.sh は Build 番号のみ自動 bump、MARKETING_VERSION は手動**: Apple の "Invalid Pre-Release Train" エラー回避のため MARKETING_VERSION の semver bump は必須だが script は触らない。version bump PR (project.yml + pbxproj sync) → merge → upload の順を runbook 化済 (PR #195 / PR #203 で実証済)
+
+### CI の現状
+
+- main `7e11b71` (PR #203 merge 後): post-merge iOS Tests 走行中 (Pre-merge は両 PR とも green)
+- Pre-merge: PR #202 → Xcode 16.3 strict concurrency fix 後 green (sha 3a721a6) / PR #203 → green (sha 7b1e0b6)
+
+### 次セッション推奨アクション (優先順)
+
+「完全着地」残作業は基本ユーザー手動。Build 37 が App Review 通過 → Unlisted release 配布 → メンバー追加で smoke の流れ。
+
+1. **🔥 Build 37 / v0.1.2 App Review 提出 (ユーザー手動)**: App Store Connect で Build 37 processing 完了 (10-30 分) を待ち、Build 37 を選択して App Review 提出。**Apple Review 経緯チェックリスト** (`memory/project_carenote_app_review.md`「次回審査時の留意点」) を提出前に確認: デモアカウント whitelist 維持 / エラー UI 赤字単色なし / admin 限定機能 demo-reviewer でテスト可能 / Sign in with Apple entitlement 維持
+2. **App Review 通過後 Unlisted release (ユーザー手動)**: 通過 (1-3 日想定、リジェクト時は理由分析 + 修正版再提出) → App Store Connect で Build 37 を Unlisted release。**完全着地達成**
+3. **Issue #111 Phase 0.9 close 判断**: Build 37 配布後に新メンバー (`@279279.net`) を 1 名招待し allowedDomains 自動加入 + admin UI でアカウント引き継ぎ self-service の実機 smoke 完了 → close
+4. **#192 Phase B/C** (Cloud Storage orphan cleanup): dev 実 trigger smoke + prod deploy + runbook 整備 (既存 handoff 推奨アクション継続)
+5. **#178 Stage 2 GHA + WIF** / **#105 deleteAccount E2E** / **#92 / #90 Guest Tenant** / **#65 Apple × Google account link**
+
+### 関連リンク
+
+- [PR #202 merged](https://github.com/system-279/carenote-ios/pull/202) — Issue #201 transferOwnership iOS admin UI (ADR-008 Phase 2)
+- [PR #203 merged](https://github.com/system-279/carenote-ios/pull/203) — Build 37 / v0.1.2 bump
+- [Issue #201 CLOSED](https://github.com/system-279/carenote-ios/issues/201)
+- `~/.claude/memory/project_carenote_app_review.md` (グローバル) — Apple App Review 経緯の集約
+- ADR-008 Phase 2 (本セッションで実装完遂)
+
+---
+
 # Handoff — 2026-04-25 朝〜午後セッション: PR #191 follow-up 3 件 (#194 / #193 / #192) 完遂 + Cloud Function dev deploy
 
 ## ✅ Issue #194 / #193 close (PR #197 / #198 merge) + Issue #192 Phase A merge (PR #199) + dev deploy ACTIVE
@@ -303,99 +381,6 @@ Issue #170 hardening bundle 完了で test infra は安定化。次は applicati
 - [PR #187 merged](https://github.com/system-279/carenote-ios/pull/187) — H4
 - [PR #188 merged](https://github.com/system-279/carenote-ios/pull/188) — H5 (Closes #170)
 - impl-plan v1/v2（Issue #170 コメント）: https://github.com/system-279/carenote-ios/issues/170#issuecomment-4308689214
-
----
-
-# Handoff — 2026-04-24 セッション: Issue #100 **恒久解消** (PR #181 merged) + iOS delete follow-up #182 起票
-
-## ✅ 前セッション Phase 0.5 Rules rollback 判断ミスを GCP 側のみで根本解消
-
-前セッション (2026-04-23 夜) で Phase 0.5 強化版 Rules の prod deploy が稼働中 iOS Build 35 と不整合で業務停止 → rollback した。当初の想定ルート「Build 36 リリース → createdBy 書込み確認 → Phase 0.5 再 deploy」はユーザー方針「**iOS バージョンアップを避け、GCP 側のみで根本解決**」で破棄。本セッションで **iOS バイナリを変更せず** Issue #100 恒久解消を達成。
-
-### セッション成果サマリ
-
-| PR | 内容 | Milestone |
-|----|------|-----------|
-| #181 (merged) | iOS 非変更で recordings 権限モデルを段階的強化 (ADR-010) | **Issue #100 恒久 close** |
-| #182 (新規起票) | iOS 側の録音 delete が Firestore に同期されない既存不具合 (bug / P2) | smoke 過程で発見・別追跡化 |
-
-### 主要判断のハイライト
-
-- **iOS 非変更方針の採用**: Build 36 リリース (iOS レビュー + TestFlight 経由、2-5 日所要) を避け、「createdBy の存在と値を条件分岐キーにした二段階 Rules」で Build 35 互換を維持しつつ Issue #100 核心 (他人 update/delete) を遮断
-- **read は暫定許容**: 案B (read も createdBy 制限) は Firestore query 仕様 (返却全 doc が read rule を満たす必要) により Build 35 の RecordingList が permission-denied で破綻 → 前回業務停止再発リスク。ADR-010 で将来 Build N+ 時の段階強化計画を明記
-- **既存 recordings は backfill しない判断**: 2026-04-24 prod audit 実測で tenant 279 の全 2 件が `createdBy=""` (string 型)、admin = 実運用者なので admin 権限で業務継続可能。ADR-010 consequences 明記
-- **admin の createdBy 書換も immutable**: Phase 0.5 原案の設計思想を継承。所有権書換は Admin SDK 経由 Callable `transferOwnership` (ADR-008) に限定
-- **Evaluator HIGH 指摘の双方向 in-check 強化**: 「admin が createdBy なし recording に createdBy を追加する update」の silent pass バグを双方向 `in` チェックで修正 + 専用テスト 2 件追加
-- **smoke 5「削除復活」は本 PR 対象外と確定**: コード調査 (`RecordingListViewModel.swift:101-109` + `FirestoreService.swift` に `deleteRecording` メソッド未実装 + grep で `recordings` コレクションの `.delete()` 呼出ゼロ) で、iOS 既存不具合と確定。本 PR の Rules 変更とは完全に無関係なので Issue #182 で別追跡化
-
-### 実装実績
-
-- **変更ファイル**: 4 個 (+491/-11)
-  - `firestore.rules` (recordings block rewrite、+58/-6)
-  - `functions/test/firestore-rules.test.js` (+8 新規テスト + 既存 2 件反転、+169/-9)
-  - `docs/adr/ADR-010-recordings-permission-model.md` (新規、179 行)
-  - `docs/runbook/prod-deploy-smoke-test.md` (Phase 0.5.1 セクション追加、+83/-0)
-- **テスト**: **160/160 PASS** (Phase 0.5 原案時 152 → +8 件新規拡張: createdBy='' create 許容 1 + 既存 createdBy='' 境界 5 + createdBy 不在 recording 防御 2)
-- **Prod 操作** (全てユーザー明示承認済):
-  - `firebase deploy --only firestore:rules --project carenote-prod-279` (2026-04-24、compile PASS + released rules to cloud.firestore)
-  - prod audit (read-only) 2 回実行: baseline (deploy 前) + 事後確認 (deploy 後) 両方で tenant 279 = 2 件全 `createdBy=""` (string 型) を確認 → silent-failure-hunter H1 (非 string 混入リスク) が実データ上ゼロを実証
-- **dev 操作**: `firebase deploy --only firestore:rules --project carenote-dev-279` 2 回 (初回 + Evaluator HIGH 修正後)
-- **実機 smoke**: Build 35 (TestFlight prod 接続) で create / read / update 全 PASS、delete は #182 で追跡
-
-### レビュー運用 (3 層の独立レビュー + Quality Gate)
-
-- **Codex plan review** (設計段階、`/codex plan` MCP): Go with conditions、7 観点 (Build 35 互換 / Rules 構文 / author 判定単一依存 / allowedDomains 組合せ / backfill / 移行摩擦 / 再発防止) 全対応
-- **Evaluator agent** (実装 AC 検証、quality-gate.md Evaluator 分離プロトコル発動): HIGH 1 件 (update immutable 論理バグ) 検出 → 双方向 `in` チェック修正 + テスト 2 件追加 → 再検証 PASS
-- **`/review-pr` 4 エージェント並列** (code-reviewer / pr-test-analyzer / silent-failure-hunter / comment-analyzer、type-design は新規型なしで skip): Critical 0、Important 全対応 (テスト数 158→160 訂正 / admin 他フィールド update 可の Consequences 精緻化 / audit 結果明記 / FieldValue.delete() Rules 論理式保証の注記 / Rules コメントへ Firestore query 制約追加)、Suggestion も同時反映 (ADR-008 参照追加 + runbook header に ADR-010 link 追加)
-- **rules-unit-tests**: 160/160 PASS (3 回実行: 初回 158 → Evaluator 修正後 160 → review 反映後 160)
-
-### 再発防止プロトコル (ADR-010 § 再発防止 + runbook Phase 0.5.1)
-
-前回 Phase 0.5 rollback の教訓を構造化:
-1. **Rules 変更 PR 必須項目**: 前提 iOS build 番号明記 + 稼働バイナリ相当 payload テスト + Build N 相当 payload テスト
-2. **prod deploy 前ゲート**: 実機 smoke **skip 禁止** + rules-unit-tests **代替禁止** + prod audit baseline 記録 + dev deploy 先行
-3. **「rules-unit-tests は実機 smoke の代替ではない」を docs 明文化**
-
-### Issue Net 変化
-
-セッション開始時 open **8** → #100 close (-1) → #182 起票 (+1) → 終了時 open **8** (net **0**)
-
-| 動き | 件数 | Open 数推移 |
-|------|------|------------|
-| 開始時 | — | 8 |
-| #100 close (PR #181 merge で auto-close + 詳細コメント投稿) | -1 | 7 |
-| #182 起票 (iOS delete 未実装、triage #1 実害 + #2 再現可能 + rating 8+) | +1 | **8** |
-
-> **Net 0 の理由明示**: 既存実害 (#100 recordings 権限過剰、rollback 状態で再露出中) を恒久解消して -1、調査過程で発見した既存 iOS 不具合 (delete 未実装で削除後復活) を可視化して +1。triage 基準下で両方適正 (#100 は元から実害、#182 は rating 8+/conf 95+ 相当)。KPI 的には net 0 だが「未対応の現存リスク解消 + 既存未追跡不具合の可視化」で実内容は進捗あり。
-
-### CI の現状
-
-- PR #181 merge 後の main `6ad3ae6`: functions テスト 160/160、firestore.rules compile PASS 実証済
-- iOS Tests CI は PR #173 の scheme parallelizable=NO 強制 + lint-scheme-parallel.sh で安定運用継続
-
-### 次セッション推奨アクション (優先順)
-
-1. **🔥 #182 iOS delete 機能の Firestore 同期実装 — 次セッション即着手・休まず完遂** (bug, P1 へ昇格検討): `FirestoreService.deleteRecording` 追加 + `RecordingListViewModel.deleteRecording` で Firestore delete 呼び出し。ADR-010 の author 分岐 (`admin OR createdBy==uid`) を活用できる設計済。**方針 A (FirestoreService 直接呼び出し) 確定**、方針 B (OutboxSync delete 拡張) は却下 (実装コスト高・ROI 低)。
-   - **impl-plan は Issue #182 のコメント `impl-plan v1` に詳細記載**（AC1-10 / RED-GREEN-REFACTOR ステップ / 変更ファイル予測 4 個 / 所要 2-3h / リスク対策 3 点）
-   - **次セッション開始時のアクション**:
-     1. `/catchup` で本 handoff を読む
-     2. Issue #182 `impl-plan v1` コメントを開く
-     3. feature branch `fix/issue-182-ios-delete-firestore-sync` 作成
-     4. RED フェーズ (失敗テスト追加) から開始
-   - **本セッションの反省 (ユーザーに謝罪済)**: PR #181 時に iOS 側の delete 実装確認を怠り、smoke test まで問題が顕在化しなかった。ADR-010 § 再発防止プロトコル §4 に「iOS/クライアント側実装確認」を恒久プロトコル化。
-2. **#170 SharedTestModelContainer hardening H2-H6** (bug, P1): H1 は PR #173 で完了、H2-H6 follow-up 6-10h 見積もり
-3. **#111 実機 smoke test 後追い close**: 次回 TestFlight リリース時に自録音 CRUD / Guest 振分 / allowedDomains 自動加入 3 条件確認 → close
-4. **#105 deleteAccount E2E (Firebase Emulator Suite)** (enhancement, P2)
-5. **#178 Stage 2 GHA + WIF 運用基盤** (enhancement, P2、ADR-009 follow-up)
-6. **#92 / #90 Guest Tenant 関連**、**#65 Apple × Google account link**
-
-### 関連リンク
-
-- [PR #181 merged](https://github.com/system-279/carenote-ios/pull/181) — Issue #100 恒久解消
-- [Issue #100 close + 詳細コメント](https://github.com/system-279/carenote-ios/issues/100#issuecomment-4305906987)
-- [Issue #182 iOS delete follow-up](https://github.com/system-279/carenote-ios/issues/182)
-- [ADR-010 recordings Rules 権限モデル段階的強化設計](../adr/ADR-010-recordings-permission-model.md)
-- `docs/runbook/prod-deploy-smoke-test.md` § Phase 0.5.1
 
 ---
 
