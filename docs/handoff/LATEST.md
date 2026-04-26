@@ -1,3 +1,70 @@
+# Handoff — 2026-04-26 朝セッション: Build 37 提出不可判明 → Build 38 / v1.0.1 として再 upload
+
+## ✅ ダウングレード問題で Build 37 が提出不可と判明 → Build 38 / v1.0.1 修正 upload 完了 (PR #205 merge)
+
+前 handoff で「Build 37 / v0.1.2 を App Store Connect upload 完了、ユーザー手動で提出」と記録したが、ユーザーが App Store Connect 確認時に **「iOSアプリ バージョン 1.0 配信準備完了」** が表示されることを共有。Apple は新 release > 旧 release (semver) を必須とするため v0.1.2 < v1.0 でダウングレード扱い、Build 37 は提出不可と判明。Build 38 / v1.0.1 として再 bump + upload を実行し、提出可能な状態にした。
+
+### セッション成果サマリ
+
+| PR | 内容 | merge 順 |
+|----|------|----------|
+| **#205 (merged)** | Build 38 / v1.0.1 bump (project.yml 0.1.2 → 1.0.1 + pbxproj sync) | 1 |
+
+### 主要判断のハイライト
+
+- **App Store Connect 上の現行配信中バージョン = v1.0 確定**: Image #5 「iOSアプリ バージョン 1.0 配信準備完了」と App Review 履歴 4/16 「iOS 1.0 審査完了」で確認。memory `project_carenote_app_review.md` の「Build 35 = v0.1.0」記録は**誤り**で、正しくは v1.0 で配信中
+- **ダウングレード回避ルールを memory に追加**: Apple は新リリース > 旧リリース (semver) を必須とするため、ダウングレードは App Store Connect で受付不可 / App Review でリジェクト。MARKETING_VERSION bump 時は必ず App Store Connect 側の現行 release version を**実画面で確認** (推測ではなく Image スクリーンショットや「履歴」セクションで確認)
+- **Build 38 / v1.0.1 として再 bump**: project.yml の MARKETING_VERSION 0.1.2 → 1.0.1 (現行 v1.0 からの patch bump)、CURRENT_PROJECT_VERSION 37 → 38、xcodegen で pbxproj sync。PR #205 軽量レビューで merge → `./scripts/upload-testflight.sh 38` で `Uploaded CareNote` + `EXPORT SUCCEEDED`
+- **暗号化書類は Build 37 確認時に既に保存済**: ユーザーが画面で「標準的な暗号化アルゴリズム」+「フランス配信なし」を選択 → exempt 判定 (CareNote は HTTPS / Firebase / TLS など Apple OS 内蔵スタックのみ使用、独自暗号化なし)。Build 38 提出時にも同選択が流用される
+
+### 実装実績
+
+- **変更ファイル**: 2 ファイル / +6/-6 (PR #205、project.yml + pbxproj)
+- **TestFlight upload**: Build 38 / v1.0.1、`Uploaded CareNote` + `EXPORT SUCCEEDED` (Firebase Firestore 系 dSYM 欠損 warning は既知、blocker なし)
+- **memory 訂正**: `~/.claude/memory/project_carenote_app_review.md` で Build 別 version 表を訂正 (Build 21-35 = v1.0 / Build 36 = v0.1.1 / Build 37 = v0.1.2 (提出不可) / Build 38 = v1.0.1 (提出予定)) + ダウングレード回避ルール追加
+
+### Issue Net 変化
+
+セッション開始時 open **7** → 起票 0 / close 0 → 終了時 open **7** (net **0**、Build 38 upload はリリース工程の一部で Issue 管理外)
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **memory の事実関係は実画面・実データで再検証する**: 私が「Build 35 = v0.1.0」と memory に記載していたが、実際は v1.0 だった。原因は不明 (upload-testflight.sh の挙動 or 過去の手動変更)。**memory を信頼する前に App Store Connect の実画面で確認する習慣** が必要。今後 MARKETING_VERSION bump 時は提出前に「履歴」or「アプリ情報」で現行 version を必ず実画面確認する
+2. **「完全着地」フローの最後で Apple 側の制約を再確認**: 実装 → bump → upload まで自動化されているが、App Store Connect への提出 = Apple 側のルール (semver 順序、metadata、デモアカウント) で reject されるリスク。提出前に **memory の「次回審査時の留意点」チェックリスト** を必ず確認する
+3. **ユーザー画面共有が最も信頼できる事実源**: 私の context にない情報をユーザー画面スクリーンショットで共有してもらうことで、handoff/memory の誤記録を補正できた。今後も「これスクショ送って」を躊躇しない
+4. **暗号化書類の質問は exempt なら毎回スキップ可能**: Info.plist に `ITSAppUsesNonExemptEncryption: false` を追加すれば次回 upload 以降の暗号化質問が省略される。本セッションでは未対応 (任意改善、別 PR で検討候補)
+
+### CI の現状
+
+- main `3bd38ad` (PR #205 merge 後): Pre-merge iOS Tests green (sha 9095693)
+- Build 37 upload (PR #203、4/26 早朝) と Build 38 upload (PR #205、本セッション) の両方が App Store Connect に存在 (Build 37 は提出されないまま 90 日で expire 予定)
+
+### 次セッション推奨アクション (優先順)
+
+「完全着地」残作業はユーザー手動の Apple 提出フロー。次セッション着手不要、ユーザー作業完了後の状況確認から再開。
+
+1. **🔥 Build 38 / v1.0.1 App Review 提出 (ユーザー手動、本日 or 翌日)**:
+   - App Store Connect で Build 38 processing 完了 (10-30 分) を待つ
+   - 左サイドバー「iOSアプリ +」→ 新バージョン枠「**1.0.1**」作成
+   - 「ビルド」セクションで Build 38 (v1.0.1) を選択
+   - リリースノート記入例: 「アカウント引き継ぎ機能 (管理者向け)、削除動作の改善、エラー表示の改善」
+   - スクリーンショット・プロモーションテキストは前回 (1.0) 流用可
+   - **デモアカウント `demo-reviewer@carenote.jp` whitelist 維持確認** (Firestore Console で `tenants/279/whitelist` を提出前に確認)
+   - 「App Review に提出」
+2. **App Review 通過後 Unlisted release (ユーザー手動、1-3 日後)**: 通過 → App Store Connect で Build 38 を Unlisted release。**完全着地達成**
+3. **Issue #111 Phase 0.9 close 判断**: Build 38 配布後に新メンバー (`@279279.net`) を 1 名招待し allowedDomains 自動加入 + admin UI でアカウント引き継ぎ self-service の実機 smoke 完了 → close
+4. **Build 37 (v0.1.2) の取り扱い**: 提出されないまま 90 日で TestFlight expire。明示的削除は不要 (Apple 側で自動)
+5. **Info.plist `ITSAppUsesNonExemptEncryption: false` 追加** (任意): 次回 upload 以降の暗号化質問を省略。`project.yml` の `Info.plist` 設定に追加する別 PR
+6. **#192 Phase B/C** (Cloud Storage orphan cleanup) / **#178 Stage 2 GHA + WIF** / **#105 deleteAccount E2E** / **#92 / #90 Guest Tenant** / **#65 Apple × Google account link**
+
+### 関連リンク
+
+- [PR #205 merged](https://github.com/system-279/carenote-ios/pull/205) — Build 38 / v1.0.1 bump (ダウングレード回避)
+- `~/.claude/memory/project_carenote_app_review.md` (グローバル) — Build 別 version 表訂正 + ダウングレード回避ルール追加
+- 前 handoff (2026-04-26 早朝、Build 37 / v0.1.2 upload 時点) は本セッションの直前にある
+
+---
+
 # Handoff — 2026-04-26 早朝セッション: 「完全着地」フロー Phase B 完遂 + Build 37 / v0.1.2 TestFlight upload
 
 ## ✅ Issue #201 close (PR #202 merge) + Build 37 release bump (PR #203 merge) + TestFlight upload 完了
