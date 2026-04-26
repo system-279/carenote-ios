@@ -1,3 +1,76 @@
+# Handoff — 2026-04-27 続報セッション 2: Phase 0.9 (allowedDomains) 状態確認 + Issue #111 close 条件明確化
+
+## ✅ Phase 0.9 prod 設定 (2026-04-23 完了済) を再確認 + 実機 smoke test を社員ジョイン待ちでポストポーン継続
+
+ユーザーから「内部のアプリリンクを知る社員はテナント内のドメインなら誰でも入れるか?」の確認質問を受け、Issue #111 (Phase 0.9: allowedDomains 有効化) を再評価。RUNBOOK の実施ログから prod 設定が **2026-04-23 21:00 JST に完了済** であること、かつ前提フェーズ (Phase -1/0/0.5/1/Node 22) もすべて prod deploy 済であることを確認。残作業は実機 smoke test の AC 検証のみと判明。
+
+read-only verify で prod 技術設定の健全性 (`allowedDomains = ["279279.net"]` 維持 / `beforeSignIn` Cloud Function ACTIVE / 直近 7d エラー 0) を確認。実機 smoke test は新規 `@279279.net` 社員ジョイン時に自然観測する方針 (B2 ポストポーン) を確定し、Issue #111 に close 条件を明示してコメント追記、open 維持。あわせてユーザー質問「ホワイトリストの概念がなくなる?」に対し、`functions/index.js:41-73` の `beforeSignIn` 分岐確認結果から「whitelist は admin 任命・例外管理のために必須として残存、運用上の変化は一般社員が whitelist に記録されなくなる点」を明確化。
+
+### セッション成果サマリ
+
+| 変更 | リポジトリ | 内容 | 状態 |
+|----|----------|------|------|
+| **本 PR** | `system-279/carenote-ios` | `docs/runbook/phase-0-9-allowed-domains.md` 実施ログに 2026-04-27 確認エントリ追加 + `docs/handoff/LATEST.md` 続報セッション 2 追記 | 🔵 open |
+| **GitHub Issue #111** | `system-279/carenote-ios` | prod 設定健全性確認 + close 条件明確化コメント | コメント追加 |
+| **memory PR (別 push)** | `~/.claude` | `memory/project_carenote_app_review.md` に whitelist 運用変化セクション追加 | 後続 push |
+
+### 主要判断のハイライト
+
+- **「設定が未完了」と誤認していた状況を訂正**: ユーザー側で「ドメインだけで入れる状態にしたい」「まだできていないことに驚き」とのフィードバック。Issue #111 が open のため未完了と推定して `/impl-plan` 起動 → 実態は prod 設定 2026-04-23 完了済、Issue が open のままだったのは実機 smoke test 待ちのため。Issue タイトル「Phase 0.9: prod allowedDomains 有効化」が AC 全部を含む粒度のため、ステータス把握に runbook 実施ログまで遡る必要があった（次世代教訓: catchup で Issue タイトルだけでなく関連 RUNBOOK の実施ログまで遡る）
+- **B2 ポストポーン継続を判定**: A1 (whitelist 未登録 `@279279.net` 社員のジョイン予定あり) + B2 (社員ジョイン待ち) を選択。能動テスト用アカウント `test-phase09@279279.net` 発行案 (B プラン) は採用せず、「次回新規社員ジョイン時に自然観測」が運用上のオーバーヘッド最小と判断。Issue #111 を open 維持し再開トリガーを RUNBOOK に明記
+- **whitelist 概念は廃止せず併存**: ユーザーから「もはやホワイトリストという概念がなくなる?」の確認質問あり。`functions/index.js:41-73` の `beforeSignIn` 分岐確認の結果、whitelist は admin 権限付与・例外メンバー追加・権限変更のために必須として残存。allowedDomains 経由は強制的に `role: "member"`、admin 任命には依然として whitelist が必要。運用上の変化は「一般 `@279279.net` 社員は whitelist に記録されず Auth users にしか存在しない → 全メンバー一覧は Auth users API 経由で集計」
+- **prod read-only verify はユーザー明示承認後に実行**: CLAUDE.md MUST に従い、prod project ID を含むコマンド (Firestore GET + Cloud Logging) はユーザー明示承認 (「実行承認」) を取得した後にのみ実行。書き込み操作は一切なし
+
+### 実装実績
+
+- **変更ファイル**: 2 ファイル (carenote-ios) + 1 ファイル (~/.claude memory)
+  - `docs/runbook/phase-0-9-allowed-domains.md` — 実施ログ「2026-04-27 22:30 JST」セクション追記 (+45 行、健全性確認結果 + close 条件 + 観測コマンド 3 種)
+  - `docs/handoff/LATEST.md` — 本セッション handoff を先頭に追加
+  - `~/.claude/memory/project_carenote_app_review.md` — 「テナント加入動線 (allowedDomains + whitelist 併存設計)」セクション新設
+- **prod 操作**: read-only 2 件 (Firestore GET + Cloud Logging) のみ、書き込みなし
+- **GitHub Issue 操作**: #111 にコメント追加、open 維持
+- **iOS コード変更**: なし (ドキュメント + memory のみ)
+
+### Issue Net 計測
+
+| 開始時 | 終了時 | Net |
+|--------|--------|-----|
+| 7 件 (#192/#178/#111/#105/#92/#90/#65) | 7 件 (同上) | **0** |
+
+> **Net 0 の意味**: Issue #111 は close 条件を明確化したコメント追記、open 継続 (B2 ポストポーン)。新規 Issue 起票なし、close なし。triage 基準を満たす新規バグ発見なし
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **Issue open = 未着手 と即断しない**: Issue タイトルが大粒度な場合、prod 設定は完了していて AC 検証だけ pending、というケースがある。catchup の段階で Issue タイトルだけ見るのではなく、関連 RUNBOOK の実施ログまで遡って状態を把握する。今回 Issue #111「Phase 0.9 有効化」は実態が「設定完了 + smoke test 待ち」だった
+2. **ポストポーン Issue は再開トリガーを「機械的判定可能」に**: 「次回ジョイン時」だけだと曖昧 → 「Cloud Logging で新規 `@279279.net` の `beforeSignIn` 成功ログが出現した時点」のような自動検出可能な signal を併記する。今回は RUNBOOK 実施ログに観測コマンド 3 種を埋め込み、社員ジョイン後にコピペで実行できる状態にした
+3. **whitelist 廃止と聞かれたら「役割が変わる」と答える**: allowedDomains 有効化で「一般 member は whitelist 不要」になるが、admin 任命と例外管理には引き続き必須。`beforeSignIn` の分岐 (whitelist → allowedDomains → Apple → deny) は whitelist が先に評価されるため、admin の role 指定は whitelist 経由のみ
+4. **「メンバー一覧」の所在変化を運用ドキュメントに反映**: allowedDomains 有効化後、一般 `@279279.net` 社員は whitelist に痕跡を残さず Firebase Auth users にしか存在しない。今後「メンバー一覧」が必要なら Auth users API で集計する設計が必要 → 別 Issue 起票候補 (要件次第)
+
+### CI の現状
+
+- main `efdaf3b` (PR #209 merge 後): clean
+- 本セッションは documents のみのため CI 影響なし
+
+### 次セッション推奨アクション (優先順)
+
+1. **memory PR (~/.claude) push + merge**: `memory/project_carenote_app_review.md` の Phase 0.9 状態 + whitelist 運用変化セクション追記
+2. **新規 `@279279.net` 社員ジョイン時の Cloud Logging 観測 + Issue #111 close**: 社員初回ログイン後 24h 以内に RUNBOOK の close 条件 4 項目を確認 → Issue close
+3. **Build 38 配信後の admin UI smoke test**: admin UI でアカウント引き継ぎ self-service 実機確認 (Phase B 機能の本番検証、前 handoff の宿題)
+4. **既存 Issue 群** (#192 / #178 / #105 / #92 / #90 / #65): 当面は smoke 結果次第、優先度低
+5. **Info.plist `ITSAppUsesNonExemptEncryption: false` 追加** (任意、別 PR、前 handoff の宿題)
+6. **Build 37 (v0.1.2) 取り扱い**: 90 日で TestFlight 自動 expire (明示削除不要、前 handoff の宿題)
+
+### 関連リンク
+
+- [Issue #111](https://github.com/system-279/carenote-ios/issues/111) — Phase 0.9: prod tenants/279.allowedDomains 有効化 (open 維持、close 条件本セッションで明確化)
+- [docs/runbook/phase-0-9-allowed-domains.md](../runbook/phase-0-9-allowed-domains.md) — Phase 0.9 RUNBOOK (実施ログに 2026-04-27 確認エントリ追加)
+- [ADR-007 Guest Tenant for Apple Sign-In](../adr/ADR-007-guest-tenant-for-apple-signin.md) — Apple Sign-In Guest Tenant 設計 (allowedDomains の判定優先順)
+- [ADR-005 Auth Blocking Function](../adr/ADR-005-auth-blocking-function.md) — beforeSignIn 全体設計
+- `functions/index.js:41-73` — beforeSignIn の whitelist + allowedDomains 分岐実装
+- `~/.claude/memory/project_carenote_app_review.md` (グローバル) — Phase 0.9 状態 + whitelist 運用変化セクション
+
+---
+
 # Handoff — 2026-04-27 続報セッション: Build 38 / v1.0.1 APPROVED → Unlisted 配信開始
 
 ## ✅ Build 38 / v1.0.1 が App Review 通過 → Unlisted release 完了 + memory に Unlisted 新版仕様を整理

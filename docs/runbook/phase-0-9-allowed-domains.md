@@ -296,3 +296,47 @@ rollback 後、`beforeSignIn` は次回実行時に Firestore を都度読み取
 - 24h 監視: 自社単独フェーズで短縮運用、`beforeSignIn` のエラー急増は自社ログインで即検知する前提
 - 運用基盤: Stage 2 GitHub Actions + Workload Identity Federation は follow-up Issue で整備（ADR-009 参照）
 
+### 2026-04-27 22:30 JST: prod 設定健全性 read-only verify + B2 ポストポーン継続判定
+
+- 実施者: system-279
+- きっかけ: ユーザーから「内部のアプリリンクを知る社員はテナント内のドメインなら誰でも入れるか?」確認、Issue #111 が open のため未完了と推定して再評価 → 実態は prod 設定 2026-04-23 完了済、実機 smoke test だけが pending と判明
+- 確認内容（read-only、ユーザー明示承認後に実行）:
+  - prod `tenants/279.allowedDomains` = `["279279.net"]` 維持確認（Firestore REST API GET）
+  - `tenants/279` フィールド構成 = `["allowedDomains", "createdAt", "name"]`
+  - `beforeSignIn` Cloud Function = ACTIVE / GEN_2（`gcloud functions list`）
+  - Cloud Logging エラー: 直近 7d で **0 件**
+  - 直近のログイン試行: 2026-04-24 15:21 JST までエラーなし（設定後 18h 時点で実ログインあり、正常）
+- 判定: prod 技術設定は完全に健全、Build 38 / v1.0.1 配信中の今もエラーなし
+- 残作業 = Issue #111 close 条件:
+  - [ ] 新規 `@279279.net` 社員が初回 Google Sign-In 成功（Build 38 / v1.0.1 配信中の Unlisted URL から取得）
+  - [ ] Cloud Logging で `beforeSignIn` の allowedDomains match 経路を確認
+  - [ ] Firebase Auth に当該 user の `customClaims.tenantId === "279"` / `role === "member"` 反映確認
+  - [ ] `tenants/279/whitelist` に当該 entry が存在しないこと（allowedDomains 経由を担保）
+- 方針: A1 (whitelist 未登録の `@279279.net` 社員ジョイン予定者あり) + B2 (社員ジョイン待ち) でポストポーン継続。能動テスト用アカウント発行は採用せず、自然観測する
+- 再開トリガー: 新規 `@279279.net` 社員のオンボーディング発生時（social signal: 「社員が増えた」「アカウント発行した」等の発言、または Cloud Logging で新規 `@279279.net` の `beforeSignIn` 成功ログ出現）
+- 観測コマンド（社員初回ログイン後 24h 以内に実行）:
+  ```bash
+  TOKEN=$(CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud auth print-access-token)
+
+  # 1. beforeSignIn の最新ログ（allowedDomains match 経路を確認）
+  CLOUDSDK_ACTIVE_CONFIG_NAME=carenote-prod gcloud logging read \
+    'resource.type="cloud_run_revision" AND resource.labels.service_name="beforesignin"' \
+    --project=carenote-prod-279 --limit=10 --freshness=24h \
+    --format='value(timestamp,severity,jsonPayload.message)'
+
+  # 2. Auth user の custom claim 確認（社員のメール指定）
+  curl -sS -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -H "x-goog-user-project: carenote-prod-279" \
+    "https://identitytoolkit.googleapis.com/v1/projects/carenote-prod-279/accounts:lookup" \
+    -d '{"email":["新規社員のメール"]}'
+
+  # 3. whitelist に当該 entry がないこと確認（allowedDomains 経由担保）
+  curl -sS -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    "https://firestore.googleapis.com/v1/projects/carenote-prod-279/databases/(default)/documents/tenants/279:runQuery" \
+    -d '{"structuredQuery":{"from":[{"collectionId":"whitelist"}],"where":{"fieldFilter":{"field":{"fieldPath":"email"},"op":"EQUAL","value":{"stringValue":"新規社員のメール"}}}}}'
+  ```
+
