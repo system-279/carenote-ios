@@ -1,3 +1,80 @@
+# Handoff — 2026-07-01 セッション: README 刷新 (AI 引き継ぎ可能なアーキテクチャ設計を front-load)
+
+## ✅ README を readme-pro 原則で刷新し AI 引き継ぎ可能な状態を構築 (PR #213 merged)
+
+catchup で「即着手 = 0 件 / 条件待ち 4 件」の idle 判定が出た状態から、ユーザー質問「最新の技術ドキュメントについてマニュアルサイトもしくはドキュメントサイトはつくってましたか？」を起点に docs/ の Web 公開状況を調査。`docs/*.html` は Firebase Hosting `hosting/public/` に含まれず未公開、GitHub Pages も未設定と判明。「マニュアルサイト/ドキュメントサイトを別立てする」代替として **GitHub 上の Markdown レンダリング + README を hub 化する方針** をユーザーが選択 → `/readme-pro` スキルで詳細設計を README に front-load。PR #213 (docs/readme-pro-architecture-handoff → main) を作成 → ユーザー明示認可「PR #213 マージして」で squash merge 完了、local main も `origin/main` と fast-forward 同期済。
+
+### セッション成果サマリ
+
+| PR | リポジトリ | 内容 | 状態 |
+|----|----------|------|------|
+| **#213** | `system-279/carenote-ios` | README.md 全面刷新 (+246/-51、270 行) — Mermaid 3 図 (システム構成 / 録音〜文字起こしフロー / 認証・多テナントフロー) + AI 引き継ぎセクション + ADR 全 10 件 / Runbook 3 件索引 + 禁止事項 7 項目 front-load | 🟢 **merged** (squash, cf500d7) |
+
+### 主要判断のハイライト
+
+- **「マニュアルサイト新設」ではなく README を hub 化する方針を採用**: リポジトリが PUBLIC で `docs/adr/*.md` `docs/runbook/*.md` `docs/handoff/LATEST.md` は既に GitHub 上でレンダリング可能。追加インフラ (Firebase Hosting 拡張 / GitHub Pages 有効化) なしで README を索引化するだけで発見性の問題は解決可能と判定。HTML 版 (`docs/*.html`) は GitHub では raw ソースしか表示されないため今回は対象外
+- **readme-pro 原則 (Less is more + linked depth + front-loading) の忠実な適用**: 270 行 (< 300 目標) に収め、詳細は ADR/Runbook/CLAUDE.md へリンク。装飾絵文字排除、GitHub Alerts は本当に必要な IMPORTANT 1 個のみ。Mermaid 3 図は「サービス 3+ で非同期通信あり」条件を満たすため採用
+- **AI 引き継ぎセクションを明示的に新設**: ユーザー要望「AIへアーキテクチャ引き継ぎ可能な状況にしてください」に応じ、Claude Code / Codex 等の LLM が本プロジェクトを 5-10 分で把握するための読み込み順を 6 ステップで明示 (CLAUDE.md → README architecture → ADR → handoff → runbook → ソース)。`/catchup` にも言及
+- **feature ブランチ + PR フロー厳守**: CRITICAL 4 原則 §4 (main 直 push 禁止) に従い `docs/readme-pro-architecture-handoff` を切ってから編集開始。commit → push → PR → 明示認可 → squash merge → `origin/main` 同期の順で実行
+- **PR 承認は番号単位明示認可を取得**: ユーザーから「PR #213 マージして」の具体的認可を取得後に squash merge 実行 (CRITICAL 4 原則 §3 準拠)
+
+### 実装実績
+
+- **変更ファイル**: 1 ファイル (README.md、+246/-51、270 行に収束)
+- **追加された Mermaid 図**: 3 種
+  - システム構成 (flowchart TB) — iOS / Firebase / GCP の 3 subgraph、Google-Apple Sign-In + WIF + Vertex AI の全経路可視化
+  - 録音〜文字起こしデータフロー (sequenceDiagram) — User → App → SwiftData → Cloud Storage → Gemini → Firestore
+  - 認証・多テナントフロー (sequenceDiagram) — Sign-In → Firebase Auth → beforeSignIn の分岐 (allowedDomains / Guest Tenant)
+- **追加された索引**: ADR 10 件 (1 行サマリ + 影響レイヤー付き) + Runbook 3 件 (状態付き)
+- **front-load された禁止事項**: 7 項目 (tenantId ハードコーディング / SA key 同梱 / 音声 Firestore 保存 / thinkingBudget 非 0 / Gemini 3 Flash 使用 / @Query 直接使用 / prod 未確認操作)
+- **iOS コード変更**: なし (ドキュメントのみ)
+- **prod 操作**: なし (Firebase / GCP 触らず)
+
+### Issue Net 計測
+
+| 開始時 | 終了時 | Net |
+|--------|--------|-----|
+| 7 件 (#192/#178/#111/#105/#92/#90/#65) | 7 件 (同上) | **0** |
+
+> **Net 0 の意味**: 本セッションは README ドキュメント刷新のみ。実装系 Issue 着手なし、新規 Issue 起票なし (triage 基準を満たす新規バグ発見なし)。既存 Issue の状態変化なし
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **「サイトを作る」の前に「既に PUBLIC で見える状態」を確認**: docs/*.md は GitHub 上で既にレンダリング可能だったのに「サイト構築」の発想に飛びかけた。README を索引化するだけで発見性の 90% は解決するケースがある。追加インフラを検討する前に「今の PUBLIC 資産で解決できないか」を先に確認
+2. **readme-pro の Less is more は「情報を減らす」ではなく「front-load + linked depth」**: 270 行に収めつつアーキテクチャ 3 図 + ADR 10 件索引 + 禁止事項 7 項目を含められたのは、詳細を CLAUDE.md / ADR / Runbook へリンクで委譲したから。README 自体には「次のアクション」への最短経路だけ残す
+3. **AI 引き継ぎのための README パターン**: 「CLAUDE.md → README architecture → ADR → handoff → runbook → ソース」の読み込み順を明示的に書くと、AI が初回起動時にコンテキスト構築コストを大幅に削減できる。今後の新規リポジトリ立ち上げ時のテンプレート化候補
+4. **Mermaid 図採用判定は「サービス 3+ で非同期」条件で機械化**: 本 README は iOS + Firebase + GCP の 3 系統 + Auth Blocking + Callable Function の非同期があるため採用。「なんとなく図があった方が」で描くと readme-pro セルフチェック「装飾排除」に引っかかる
+
+### CI の現状
+
+- main `cf500d7` (PR #213 merge 後): README のみ変更のため CI 影響なし (Markdown のみ変更で iOS Tests workflow は発火せず)
+- 前回 iOS Tests CI: main `3bd38ad` (Build 38 / v1.0.1 bump) で green (22m42s、2026-04-26T12:43:50Z)
+
+### 次セッション推奨アクション
+
+**即着手なし、条件待ち 4 件 (前 handoff から変化なし):**
+
+1. **Issue #111 close 判断** — trigger: Cloud Logging で新規 `@279279.net` の `beforeSignIn` 成功ログ出現 / 社員ジョイン報告 → RUNBOOK 観測コマンド 3 種実行 → close 条件 6 項目確認 → Issue close
+2. **Build 38 admin UI smoke test** — trigger: 社内実機 (Build 38 自動更新済) で admin UI 動線を実行できる時点 → admin UI でアカウント引き継ぎ self-service を実機確認
+3. **Build 37 (v0.1.2) TestFlight 自動 expire** — trigger: upload から 90 日経過 (2026-07 頃) → 明示操作不要 (自動 expire)
+4. **新規社員 @279279.net オンボーディング時の allowedDomains 検証** — trigger: 新規社員ジョイン → 初回 Google Sign-In → customClaims / whitelist 状態確認
+
+**却下候補 (記録のみ、包括指示の対象外):**
+
+- Issue #192 / #178 / #105 / #92 / #90 / #65 — すべて enhancement、起点は decision-maker 領分
+- `Info.plist ITSAppUsesNonExemptEncryption: false` 追加 — 任意改善、明示指示なし
+- `pre-push-quality-check.sh` cwd 認識 bug 修正 — グローバル hook 側、本プロジェクトスコープ外
+- HTML 版 (`docs/*.html`) の Web 公開 — Firebase Hosting 拡張 or GitHub Pages 有効化が必要、decision-maker 判断
+- ケアマネ向け利用マニュアルサイト新設 — 起点は decision-maker 領分、まず「必要か」判断が先
+
+### 関連リンク
+
+- [PR #213](https://github.com/system-279/carenote-ios/pull/213) — README AI 引き継ぎ対応 (merged, cf500d7)
+- [README.md](../../README.md) — 刷新後の最新版 (Mermaid 3 図 + AI 引き継ぎセクション + ADR 索引 + 禁止事項 front-load)
+- [readme-pro スキル](file:///Users/yyyhhh/.claude/skills/readme-pro/SKILL.md) — 適用したベストプラクティス原則
+
+---
+
 # Handoff — 2026-04-27 続報セッション 2: Phase 0.9 (allowedDomains) 状態確認 + Issue #111 close 条件明確化
 
 ## ✅ Phase 0.9 prod 設定 (2026-04-23 完了済) を再確認 + 実機 smoke test を社員ジョイン待ちでポストポーン継続
