@@ -45,6 +45,9 @@ CareNote/
 
 ## Cloud Services
 - **文字起こし**: Vertex AI Gemini 3.5 Flash (`gemini-3.5-flash`, asia-northeast1, `thinkingLevel: minimal`)（[ADR-011](docs/adr/ADR-011-gemini-3-5-flash-migration.md)）
+  - モデル名・thinkingLevel は `platformConfig/vertexAi`（Firestore、テナント非依存、admin SDK 経由のみ書込）から解決する（[ADR-012](docs/adr/ADR-012-vertex-ai-config-firestore.md)）。iOS 側 `VertexAIConfigService` が allowlist 検証を通した値のみ採用し、未シード・不正値・fetch失敗時はアプリ同梱のハードコードデフォルトへソフトフェイルする
+  - allowlist（`CareNote/Models/VertexAIConfig.swift`）は本ファイル Prohibited の2制約（`thinkingLevel`/モデル）と常に整合させること。Prohibited を変更する場合は allowlist も同時に更新する
+  - 運営者によるモデル切替は `./scripts/set-vertex-ai-config.sh <MODEL_ID> <THINKING_LEVEL> [PROJECT]` で行う（App Store 審査不要）
 - **認証フロー**: Firebase Auth → WIF (STS token exchange) → SA Impersonation → GCP Access Token
 - **ストレージ**: Cloud Storage for Firebase (`{project}-audio` バケット)
 - **録音フォーマット**: M4A/AAC (44.1kHz, mono, high quality)
