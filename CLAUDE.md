@@ -44,7 +44,7 @@ CareNote/
 - セキュリティルール: テナントメンバーのみアクセス可
 
 ## Cloud Services
-- **文字起こし**: Vertex AI Gemini 2.5 Flash (`gemini-2.5-flash`, asia-northeast1)
+- **文字起こし**: Vertex AI Gemini 3.5 Flash (`gemini-3.5-flash`, asia-northeast1, `thinkingLevel: minimal`)（[ADR-011](docs/adr/ADR-011-gemini-3-5-flash-migration.md)）
 - **認証フロー**: Firebase Auth → WIF (STS token exchange) → SA Impersonation → GCP Access Token
 - **ストレージ**: Cloud Storage for Firebase (`{project}-audio` バケット)
 - **録音フォーマット**: M4A/AAC (44.1kHz, mono, high quality)
@@ -82,6 +82,6 @@ dev/prod で同一 GCP アカウントを使用するため、操作ミスで pr
 - `tenantId` ハードコーディング
 - サービスアカウントキー（JSON）のアプリ同梱
 - 音声ファイルの Firestore 保存（Cloud Storage を使用）
-- `thinkingBudget` を 0 以外に設定
+- `thinkingLevel` を `minimal` 以外に設定
 - Gemini 3 Flash / Preview モデルの使用
 - `@Query` の View 直接使用

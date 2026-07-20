@@ -3,6 +3,8 @@
 ## ステータス
 Accepted (2026-03-03)
 
+> **Superseded by [ADR-011](ADR-011-gemini-3-5-flash-migration.md)** (2026-07-21): Gemini 2.5 Flash の discontinue 予告（2026-10-16）に伴い Gemini 3.5 Flash へ移行。本 ADR は historical record として残置。
+
 ## コンテキスト
 録音音声の文字起こしサービスを選定する必要があった。仕様書 v3 では Cloud Speech-to-Text V2 を採用していた。
 

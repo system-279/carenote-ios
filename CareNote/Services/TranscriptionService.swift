@@ -47,7 +47,7 @@ struct VertexAIRequest: Codable, Sendable {
     }
 
     struct ThinkingConfig: Codable, Sendable {
-        let thinkingBudget: Int
+        let thinkingLevel: String
     }
 }
 
@@ -75,12 +75,12 @@ protocol Transcribing: Sendable {
 
 // MARK: - TranscriptionService
 
-/// Vertex AI Gemini 2.5 Flash transcription service (Spec S11).
+/// Vertex AI Gemini 3.5 Flash transcription service (Spec S11).
 actor TranscriptionService: Transcribing {
 
     // MARK: - Constants
 
-    private let model = "gemini-2.5-flash"
+    private let model = "gemini-3.5-flash"
     private let region = "asia-northeast1"
 
     /// デフォルトプロンプト（PresetTemplates の文字起こしプリセットを Single Source of Truth とする）
@@ -162,7 +162,7 @@ actor TranscriptionService: Transcribing {
             generationConfig: VertexAIRequest.GenerationConfig(
                 temperature: 0.0,
                 maxOutputTokens: 8192,
-                thinkingConfig: VertexAIRequest.ThinkingConfig(thinkingBudget: 0)
+                thinkingConfig: VertexAIRequest.ThinkingConfig(thinkingLevel: "minimal")
             )
         )
 
