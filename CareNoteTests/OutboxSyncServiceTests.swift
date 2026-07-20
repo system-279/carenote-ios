@@ -81,6 +81,7 @@ struct OutboxSyncServiceTests {
 
     private static func makeService(
         container: ModelContainer,
+        transcriptionModelId: String = VertexAIConfig.default.modelId,
         currentUidProvider: @escaping @Sendable @MainActor () -> String? = { "test-uid" }
     ) -> OutboxSyncService {
         let tokenProvider = StubAccessTokenProvider()
@@ -96,6 +97,7 @@ struct OutboxSyncServiceTests {
                 accessTokenProvider: tokenProvider
             ),
             tenantId: "test-tenant",
+            transcriptionModelId: transcriptionModelId,
             currentUidProvider: currentUidProvider
         )
     }
@@ -309,6 +311,35 @@ struct OutboxSyncServiceTests {
         #expect(result.createdBy == "uid-xyz")
     }
 
+    @Test @MainActor
+    func buildFirestoreRecordingでtranscriptionModelIdが注入した値になる() async throws {
+        let container = try makeTestModelContainer()
+        let context = container.mainContext
+        let service = Self.makeService(
+            container: container,
+            transcriptionModelId: "gemini-custom-flash",
+            currentUidProvider: { "uid-xyz" }
+        )
+
+        let recordingId = UUID()
+        let recording = RecordingRecord(
+            id: recordingId,
+            clientId: "client-1",
+            clientName: "テスト利用者",
+            scene: RecordingScene.visit.rawValue,
+            localAudioPath: "/tmp/test.m4a"
+        )
+        context.insert(recording)
+        try context.save()
+
+        let result = try await service.buildFirestoreRecording(
+            recordingId: recordingId,
+            gcsUri: "gs://test-bucket/test.m4a"
+        )
+
+        #expect(result.transcriptionModelId == "gemini-custom-flash")
+    }
+
     // MARK: - processItem 主経路テスト (issue #107 / I-Cdx-3)
     //
     // buildFirestoreRecording 直叩きテストは uid 変換ロジック単体を検証する。
@@ -334,6 +365,7 @@ struct OutboxSyncServiceTests {
             firestoreService: stubStore,
             transcriptionService: stubTranscriber,
             tenantId: "test-tenant",
+            transcriptionModelId: "gemini-custom-flash",
             currentUidProvider: { "test-uid-alpha" }
         )
 
@@ -361,6 +393,7 @@ struct OutboxSyncServiceTests {
         #expect(uploadCalls.first?.recordingId == recordingId.uuidString)
         #expect(createCalls.count == 1)
         #expect(createCalls.first?.createdBy == "test-uid-alpha")
+        #expect(createCalls.first?.transcriptionModelId == "gemini-custom-flash")
         #expect(transcribeCalls.count == 1)
         #expect(transcribeCalls.first?.audioGCSUri == "gs://test-bucket/expected.m4a")
     }

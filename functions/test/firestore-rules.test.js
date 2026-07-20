@@ -981,6 +981,105 @@ describe("migrationLogs 権限境界", () => {
   });
 });
 
+// ===== platformConfig: Vertex AI モデル設定 (ADR-012, テナント非依存トップレベル) =====
+
+describe("platformConfig 権限境界", () => {
+  async function seedVertexAiConfig() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context
+        .firestore()
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .set({
+          modelId: "gemini-3.5-flash",
+          thinkingLevel: "minimal",
+          updatedAt: new Date(),
+        });
+    });
+  }
+
+  it("認証済みメンバーは platformConfig を read できる", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "member-a",
+      memberAuth(TENANT_ID).token
+    ).firestore();
+    await assertSucceeds(
+      db.collection("platformConfig").doc("vertexAi").get()
+    );
+  });
+
+  it("認証済み admin も platformConfig を read できる", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertSucceeds(
+      db.collection("platformConfig").doc("vertexAi").get()
+    );
+  });
+
+  it("未認証ユーザーは platformConfig を read できない", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(
+      db.collection("platformConfig").doc("vertexAi").get()
+    );
+  });
+
+  it("admin でもクライアントからは platformConfig を作成できない (運営者スクリプト経由の admin SDK 専用)", async () => {
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .set({ modelId: "gemini-3.5-flash", thinkingLevel: "minimal" })
+    );
+  });
+
+  it("admin でも platformConfig を update できない", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .update({ modelId: "gemini-3-flash" })
+    );
+  });
+
+  it("admin でも platformConfig を delete できない", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db.collection("platformConfig").doc("vertexAi").delete()
+    );
+  });
+
+  it("member も当然 write できない", async () => {
+    const db = testEnv.authenticatedContext(
+      "member-a",
+      memberAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .set({ modelId: "gemini-3.5-flash", thinkingLevel: "minimal" })
+    );
+  });
+});
+
 // ===== Issue #116 follow-up: エッジケーステスト =====
 
 describe("エッジケース (Issue #116 follow-up)", () => {
