@@ -37,6 +37,8 @@ actor OutboxSyncService {
     private let firestoreService: any RecordingStoring
     private let transcriptionService: any Transcribing
     private let tenantId: String
+    /// 文字起こしに使用する Vertex AI モデル ID（ADR-012）。録音作成時に `FirestoreRecording.transcriptionModelId` として記録する。
+    private let transcriptionModelId: String
     // `@MainActor` 境界越えを型で表明。Firebase Auth singleton は MainActor 前提で
     // アクセスし、actor 内からは `await` で呼ぶことで data race 可能性を排除する
     // (issue #106)。
@@ -57,6 +59,7 @@ actor OutboxSyncService {
         firestoreService: any RecordingStoring,
         transcriptionService: any Transcribing,
         tenantId: String,
+        transcriptionModelId: String = VertexAIConfig.default.modelId,
         currentUidProvider: @escaping @Sendable @MainActor () -> String?
     ) {
         self.modelContainer = modelContainer
@@ -64,6 +67,7 @@ actor OutboxSyncService {
         self.firestoreService = firestoreService
         self.transcriptionService = transcriptionService
         self.tenantId = tenantId
+        self.transcriptionModelId = transcriptionModelId
         self.currentUidProvider = currentUidProvider
     }
 
@@ -380,7 +384,8 @@ actor OutboxSyncService {
             transcriptionStatus: TranscriptionStatus.processing.rawValue,
             createdBy: uid,
             createdAt: record.recordedAt,
-            updatedAt: Date()
+            updatedAt: Date(),
+            transcriptionModelId: transcriptionModelId
         )
     }
 

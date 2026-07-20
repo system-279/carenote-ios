@@ -84,6 +84,14 @@ protocol ClientManaging: Sendable {
     func deleteClient(tenantId: String, clientId: String) async throws
 }
 
+// MARK: - VertexAIConfigFetching
+
+/// `platformConfig/vertexAi`（テナント非依存、admin SDK 経由でのみ書込）から
+/// Vertex AI モデル設定を読み取るための protocol（ADR-012）。
+protocol VertexAIConfigFetching: Sendable {
+    func fetchVertexAIConfig() async throws -> VertexAIConfig?
+}
+
 // MARK: - TemplateManaging
 
 protocol TemplateManaging: Sendable {
@@ -96,7 +104,7 @@ protocol TemplateManaging: Sendable {
 // MARK: - FirestoreService
 
 /// Firestore CRUD service with multi-tenant structure: `tenants/{tenantId}/...`
-actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
+actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging, VertexAIConfigFetching {
 
     // MARK: - Properties
 
@@ -440,7 +448,8 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                 transcriptionStatus: data["transcriptionStatus"] as? String ?? TranscriptionStatus.pending.rawValue,
                 createdBy: data["createdBy"] as? String ?? "",
                 createdAt: createdAt,
-                updatedAt: updatedAt
+                updatedAt: updatedAt,
+                transcriptionModelId: data["transcriptionModelId"] as? String
             )
         } catch {
             throw FirestoreError.operationFailed(error)
@@ -475,9 +484,30 @@ actor FirestoreService: RecordingStoring, ClientManaging, TemplateManaging {
                     transcriptionStatus: data["transcriptionStatus"] as? String ?? TranscriptionStatus.pending.rawValue,
                     createdBy: data["createdBy"] as? String ?? "",
                     createdAt: createdAt,
-                    updatedAt: updatedAt
+                    updatedAt: updatedAt,
+                    transcriptionModelId: data["transcriptionModelId"] as? String
                 )
             }
+        } catch {
+            throw FirestoreError.operationFailed(error)
+        }
+    }
+
+    // MARK: - Platform Config
+
+    /// `platformConfig/vertexAi` を読み取る（テナント非依存、トップレベルコレクション）。
+    /// ドキュメント未作成 / フィールド欠損時は `nil` またはフィールド欠損のまま返し、
+    /// allowlist 検証とデフォルトへのフォールバックは呼び出し元 (`VertexAIConfigService`) の責務とする。
+    func fetchVertexAIConfig() async throws -> VertexAIConfig? {
+        do {
+            let document = try await db.collection("platformConfig").document("vertexAi").getDocument()
+            guard document.exists, let data = document.data() else {
+                return nil
+            }
+            return VertexAIConfig(
+                modelId: data["modelId"] as? String ?? "",
+                thinkingLevel: data["thinkingLevel"] as? String ?? ""
+            )
         } catch {
             throw FirestoreError.operationFailed(error)
         }

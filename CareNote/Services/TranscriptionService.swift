@@ -80,7 +80,6 @@ actor TranscriptionService: Transcribing {
 
     // MARK: - Constants
 
-    private let model = "gemini-3.5-flash"
     private let region = "asia-northeast1"
 
     /// デフォルトプロンプト（PresetTemplates の文字起こしプリセットを Single Source of Truth とする）
@@ -93,6 +92,10 @@ actor TranscriptionService: Transcribing {
     private let projectId: String
     private let accessTokenProvider: any AccessTokenProviding
     private let urlSession: URLSession
+    /// 文字起こしに使用する Vertex AI モデル ID（ADR-012、`platformConfig/vertexAi` 由来）。
+    private let model: String
+    /// Vertex AI thinking レベル（CLAUDE.md Prohibited: `minimal` 以外禁止）。
+    private let thinkingLevel: String
 
     // MARK: - Computed Properties
 
@@ -107,11 +110,15 @@ actor TranscriptionService: Transcribing {
     init(
         projectId: String,
         accessTokenProvider: any AccessTokenProviding,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = .shared,
+        model: String = "gemini-3.5-flash",
+        thinkingLevel: String = "minimal"
     ) {
         self.projectId = projectId
         self.accessTokenProvider = accessTokenProvider
         self.urlSession = urlSession
+        self.model = model
+        self.thinkingLevel = thinkingLevel
     }
 
     // MARK: - Public Methods
@@ -162,7 +169,7 @@ actor TranscriptionService: Transcribing {
             generationConfig: VertexAIRequest.GenerationConfig(
                 temperature: 0.0,
                 maxOutputTokens: 8192,
-                thinkingConfig: VertexAIRequest.ThinkingConfig(thinkingLevel: "minimal")
+                thinkingConfig: VertexAIRequest.ThinkingConfig(thinkingLevel: thinkingLevel)
             )
         )
 
