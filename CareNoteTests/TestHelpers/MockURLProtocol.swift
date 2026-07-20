@@ -21,7 +21,37 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    /// `URLSession` は `httpBody` を内部で `httpBodyStream` に変換してから
+    /// `URLProtocol` へ渡すことがある（Foundation の既知の挙動）。
+    /// そのままだと `startLoading()` 内で `request.httpBody` が `nil` になり、
+    /// リクエストボディを検証するテストが本来の挙動を観測できない。
+    /// ここで stream を読み戻して `httpBody` に復元する。
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        guard request.httpBody == nil, let bodyStream = request.httpBodyStream else {
+            return request
+        }
+
+        bodyStream.open()
+        defer { bodyStream.close() }
+
+        var data = Data()
+        let bufferSize = 4096
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
+        while bodyStream.hasBytesAvailable {
+            let bytesRead = bodyStream.read(&buffer, maxLength: bufferSize)
+            if bytesRead > 0 {
+                data.append(buffer, count: bytesRead)
+            } else {
+                break
+            }
+        }
+
+        var newRequest = request
+        newRequest.httpBodyStream = nil
+        newRequest.httpBody = data
+        return newRequest
+    }
 
     override func startLoading() {
         let urlString = request.url?.absoluteString ?? ""
