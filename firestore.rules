@@ -16,6 +16,14 @@ service cloud.firestore {
         && request.auth.token.role == 'admin';
     }
 
+    // プラットフォーム設定（ADR-012）。テナント非依存のトップレベルコレクション。
+    //   read  : 認証済みメンバーなら誰でも可（Vertex AI モデル設定はテナント間で共通、機微情報なし）
+    //   write : クライアントからは一切不可（運営者が admin SDK 経由スクリプトで直書き）
+    match /platformConfig/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     match /tenants/{tenantId} {
       // テナントドキュメント: メンバーは読み取り可、adminのみ書き込み可
       allow read: if isTenantMember(tenantId);
