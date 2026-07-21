@@ -655,6 +655,77 @@ describe("recordings 権限境界", () => {
           .update({ createdBy: "member-b" })
       );
     });
+
+    // ADR-012: transcriptionModelId は作成時のみ記録し、以後は不変。
+    it("member は transcriptionModelId を変更しない update は許可される", async () => {
+      await seedRecording(TENANT_ID, "r-model-keep", "member-a", {
+        transcriptionModelId: "gemini-3.5-flash",
+      });
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-keep")
+          .update({ transcription: "編集済みテキスト" })
+      );
+    });
+
+    it("member は transcriptionModelId を書き換える update を拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-model-rewrite", "member-a", {
+        transcriptionModelId: "gemini-3.5-flash",
+      });
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-rewrite")
+          .update({ transcriptionModelId: "gemini-4-flash" })
+      );
+    });
+
+    it("admin も client 経由の transcriptionModelId 変更 update は拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-model-admin-rewrite", "member-a", {
+        transcriptionModelId: "gemini-3.5-flash",
+      });
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-admin-rewrite")
+          .update({ transcriptionModelId: "gemini-4-flash" })
+      );
+    });
+
+    it("admin も transcriptionModelId 不在 recording に追加する update は拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-model-add", "member-a");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-add")
+          .update({ transcriptionModelId: "gemini-3.5-flash" })
+      );
+    });
   });
 
   describe("delete", () => {
@@ -977,6 +1048,105 @@ describe("migrationLogs 権限境界", () => {
         .collection("migrationLogs")
         .doc("log-delete")
         .delete()
+    );
+  });
+});
+
+// ===== platformConfig: Vertex AI モデル設定 (ADR-012, テナント非依存トップレベル) =====
+
+describe("platformConfig 権限境界", () => {
+  async function seedVertexAiConfig() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context
+        .firestore()
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .set({
+          modelId: "gemini-3.5-flash",
+          thinkingLevel: "minimal",
+          updatedAt: new Date(),
+        });
+    });
+  }
+
+  it("認証済みメンバーは platformConfig を read できる", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "member-a",
+      memberAuth(TENANT_ID).token
+    ).firestore();
+    await assertSucceeds(
+      db.collection("platformConfig").doc("vertexAi").get()
+    );
+  });
+
+  it("認証済み admin も platformConfig を read できる", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertSucceeds(
+      db.collection("platformConfig").doc("vertexAi").get()
+    );
+  });
+
+  it("未認証ユーザーは platformConfig を read できない", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(
+      db.collection("platformConfig").doc("vertexAi").get()
+    );
+  });
+
+  it("admin でもクライアントからは platformConfig を作成できない (運営者スクリプト経由の admin SDK 専用)", async () => {
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .set({ modelId: "gemini-3.5-flash", thinkingLevel: "minimal" })
+    );
+  });
+
+  it("admin でも platformConfig を update できない", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .update({ modelId: "gemini-3-flash" })
+    );
+  });
+
+  it("admin でも platformConfig を delete できない", async () => {
+    await seedVertexAiConfig();
+    const db = testEnv.authenticatedContext(
+      "admin-a",
+      adminAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db.collection("platformConfig").doc("vertexAi").delete()
+    );
+  });
+
+  it("member も当然 write できない", async () => {
+    const db = testEnv.authenticatedContext(
+      "member-a",
+      memberAuth(TENANT_ID).token
+    ).firestore();
+    await assertFails(
+      db
+        .collection("platformConfig")
+        .doc("vertexAi")
+        .set({ modelId: "gemini-3.5-flash", thinkingLevel: "minimal" })
     );
   });
 });

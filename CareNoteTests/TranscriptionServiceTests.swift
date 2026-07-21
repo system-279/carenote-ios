@@ -146,4 +146,41 @@ struct TranscriptionServiceTests {
             try await service.transcribe(audioGCSUri: "gs://bucket/audio.m4a")
         }
     }
+
+    @Test
+    func 注入したmodelとthinkingLevelがリクエストに反映される() async throws {
+        MockURLProtocol.setHandler(for: vertexAIURLKey) { request in
+            #expect(request.url?.absoluteString.contains("gemini-custom-flash") == true)
+
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let generationConfig = json["generationConfig"] as? [String: Any],
+               let thinkingConfig = generationConfig["thinkingConfig"] as? [String: Any] {
+                #expect(thinkingConfig["thinkingLevel"] as? String == "custom-level")
+            } else {
+                Issue.record("request body missing thinkingConfig.thinkingLevel")
+            }
+
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, makeVertexAIResponseJSON(text: "テスト"))
+        }
+        defer { MockURLProtocol.handlers.removeValue(forKey: vertexAIURLKey) }
+
+        let tokenProvider = MockAccessTokenProvider()
+        let service = TranscriptionService(
+            projectId: "test-project",
+            accessTokenProvider: tokenProvider,
+            urlSession: makeMockURLSession(),
+            model: "gemini-custom-flash",
+            thinkingLevel: "custom-level"
+        )
+
+        let result = try await service.transcribe(audioGCSUri: "gs://bucket/audio.m4a")
+        #expect(result == "テスト")
+    }
 }

@@ -22,6 +22,7 @@
 		3BD5BC7613B343D31D862160 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9CB37C87346E35793C32386 /* KeychainHelper.swift */; };
 		3F363AE7FF848C519FE40C7A /* AccountTransferViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24B525C492C30290B053980 /* AccountTransferViewModel.swift */; };
 		3F752F8424C4122A17EF1FEE /* PresetTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */; };
+		3FA7D6B4DCCA9DD5BAA72CC9 /* VertexAIConfigServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD036DFD0ED7C16AA936578 /* VertexAIConfigServiceTests.swift */; };
 		3FE937C69F2334F51FF60A32 /* TemplateListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 045FD4755BC7F09BF6967EB7 /* TemplateListViewModel.swift */; };
 		47FE4B218F49277FBB05F518 /* RecordingListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */; };
 		49EDC4D0E2DCC6A88931AC17 /* ClientSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFDE09543BDF9E6601F1F2A /* ClientSelectView.swift */; };
@@ -34,6 +35,7 @@
 		65E5E0CD5DBC914A92B91130 /* ClientSelectViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */; };
 		6B0117657090C55B8D4A4A43 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0201FF49E15F02E9E9054426 /* Assets.xcassets */; };
 		6DA2DDE0F90D3985BC3C5D17 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2848993801DEF66A676C25D /* AppEnvironment.swift */; };
+		7107BC2781815B999B4D00FB /* VertexAIConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 273BA835FAC9B8D3C2E96885 /* VertexAIConfigService.swift */; };
 		75D3B3D5ED8EB33EDC97B6D1 /* SwiftDataTestHelperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75F7694513195B13FC911A0 /* SwiftDataTestHelperTests.swift */; };
 		792F0B0FB46944FA0363CDC5 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43708B0DF054C4C514B8D58E /* AudioPlayerView.swift */; };
 		7CA851BF8A07B0D97F3903A3 /* RecordingConfirmViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C0F8FB680432239DF40DE4 /* RecordingConfirmViewModelTests.swift */; };
@@ -42,6 +44,7 @@
 		854789E2D53FE67EB38E7E4D /* ClientRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C66B8FD7F4EEDA2F428C0A1F /* ClientRepository.swift */; };
 		867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */; };
 		869A0B31A12596BAE1B9C956 /* TemplateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9CBCE04F87683C59768366C /* TemplateCreateView.swift */; };
+		88C68A247AF6811CCAFDC715 /* VertexAIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FF164DFD3D165CED028260 /* VertexAIConfig.swift */; };
 		8A4E94E3CD9A0B866817E387 /* FirestoreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D2B24492527E7C7CE59620 /* FirestoreModels.swift */; };
 		8F8930B68A64B56B8FF49023 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5145C7CB43880EF7C55A94B3 /* StorageService.swift */; };
 		94DF9E5A0CCD3408F6EC31B7 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036156B4FFB1416DCC51D265 /* AuthViewModel.swift */; };
@@ -104,6 +107,7 @@
 		1CEEA689FBC6B94B6C315907 /* CareNote.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CareNote.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D1751BC835BB28519295961 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		23C881A8F928E26F120A4C84 /* LocalDataCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDataCleaner.swift; sourceTree = "<group>"; };
+		273BA835FAC9B8D3C2E96885 /* VertexAIConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexAIConfigService.swift; sourceTree = "<group>"; };
 		2A76D8BBD11811BC4D741477 /* TemplateCreateViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateCreateViewModelTests.swift; sourceTree = "<group>"; };
 		2D764EF3D3EA6CDB7FD4A7B9 /* CareNoteTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CareNoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DD7DBB99EAE4823CA33FA82 /* ClientSelectViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSelectViewModelTests.swift; sourceTree = "<group>"; };
@@ -124,6 +128,7 @@
 		58D2B24492527E7C7CE59620 /* FirestoreModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreModels.swift; sourceTree = "<group>"; };
 		64D98898DABD5809A475A0C0 /* TransferOwnershipServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferOwnershipServiceTests.swift; sourceTree = "<group>"; };
 		6CCF73C9C8E3E2C08DD50815 /* ClientRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientRepositoryTests.swift; sourceTree = "<group>"; };
+		6FD036DFD0ED7C16AA936578 /* VertexAIConfigServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexAIConfigServiceTests.swift; sourceTree = "<group>"; };
 		7452B80D90D9172B77475447 /* ClientSelectViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSelectViewModel.swift; sourceTree = "<group>"; };
 		7BD5333C19B8D05EBA8B140B /* EnumStableIdentifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnumStableIdentifierTests.swift; sourceTree = "<group>"; };
 		7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataModels.swift; sourceTree = "<group>"; };
@@ -131,6 +136,7 @@
 		85290DC06C806F0EEF4298F0 /* AccountTransferViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTransferViewModelTests.swift; sourceTree = "<group>"; };
 		88B74F6BC7FCB2B9178B42F7 /* RecordingListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingListViewModelTests.swift; sourceTree = "<group>"; };
 		933487C9E5291192E20D3FD6 /* RecordingListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingListViewModel.swift; sourceTree = "<group>"; };
+		94FF164DFD3D165CED028260 /* VertexAIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexAIConfig.swift; sourceTree = "<group>"; };
 		95C67F09979A83A8D77ED023 /* MockURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockURLProtocol.swift; sourceTree = "<group>"; };
 		96464007F869DAE0DA555BA3 /* SwiftDataTestHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataTestHelper.swift; sourceTree = "<group>"; };
 		96BF9442D22A121622206F23 /* RecordingConfirmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingConfirmView.swift; sourceTree = "<group>"; };
@@ -233,6 +239,7 @@
 				5145C7CB43880EF7C55A94B3 /* StorageService.swift */,
 				CE80E23E3C3633F29AC0F0DA /* TranscriptionService.swift */,
 				CD847659B578124282BC38DB /* TransferOwnershipService.swift */,
+				273BA835FAC9B8D3C2E96885 /* VertexAIConfigService.swift */,
 				EC5C0A2EB369429A8FD3D891 /* WIFAuthService.swift */,
 			);
 			path = Services;
@@ -245,6 +252,7 @@
 				ECB12BF484200EAC264DAC63 /* PresetTemplates.swift */,
 				B19118D3C407ABA870A521B2 /* RecordingScene.swift */,
 				7C870BA88FAE7FE80BBF4DD2 /* SwiftDataModels.swift */,
+				94FF164DFD3D165CED028260 /* VertexAIConfig.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -327,6 +335,7 @@
 				E9B4E2778FEE530A1DC4DF06 /* TemplateListViewModelTests.swift */,
 				46A7E7E108F739F5871EB716 /* TranscriptionServiceTests.swift */,
 				64D98898DABD5809A475A0C0 /* TransferOwnershipServiceTests.swift */,
+				6FD036DFD0ED7C16AA936578 /* VertexAIConfigServiceTests.swift */,
 				4D437E580EA429317272B4F9 /* WIFAuthServiceTests.swift */,
 				88C79EF519A21CCDA8506A62 /* TestHelpers */,
 			);
@@ -552,6 +561,7 @@
 				FD8997F1B7751D73EDA8FD45 /* TemplateListViewModelTests.swift in Sources */,
 				CCA4CF007249D2BA99FD5315 /* TranscriptionServiceTests.swift in Sources */,
 				ED47579B2EE6DA52E42AD34D /* TransferOwnershipServiceTests.swift in Sources */,
+				3FA7D6B4DCCA9DD5BAA72CC9 /* VertexAIConfigServiceTests.swift in Sources */,
 				0902A03D28689676FBA5A55E /* WIFAuthServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -600,6 +610,8 @@
 				13A5A2945594CCE9F062EE03 /* TimeFormatting.swift in Sources */,
 				867BA544A9DB963182049D63 /* TranscriptionService.swift in Sources */,
 				F059E67D489FA04FC0A4A455 /* TransferOwnershipService.swift in Sources */,
+				88C68A247AF6811CCAFDC715 /* VertexAIConfig.swift in Sources */,
+				7107BC2781815B999B4D00FB /* VertexAIConfigService.swift in Sources */,
 				D68884E97DC6ABD4E1501E05 /* WIFAuthService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

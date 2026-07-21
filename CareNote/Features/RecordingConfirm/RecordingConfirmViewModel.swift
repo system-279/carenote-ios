@@ -23,7 +23,7 @@ final class RecordingConfirmViewModel {
     private let modelContext: ModelContext
     private let tenantId: String
     private let firestoreService: any TemplateManaging
-    private let syncServiceFactory: @Sendable (ModelContainer, String) -> OutboxSyncService
+    private let syncServiceFactory: @Sendable (ModelContainer, String) async -> OutboxSyncService
 
     init(
         audioURL: URL,
@@ -34,7 +34,7 @@ final class RecordingConfirmViewModel {
         modelContext: ModelContext,
         tenantId: String,
         firestoreService: any TemplateManaging = FirestoreService(),
-        syncServiceFactory: (@Sendable (ModelContainer, String) -> OutboxSyncService)? = nil
+        syncServiceFactory: (@Sendable (ModelContainer, String) async -> OutboxSyncService)? = nil
     ) {
         self.audioURL = audioURL
         self.clientId = clientId
@@ -47,17 +47,21 @@ final class RecordingConfirmViewModel {
         self.syncServiceFactory = syncServiceFactory ?? Self.defaultSyncServiceFactory
     }
 
-    private static let defaultSyncServiceFactory: @Sendable (ModelContainer, String) -> OutboxSyncService = { container, tenantId in
+    private static let defaultSyncServiceFactory: @Sendable (ModelContainer, String) async -> OutboxSyncService = { container, tenantId in
         let wifService = WIFAuthService()
+        let config = await VertexAIConfigService.shared.resolveConfig()
         return OutboxSyncService(
             modelContainer: container,
             storageService: StorageService(accessTokenProvider: wifService),
             firestoreService: FirestoreService(),
             transcriptionService: TranscriptionService(
                 projectId: AppConfig.gcpProject,
-                accessTokenProvider: wifService
+                accessTokenProvider: wifService,
+                model: config.modelId,
+                thinkingLevel: config.thinkingLevel
             ),
             tenantId: tenantId,
+            transcriptionModelId: config.modelId,
             currentUidProvider: { @MainActor in Auth.auth().currentUser?.uid }
         )
     }
@@ -148,7 +152,7 @@ final class RecordingConfirmViewModel {
             try modelContext.save()
 
             // 3. OutboxSyncService を生成して即時処理
-            let syncService = syncServiceFactory(modelContext.container, tenantId)
+            let syncService = await syncServiceFactory(modelContext.container, tenantId)
             try await syncService.processQueueImmediately()
         } catch {
             let detail: String

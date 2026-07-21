@@ -27,11 +27,13 @@ struct FirestoreRecording: Codable, Sendable, Identifiable {
     let createdBy: String
     let createdAt: Date
     let updatedAt: Date
+    /// 文字起こしに使用した Vertex AI モデル ID（ADR-012）。作成時のみ記録し、以後は不変。
+    let transcriptionModelId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, clientId, clientName, scene, recordedAt, durationSeconds
         case audioStoragePath, transcription, transcriptionStatus
-        case createdBy, createdAt, updatedAt
+        case createdBy, createdAt, updatedAt, transcriptionModelId
     }
 }
 
