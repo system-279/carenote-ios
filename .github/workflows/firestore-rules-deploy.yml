@@ -1,0 +1,72 @@
+name: Deploy Firestore Rules
+
+# ADR-013: dedicated WIF pool (github-actions-pool) + minimal-privilege SA
+# (gha-firestore-ops, roles/datastore.user + roles/firebaserules.admin only).
+# Does NOT reuse carenote-pool (ADR-002, app end-user WIF) to avoid the
+# wildcard impersonation binding on carenote-ios-client.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firestore-rules-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Firestore rules
+        run: |
+          set -euo pipefail
+          echo "Deploying firestore.rules to ${{ vars.GCP_PROJECT }} (environment: ${{ inputs.environment }})"
+          firebase deploy --only firestore:rules --project "${{ vars.GCP_PROJECT }}" --non-interactive
+
+      - name: Verify deployed ruleset (read back)
+        run: |
+          set -euo pipefail
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          RULESET_NAME=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firebaserules.googleapis.com/v1/projects/${{ vars.GCP_PROJECT }}/releases/cloud.firestore" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['rulesetName'])")
+          echo "Active ruleset after deploy: $RULESET_NAME"
+          if ! curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
+              "https://firebaserules.googleapis.com/v1/${RULESET_NAME}" \
+              | grep -q "platformConfig"; then
+            echo "::warning::Deployed ruleset does not mention 'platformConfig' — verify firestore.rules content if this is unexpected."
+          fi

@@ -1,0 +1,217 @@
+name: Firestore Operations
+
+# ADR-013 / Issue #178: 代表的な Firestore ドキュメント操作を GitHub Actions +
+# Workload Identity Federation 経由で実行する。firestore.rules のデプロイは
+# firestore-rules-deploy.yml に分離（影響度が違うため）。
+#
+# 全 operation は: (1) 入力を正規表現でバリデーション (2) jq で JSON body 生成
+# (3) curl --fail-with-body で書込み (4) 書込み後に GET で期待値照合、という
+# 共通パターンに従う。admin-role-grant/revoke は Identity Toolkit の custom
+# claim 直接書換えではなく、whitelist ドキュメントの role フィールド書換えとして
+# 実装する（functions/index.js の beforeSignIn が whitelist から role を導出する
+# ため、roles/datastore.user だけで完結し roles/firebaseauth.admin が不要になる）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      operation:
+        description: 'Operation to perform'
+        required: true
+        type: choice
+        options:
+          - set-vertex-ai-config
+          - set-allowed-domains
+          - whitelist-add
+          - whitelist-remove
+          - admin-role-grant
+          - admin-role-revoke
+      tenant_id:
+        description: 'Tenant ID (required for tenant-scoped operations, not set-vertex-ai-config)'
+        required: false
+        type: string
+      model_id:
+        description: '[set-vertex-ai-config] Vertex AI model ID (must also pass the iOS-side allowlist, see ADR-012)'
+        required: false
+        type: string
+      thinking_level:
+        description: '[set-vertex-ai-config] thinkingLevel (must be "minimal" per CLAUDE.md Prohibited)'
+        required: false
+        type: string
+        default: minimal
+      domains_csv:
+        description: '[set-allowed-domains] comma-separated FQDN list'
+        required: false
+        type: string
+      email:
+        description: '[whitelist-add / admin-role-*] target user email'
+        required: false
+        type: string
+      role:
+        description: '[whitelist-add] role to grant (admin|member)'
+        required: false
+        type: choice
+        options:
+          - member
+          - admin
+        default: member
+      whitelist_entry_id:
+        description: '[whitelist-remove / admin-role-*] whitelist document ID (usually the email, sanitized)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firestore-op-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          TENANT_RE='^[a-zA-Z0-9_-]+$'
+          DOMAIN_RE='^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$'
+          EMAIL_RE='^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'
+
+          if [ -n "${{ inputs.tenant_id }}" ] && ! [[ "${{ inputs.tenant_id }}" =~ $TENANT_RE ]]; then
+            echo "::error::tenant_id contains invalid characters"; exit 1
+          fi
+          if [ -n "${{ inputs.email }}" ] && ! [[ "${{ inputs.email }}" =~ $EMAIL_RE ]]; then
+            echo "::error::email is not a valid email address"; exit 1
+          fi
+          if [ -n "${{ inputs.domains_csv }}" ]; then
+            IFS=',' read -ra DOMS <<< "${{ inputs.domains_csv }}"
+            for d in "${DOMS[@]}"; do
+              if ! [[ "$d" =~ $DOMAIN_RE ]]; then
+                echo "::error::domain '$d' is not a valid FQDN"; exit 1
+              fi
+            done
+          fi
+          if [ -n "${{ inputs.whitelist_entry_id }}" ] && ! [[ "${{ inputs.whitelist_entry_id }}" =~ $TENANT_RE ]]; then
+            echo "::error::whitelist_entry_id contains invalid characters"; exit 1
+          fi
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - name: set-vertex-ai-config
+        if: inputs.operation == 'set-vertex-ai-config'
+        run: |
+          set -euo pipefail
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          PROJECT="${{ vars.GCP_PROJECT }}"
+          BODY=$(jq -n --arg model "${{ inputs.model_id }}" --arg level "${{ inputs.thinking_level }}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+            fields: {
+              modelId: {stringValue: $model},
+              thinkingLevel: {stringValue: $level},
+              updatedAt: {timestampValue: $ts}
+            }
+          }')
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/platformConfig/vertexAi" \
+            -d "$BODY"
+          echo "--- verify ---"
+          curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/platformConfig/vertexAi" \
+            | tee /tmp/verify.json
+          jq -e --arg model "${{ inputs.model_id }}" '.fields.modelId.stringValue == $model' /tmp/verify.json > /dev/null \
+            || { echo "::error::verify failed: modelId does not match expected value"; exit 1; }
+
+      - name: set-allowed-domains
+        if: inputs.operation == 'set-allowed-domains'
+        run: |
+          set -euo pipefail
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          PROJECT="${{ vars.GCP_PROJECT }}"
+          TENANT="${{ inputs.tenant_id }}"
+          BODY=$(jq -n --arg csv "${{ inputs.domains_csv }}" '{
+            fields: { allowedDomains: { arrayValue: { values: ($csv | split(",") | map({stringValue: .})) } } }
+          }')
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}?updateMask.fieldPaths=allowedDomains" \
+            -d "$BODY"
+          echo "--- verify ---"
+          curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}"
+
+      - name: whitelist-add
+        if: inputs.operation == 'whitelist-add'
+        run: |
+          set -euo pipefail
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          PROJECT="${{ vars.GCP_PROJECT }}"
+          TENANT="${{ inputs.tenant_id }}"
+          ENTRY_ID="${{ inputs.whitelist_entry_id }}"
+          BODY=$(jq -n --arg email "${{ inputs.email }}" --arg role "${{ inputs.role }}" '{
+            fields: { email: {stringValue: $email}, role: {stringValue: $role} }
+          }')
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}/whitelist/${ENTRY_ID}" \
+            -d "$BODY"
+          echo "--- verify ---"
+          curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}/whitelist/${ENTRY_ID}"
+
+      - name: whitelist-remove
+        if: inputs.operation == 'whitelist-remove'
+        run: |
+          set -euo pipefail
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          PROJECT="${{ vars.GCP_PROJECT }}"
+          TENANT="${{ inputs.tenant_id }}"
+          ENTRY_ID="${{ inputs.whitelist_entry_id }}"
+          curl -sS --fail-with-body -X DELETE \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}/whitelist/${ENTRY_ID}"
+          echo "--- verify (expect 404) ---"
+          STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}/whitelist/${ENTRY_ID}")
+          if [ "$STATUS" != "404" ]; then
+            echo "::error::verify failed: expected 404 after delete, got $STATUS"; exit 1
+          fi
+
+      - name: admin-role-grant / admin-role-revoke
+        if: inputs.operation == 'admin-role-grant' || inputs.operation == 'admin-role-revoke'
+        run: |
+          set -euo pipefail
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          PROJECT="${{ vars.GCP_PROJECT }}"
+          TENANT="${{ inputs.tenant_id }}"
+          ENTRY_ID="${{ inputs.whitelist_entry_id }}"
+          if [ "${{ inputs.operation }}" = "admin-role-grant" ]; then ROLE="admin"; else ROLE="member"; fi
+          BODY=$(jq -n --arg role "$ROLE" '{ fields: { role: {stringValue: $role} } }')
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}/whitelist/${ENTRY_ID}?updateMask.fieldPaths=role" \
+            -d "$BODY"
+          echo "--- verify ---"
+          curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/tenants/${TENANT}/whitelist/${ENTRY_ID}" \
+            | tee /tmp/verify_role.json
+          jq -e --arg role "$ROLE" '.fields.role.stringValue == $role' /tmp/verify_role.json > /dev/null \
+            || { echo "::error::verify failed: role does not match expected value"; exit 1; }
+          echo "::notice::role change takes effect on the user's next sign-in (custom claim derived from whitelist at beforeSignIn)"
