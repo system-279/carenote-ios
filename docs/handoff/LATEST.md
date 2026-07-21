@@ -1,3 +1,77 @@
+# Handoff — 2026-07-21 セッション: Gemini 3.5 移行 → GHA+WIF基盤(dev) → Vertex AI設定Firestore化 → code-review修正 → dev検証
+
+## ✅ Gemini 2.5→3.5 Flash移行を起点に、GHA+WIF運用基盤(dev)とVertex AI設定Firestore化(ADR-012)を実装、/code-review高優先度5件を修正しdev環境でend-to-end検証完了 (PR #215/#216/#217/#218 merged)
+
+Gemini 2.5 Flashのretirement（2026-10-16以降）を受け、最小限のモデル差替えを先行実装した後、時間的余裕があることから「App Store審査なしでモデル/プロンプトを切替できる仕組み」への投資を決定。Plan Mode → Ultraplan（クラウド実行）でVertex AI設定Firestore化を実装、ローカルへteleport後にxcodegen再生成漏れ・MockURLProtocolのhttpBodyStream復元漏れの2件の実バグを発見修正。firestore.rulesデプロイでfirebase CLIログインアカウント不一致に遭遇したことを機に、ADR-009 Stage 2として構想のみだったGHA+WIF基盤(Issue #178)を今回dev環境分のみ実装。最後に`/code-review xhigh`（10ファインダー→13候補検証→3件スイープ追加→計15件報告）を実行し、高優先度5件を修正・検証してdev環境でend-to-end確認まで完了した。
+
+### セッション成果サマリ
+
+| PR | 内容 | 状態 |
+|----|------|------|
+| **#215** | GitHub Actions + WIF によるFirestore rules/操作デプロイ基盤 (ADR-013) | 🟢 merged |
+| **#216** | `google-github-actions/auth`に`token_format: access_token`追加（dev初回検証で発覚した実バグ） | 🟢 merged |
+| **#217** | Vertex AI モデル設定のFirestore化 (ADR-012) + `/code-review xhigh`高優先度5件修正 | 🟢 merged |
+| **#218** | ADR-009にADR-013への相互参照を追記（handoff時のADR整合性チェックで発見） | 🟢 merged |
+
+### 主要判断のハイライト
+
+- **モデル移行は最小差替え→本格投資の2段階**: 最初にAskUserQuestionで「最小限：モデル差替えのみ」を選択、動作確認後、期限まで3ヶ月の余裕があると判断し「しっかりプランたてていきましょう」でVertex AI設定Firestore化へ投資判断
+- **Ultraplan実装のクロスチェックが有効**: クラウド実行後のローカルbuild+testで、Ultraplanのサンドボックスには無いXcode/Swiftツールチェーンだからこそ発見できた実バグ2件（xcodegen再生成漏れ、MockURLProtocolのhttpBodyStream復元漏れ）を修正
+- **GHA+WIF基盤は既存WIFプールを流用せず新設**: `carenote-pool`（ADR-002、アプリのエンドユーザー認証用）のワイルドカードimpersonation bindingを流用すると権限昇格リスクがあるため、`github-actions-pool`を新規作成。専用SA `gha-firestore-ops`は`roles/datastore.user`+`roles/firebaserules.admin`のみで`firebaseauth.admin`は不要と判断（whitelist書込みでadmin-role操作が完結するため）
+- **`workflow_dispatch`はdefault branch必須の制約に対応**: 新規workflowファイルはmainにマージ済みでないとdispatchできないため、ADR-013+2ワークフローファイルのみの小PR(#215)を先行マージしてから検証する戦略を採用
+- **`/code-review xhigh`は9/10ファインダーが機能、13件Phase 2検証で全てCONFIRMED/PLAUSIBLE**: 唯一angleE(wrapper/proxy correctness)のみ10回以上の再依頼でも内容が届かず未実施のまま終了（他アングルで部分的にカバー）。高優先度5件（VertexAIConfigServiceのキャッシュTTL欠如+失敗の永続キャッシュ化、set-vertex-ai-config.shの失敗時サイレント成功+JSONインジェクション、allowlist拒否の完全サイレント化、firestore.rulesのtranscriptionModelId不変性未強制）を修正し、修正後にSwift 207件+Firestore rulesテスト88件（新規5件含む）全PASSを確認
+- **dev環境end-to-end検証を完了**: `firestore-rules-deploy.yml`でplatformConfigルールがdevに反映されたことをverifyステップで確認、`firestore-op.yml`の`set-vertex-ai-config`でdevに`gemini-3.5-flash`/`minimal`をシード、GitHub側`type: choice`制約により不正なmodel_idがAPI層でHTTP 422拒否されることも実証、Cloud Loggingでの監査ログ記録も確認済み
+
+### 実装実績
+
+- **新規ファイル**: `CareNote/Models/VertexAIConfig.swift`, `CareNote/Services/VertexAIConfigService.swift`, `CareNoteTests/VertexAIConfigServiceTests.swift`, `scripts/set-vertex-ai-config.sh`, `docs/adr/ADR-011/012/013`, `.github/workflows/firestore-rules-deploy.yml`, `.github/workflows/firestore-op.yml`
+- **変更ファイル**: `TranscriptionService.swift`（model/thinkingLevelを注入可能に）, `FirestoreService.swift`（fetchVertexAIConfig追加）, `OutboxSyncService.swift`（transcriptionModelId記録）, `RecordingConfirmViewModel.swift`（factory async化）, `firestore.rules`（platformConfig読取ルール+transcriptionModelId不変性）, `FirestoreModels.swift`, `CLAUDE.md`, `README.md`
+- **GCPリソース新規作成（dev、`carenote-dev-279`）**: WIFプール`github-actions-pool`+provider、SA`gha-firestore-ops`（`roles/datastore.user`+`roles/firebaserules.admin`+`roles/serviceusage.serviceUsageViewer`）、Firestore Data Access監査ログ有効化
+- **GitHub Environment**: `dev`（保護なし）・`prod`（箱のみ、required reviewer等は未設定）
+- **prod操作**: なし（明示的にスコープ外、Issue #178継続open）
+
+### `/code-review xhigh` 詳細（10ファインダー→13検証→3件スイープ、計15件報告・うち5件修正済み）
+
+**修正済み（高優先度5件、PR #217に追加commit a4e3884で対応）**:
+1. `VertexAIConfigService.resolveConfig()`: fetch失敗・allowlist不正値をキャッシュしない設計に変更（従来は一時障害でプロセス生存中ずっとdefault固定、かつ後発の失敗が先発の成功をレース条件で上書きしうる不具合があった）
+2. `scripts/set-vertex-ai-config.sh`: JSON組立を生文字列結合から`jq -n --arg`に変更（JSONインジェクション対策）、HTTPステータス明示チェックを追加（失敗時も✅成功表示していた不具合を解消）
+3. `.github/workflows/firestore-op.yml`: `model_id`/`thinking_level`を`type: choice`のallowlist選択式に変更＋Validate inputsに二重チェック追加（従来はallowlist外の値を書き込んでもCIが緑になり誰も気づけなかった）
+4. `firestore.rules`: `recordings`の`allow update`に`transcriptionModelId`不変性チェックを追加（`createdBy`と同じpre/post判定パターン）、`functions/test/firestore-rules.test.js`にテスト5件追加
+
+**未修正（スコープ外、既知の制約としてADR-012に明記）**:
+- `allowedModelIds`がSwiftソースにハードコードされ、真に新規のモデルIDへの切替は依然としてアプリ再ビルドを要する（ADR-011のシナリオを完全解決していない）
+- `OutboxSyncService`の`transcriptionModelId`が`transcriptionService`から独立したパラメータで、両者の一致を強制する仕組みがない
+- `RecordingListViewModel.retryRecording()`後に別モデルで文字起こしされても`transcriptionModelId`は作成時の値のまま（PLAUSIBLE判定、要app relaunch+新規保存トリガーの複合条件）
+- テストカバレッジ欠如（`saveAndTranscribe()`の非同期factory統合経路が未テスト）、TranscriptionServiceのmodel検証欠如（latentのみ、現状唯一の呼び出し元はallowlist経由）、README ADR件数の陳腐化、シェルスクリプト3本の定型処理重複、syncServiceFactoryの不要なasync化、コールドスタート時の重複fetch
+
+### Issue Net 計測
+
+| 開始時 | 終了時 | Net |
+|--------|--------|-----|
+| 7 件 (#192/#178/#111/#105/#92/#90/#65) | 7 件 (同上、Issue起票・close なし) | **0** |
+
+> Issue #178（Stage 2 follow-up）は今回dev分のみ実装・prod分は継続OPEN。triage基準を満たす新規Issue起票なし。
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **Ultraplan（クラウド実行）はローカルでのbuild+test検証を必ず挟む**: サンドボックスにXcode/Swiftツールチェーンがないため、xcodegen再生成漏れやテストヘルパーのFoundation既知バグ（httpBodyStream→httpBody変換）はローカル検証でしか発見できなかった
+2. **既存WIFプールの流用は権限昇格リスクを疑う**: プール単位のワイルドカードimpersonation bindingがある場合、新規providerを同プールに足すと意図しない権限昇格になりうる。専用プール新設のコストは低い
+3. **`workflow_dispatch`は対象ファイルがdefault branchに存在しないと起動できない**: 新規workflow追加時は「小PRで先にmainへ」戦略が有効
+4. **`/code-review`のバックグラウンドエージェント団は応答が来ないケースがある**: 10体中1体(angleE)が10回以上の催促でも内容を返さなかった。他アングルで部分カバーされていれば結果全体としては許容範囲だが、全滅リスクは考慮に入れる
+5. **allowlist方式の設定切替は「ソフトフェイル」だけでは不十分**: 失敗をログに残さないと運営者が設定ミスに気づく手段がなくなる。CI側のverifyも「書いた値が読めるか」だけでなく「その値が有効か」まで見ないと自己言及的になる
+
+### 次セッション推奨アクション
+
+**即着手なし、条件待ち 1 件:**
+
+1. **Issue #178（Stage 2 prod展開）の着手判断** — trigger: decision-maker が prod への GHA+WIF 展開を明示指示。充足時のタスク: ADR-013 Phase 3（prod専用WIFプール・SA・IAM構築、`prod` Environment に required reviewer + main限定設定）を実施。確認方法: `gh issue view 178` で AC 未達項目を再確認してから着手
+
+**却下候補:**
+
+1. **`/code-review`残り10件の指摘への対応** — 検討経緯: 今回は高優先度5件のみ修正、残り10件（テストカバレッジ欠如・allowedModelIds拡張性・シンプリフィケーション系等）はADR-012に既知の制約として明記済み。着手しない理由: ROI中程度でスコープ未確定、decision-maker明示指示待ち
+
+---
+
 # Handoff — 2026-07-01 セッション: README 刷新 (AI 引き継ぎ可能なアーキテクチャ設計を front-load)
 
 ## ✅ README を readme-pro 原則で刷新し AI 引き継ぎ可能な状態を構築 (PR #213 merged)
