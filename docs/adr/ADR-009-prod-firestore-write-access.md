@@ -1,9 +1,9 @@
 # ADR-009: prod Firestore 直接書き込みの運用パターン
 
-**Status**: Accepted（Stage 1 確定、Stage 2 follow-up、2026-04-23）
+**Status**: Accepted（Stage 1 確定、Stage 2 は dev 実装済み・prod は follow-up、2026-07-21 追記）
 **Date**: 2026-04-23
 **Supersedes**: なし
-**Related**: Issue #111（Phase 0.9 allowedDomains 有効化）、`docs/runbook/phase-0-9-allowed-domains.md`
+**Related**: Issue #111（Phase 0.9 allowedDomains 有効化）、`docs/runbook/phase-0-9-allowed-domains.md`、[ADR-013](./ADR-013-github-actions-wif-firestore-ops.md)（Stage 2 の詳細設計・dev 実装、Issue #178 follow-up）
 
 ## Context
 
