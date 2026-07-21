@@ -34,17 +34,27 @@ TOKEN=$(gcloud auth print-access-token --account="$ACCOUNT")
 
 echo "Setting platformConfig/vertexAi on project: $PROJECT (modelId=$MODEL_ID, thinkingLevel=$THINKING_LEVEL)"
 
-curl -s -X PATCH \
+BODY=$(jq -n --arg model "$MODEL_ID" --arg level "$THINKING_LEVEL" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+  fields: {
+    modelId: { stringValue: $model },
+    thinkingLevel: { stringValue: $level },
+    updatedAt: { timestampValue: $ts }
+  }
+}')
+
+HTTP_STATUS=$(curl -s -o /tmp/set-vertex-ai-config-response.json -w '%{http_code}' -X PATCH \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "x-goog-user-project: $PROJECT" \
   "https://firestore.googleapis.com/v1/projects/$PROJECT/databases/(default)/documents/platformConfig/vertexAi" \
-  -d '{
-    "fields": {
-      "modelId": { "stringValue": "'"$MODEL_ID"'" },
-      "thinkingLevel": { "stringValue": "'"$THINKING_LEVEL"'" },
-      "updatedAt": { "timestampValue": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'" }
-    }
-  }' | python3 -m json.tool
+  -d "$BODY")
+
+python3 -m json.tool < /tmp/set-vertex-ai-config-response.json
+rm -f /tmp/set-vertex-ai-config-response.json
+
+if [ "$HTTP_STATUS" -ge 400 ]; then
+  echo "❌ Firestore returned HTTP $HTTP_STATUS — platformConfig/vertexAi was NOT updated" >&2
+  exit 1
+fi
 
 echo "✅ Set platformConfig/vertexAi on $PROJECT"

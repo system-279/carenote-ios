@@ -655,6 +655,77 @@ describe("recordings 権限境界", () => {
           .update({ createdBy: "member-b" })
       );
     });
+
+    // ADR-012: transcriptionModelId は作成時のみ記録し、以後は不変。
+    it("member は transcriptionModelId を変更しない update は許可される", async () => {
+      await seedRecording(TENANT_ID, "r-model-keep", "member-a", {
+        transcriptionModelId: "gemini-3.5-flash",
+      });
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertSucceeds(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-keep")
+          .update({ transcription: "編集済みテキスト" })
+      );
+    });
+
+    it("member は transcriptionModelId を書き換える update を拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-model-rewrite", "member-a", {
+        transcriptionModelId: "gemini-3.5-flash",
+      });
+      const db = testEnv.authenticatedContext(
+        "member-a",
+        memberAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-rewrite")
+          .update({ transcriptionModelId: "gemini-4-flash" })
+      );
+    });
+
+    it("admin も client 経由の transcriptionModelId 変更 update は拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-model-admin-rewrite", "member-a", {
+        transcriptionModelId: "gemini-3.5-flash",
+      });
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-admin-rewrite")
+          .update({ transcriptionModelId: "gemini-4-flash" })
+      );
+    });
+
+    it("admin も transcriptionModelId 不在 recording に追加する update は拒否される", async () => {
+      await seedRecording(TENANT_ID, "r-model-add", "member-a");
+      const db = testEnv.authenticatedContext(
+        "admin-a",
+        adminAuth(TENANT_ID).token
+      ).firestore();
+      await assertFails(
+        db
+          .collection("tenants")
+          .doc(TENANT_ID)
+          .collection("recordings")
+          .doc("r-model-add")
+          .update({ transcriptionModelId: "gemini-3.5-flash" })
+      );
+    });
   });
 
   describe("delete", () => {

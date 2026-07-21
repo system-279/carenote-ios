@@ -26,24 +26,27 @@ actor VertexAIConfigService {
 
     /// 有効な `VertexAIConfig` を返す。fetch 失敗・不正値・未シードの場合は
     /// `VertexAIConfig.default` にフォールバックする（例外は伝播させない）。
+    ///
+    /// 成功して allowlist 検証を通った値のみキャッシュする。fetch 失敗や
+    /// allowlist 不正値はキャッシュしない — 次回呼び出しで再度 fetch を試みる
+    /// ことで、一時的な障害でプロセス生存中ずっと `.default` に固定されるのを防ぐ。
     func resolveConfig() async -> VertexAIConfig {
         if let cachedConfig {
             return cachedConfig
         }
 
-        let resolved: VertexAIConfig
         do {
-            if let fetched = try await configFetcher.fetchVertexAIConfig(), fetched.isValid {
-                resolved = fetched
-            } else {
-                resolved = .default
+            if let fetched = try await configFetcher.fetchVertexAIConfig() {
+                if fetched.isValid {
+                    cachedConfig = fetched
+                    return fetched
+                }
+                Self.logger.error("fetchVertexAIConfig returned an invalid config (modelId=\(fetched.modelId, privacy: .public), thinkingLevel=\(fetched.thinkingLevel, privacy: .public)), falling back to default")
             }
         } catch {
-            Self.logger.error("fetchVertexAIConfig failed, falling back to default: \(error.localizedDescription)")
-            resolved = .default
+            Self.logger.error("fetchVertexAIConfig failed, falling back to default: \(error.localizedDescription, privacy: .public)")
         }
 
-        cachedConfig = resolved
-        return resolved
+        return .default
     }
 }

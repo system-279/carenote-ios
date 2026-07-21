@@ -106,6 +106,19 @@ service cloud.firestore {
               !('createdBy' in request.resource.data)
               && !('createdBy' in resource.data)
             )
+          )
+          && (
+            // transcriptionModelId immutable (ADR-012): 作成時のみ記録し、以後は不変。
+            // createdBy と同じ pre/post 判定パターンで admin 含め client 経路での書換を禁止する。
+            (
+              'transcriptionModelId' in request.resource.data
+              && 'transcriptionModelId' in resource.data
+              && request.resource.data.transcriptionModelId == resource.data.transcriptionModelId
+            )
+            || (
+              !('transcriptionModelId' in request.resource.data)
+              && !('transcriptionModelId' in resource.data)
+            )
           );
 
         allow delete: if isAdmin(tenantId)
