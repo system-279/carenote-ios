@@ -41,6 +41,7 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT }}
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.DEPLOYER_SA }}
+          token_format: 'access_token'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
