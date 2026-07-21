@@ -114,6 +114,7 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT }}
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.DEPLOYER_SA }}
+          token_format: 'access_token'
 
       - name: set-vertex-ai-config
         if: inputs.operation == 'set-vertex-ai-config'
