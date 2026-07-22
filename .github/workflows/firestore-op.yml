@@ -38,11 +38,9 @@ on:
         required: false
         type: string
       model_id:
-        description: '[set-vertex-ai-config] Vertex AI model ID — options must mirror CareNote/Models/VertexAIConfig.swift allowedModelIds, see ADR-012'
+        description: '[set-vertex-ai-config] Vertex AI model ID (free text) — rejected only if it matches the CareNote/Models/VertexAIConfig.swift denylist (bare gemini-3-flash / preview / exp), see ADR-014'
         required: false
-        type: choice
-        options:
-          - gemini-3.5-flash
+        type: string
       thinking_level:
         description: '[set-vertex-ai-config] thinkingLevel — options must mirror CareNote/Models/VertexAIConfig.swift allowedThinkingLevels (CLAUDE.md Prohibited: must be "minimal")'
         required: false
@@ -111,13 +109,24 @@ jobs:
             echo "::error::whitelist_entry_id contains invalid characters"; exit 1
           fi
           if [ "${{ inputs.operation }}" = "set-vertex-ai-config" ]; then
-            # Defense-in-depth: model_id/thinking_level are already constrained to `type: choice`
-            # options above, but re-check here in case this job is ever dispatched via a path that
-            # bypasses that UI constraint. Keep this allowlist mirrored with
-            # CareNote/Models/VertexAIConfig.swift's allowedModelIds/allowedThinkingLevels.
-            if [ "${{ inputs.model_id }}" != "gemini-3.5-flash" ]; then
-              echo "::error::model_id '${{ inputs.model_id }}' is not in the allowlist (CareNote/Models/VertexAIConfig.swift)"; exit 1
+            # model_id is free text (ADR-014): re-check it here against the same denylist as
+            # CareNote/Models/VertexAIConfig.swift's isModelAllowed(), in case this job is ever
+            # dispatched via a path that bypasses the UI. thinking_level stays a closed allowlist
+            # mirrored with VertexAIConfig.swift's allowedThinkingLevels.
+            MODEL_ID_RE='^[a-z0-9]([a-z0-9.-]{0,63})?$'
+            MODEL_ID_LOWER=$(echo "${{ inputs.model_id }}" | tr '[:upper:]' '[:lower:]')
+            if ! [[ "$MODEL_ID_LOWER" =~ $MODEL_ID_RE ]]; then
+              echo "::error::model_id '${{ inputs.model_id }}' is not a well-formed model ID"; exit 1
             fi
+            if [ "$MODEL_ID_LOWER" = "gemini-3-flash" ] || [[ "$MODEL_ID_LOWER" == gemini-3-flash-* ]]; then
+              echo "::error::model_id '${{ inputs.model_id }}' is the prohibited bare Gemini 3 Flash base model (CLAUDE.md Prohibited)"; exit 1
+            fi
+            IFS='-' read -ra MODEL_SEGMENTS <<< "$MODEL_ID_LOWER"
+            for seg in "${MODEL_SEGMENTS[@]}"; do
+              if [ "$seg" = "preview" ] || [ "$seg" = "exp" ] || [ "$seg" = "experimental" ]; then
+                echo "::error::model_id '${{ inputs.model_id }}' contains a prohibited preview/experimental segment (CLAUDE.md Prohibited)"; exit 1
+              fi
+            done
             if [ "${{ inputs.thinking_level }}" != "minimal" ]; then
               echo "::error::thinking_level '${{ inputs.thinking_level }}' is not in the allowlist (CareNote/Models/VertexAIConfig.swift)"; exit 1
             fi

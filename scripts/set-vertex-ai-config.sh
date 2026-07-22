@@ -5,9 +5,11 @@
 #
 # Sets platformConfig/vertexAi, the Firestore document that lets an operator
 # switch the Vertex AI transcription model/thinkingLevel without an App Store
-# release. See ADR-012 for background. MODEL_ID/THINKING_LEVEL must still pass
-# the iOS-side allowlist (CareNote/Models/VertexAIConfig.swift) or the app
-# soft-fails back to its hardcoded default.
+# release. See ADR-012 for background. MODEL_ID must still pass the iOS-side
+# denylist (CareNote/Models/VertexAIConfig.swift, see ADR-014 — rejects only
+# the bare Gemini 3 Flash base model and preview/experimental IDs) and
+# THINKING_LEVEL must be "minimal", or the app soft-fails back to its
+# hardcoded default.
 
 set -euo pipefail
 
