@@ -1,3 +1,78 @@
+# Handoff — 2026-07-22〜23 セッション: Vertex AIモデル自由入力化(ADR-014) → /code-review修正 → PR #220マージ → Build 39提出試行(契約待ちで中断)
+
+## ✅ modelId検証を完全一致allowlistからProhibited denylistへ改訂(ADR-014)、/code-review medium指摘5件（CRITICAL含む）を修正しPR #220マージ完了。Build 39をTestFlight提出試行するもApple Developer Agreement再署名待ちで中断 (PR #220 merged)
+
+前回セッションで実装したADR-011/012がまだApple審査未提出（本番Build 38に未反映）と判明したことを起点に、「どうせ審査を受けるなら以後のモデル切替をGCP側だけで完結できるよう作り込んでから出す」という投資判断でADR-014に着手。plan mode で設計後、decision-makerの明示要望「人が正しいモデル名を入れれば使える」を受けてmodelId検証を完全一致allowlistからCLAUDE.md Prohibitedの2パターンのみを拒否するdenylistへ改訂。実装中に並行セッションのmemory更新を検知し「gemini-3.6-flashの日本DRZ非対応」の根拠が誤った製品ページ（Gemini Enterprise Standard/Plus Editions、CareNoteが使うVertex AIとは別製品）だったことが判明、dev環境での実疎通テスト（`gemini-3.6-flash`はasia-northeast1でHTTP 404）に切り替えてground truthを確定させた。`/code-review medium`でCRITICAL 1件（GitHub Actionsスクリプトインジェクション）・HIGH 1件（URL force-unwrapクラッシュ経路）・MEDIUM 2件・LOW 1件がCONFIRMEDと判定され、全て修正してPR #220をマージ。最後にBuild 39のTestFlight提出を試行したが、App Store ConnectのAgreement（契約）再署名待ちでExportが失敗し中断した。
+
+### セッション成果サマリ
+
+| PR | 内容 | 状態 |
+|----|------|------|
+| **#220** | Vertex AIモデルID検証をProhibited denylistへ改訂 (ADR-014) + `/code-review medium`指摘5件修正 | 🟢 merged (squash, c8273a2) |
+
+### 主要判断のハイライト
+
+- **decision-makerの「人が正しいモデル名を入れれば使える」という意図を正確に汲み取る**: 当初提示した3択（パターン一致allowlist拡張/検証済みモデル事前登録/allowlist自体のFirestore化）のいずれでもなく、「完全一致allowlist廃止＋Prohibited denylistで両立」という第4の設計に到達。CLAUDE.md Prohibitedを黙って無効化せず、denylistとしてコードで担保し続けることでAI executorのガバナンス越権を回避
+- **thinkingLevelの範囲は現状維持を選択**: modelIdと違い、thinkingLevel拡張はコスト・レイテンシ予測可能性とのトレードオフを伴う経営判断のため、AskUserQuestionで明示確認し「minimalのみ維持」を選択（AI単独で決めない）
+- **並行セッションのmemory更新を鵜呑みにせず独立検証**: 会話中に別セッション（同一ユーザー）が更新したmemoryで「gemini-3.6-flashは日本DRZ未対応」という記述が出現したが、一次ソース製品スコープ（Gemini Enterprise Standard/Plus Editions vs Vertex AI）を自ら確認し、最終的にdev環境の実API呼び出し（HTTP 404）でground truthを確定。ADR-014の初版記述に誤りがあったことを訂正コミットで明示的に記録
+- **`/code-review medium`でCRITICAL 1件を発見・修正**: `model_id`をGitHub Actions `type: choice`→`type: string`化した際、`${{ inputs.model_id }}`をrun:ブロックに直接埋め込んだままだったためスクリプトインジェクション脆弱性が生じていた（WIF由来のGCPトークン窃取リスク）。job-level `env:` 経由の間接参照に変更し解消
+- **Apple Developer Agreement未署名でTestFlight提出が中断**: アーカイブ自体は成功したが、Export時に`403 FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`。契約への同意はAI実行不可（本人のみが行うべき法的行為）のため、decision-maker自身のApp Store Connect対応待ち。アーカイブは`build/CareNote.xcarchive`に残存しており再Export可能
+
+### 実装実績
+
+- **新規ファイル**: `docs/adr/ADR-014-vertex-ai-model-denylist.md`
+- **変更ファイル**: `CareNote/Models/VertexAIConfig.swift`（`allowedModelIds`完全一致Set→`isModelAllowed(_:)`denylist関数＋文字種/長さ検証）、`.github/workflows/firestore-op.yml`（`model_id`をtype:choice→type:string化＋job-level `env: MODEL_ID`でスクリプトインジェクション対策＋denylistロジック強化）、`scripts/set-vertex-ai-config.sh`（denylist検証を新規追加）、`CareNoteTests/VertexAIConfigServiceTests.swift`（`@Test(arguments:)`パラメータ化＋新規バイパスケース）、`docs/adr/ADR-012-vertex-ai-config-firestore.md`・`CLAUDE.md`・`README.md`（整合更新）
+- **テスト**: Swift全208件PASS（denylist境界テスト含む、`gemini-3.0-flash`/`gemini-3-flashpreview`/`preview001`拒否・`expansion`誤検知回避を明示的にカバー）
+- **GCP実測**: `carenote-dev-279`から`gemini-3.5-flash`（HTTP 200 + ON_DEMAND）・`gemini-3.6-flash`（HTTP 404、asia-northeast1未デプロイ）をVertex AI `generateContent` APIへ直接呼び出しして確認
+- **TestFlight**: `project.yml`のCURRENT_PROJECT_VERSIONを38→39に更新（ローカル未コミット、`build/CareNote.xcarchive`としてアーカイブ済み）、Export/UploadはAgreement待ちで中断
+
+### `/code-review medium` 詳細（8ファインダー→8件検証、5件CONFIRMED修正済み）
+
+1. **CRITICAL**: `.github/workflows/firestore-op.yml` — `model_id`のtype:choice→type:string化に伴うGitHub Actionsスクリプトインジェクション。job-level `env: MODEL_ID`経由に変更し解消
+2. **HIGH**: `CareNote/Models/VertexAIConfig.swift` — `isModelAllowed()`に文字種・長さ検証なし、`TranscriptionService`のURL force-unwrapクラッシュ経路。文字種チェック追加で解消
+3. **MEDIUM**: denylistのセグメント完全一致判定が`gemini-3.0-flash`/`gemini-3-flashpreview`/`preview001`等をバイパス。`preview`部分一致＋`exp`の英字直後ガードで強化
+4. **MEDIUM**: `scripts/set-vertex-ai-config.sh`が無検証。GHA/Swiftと同じdenylistロジックを追加
+5. **LOW**: テスト重複4件を`@Test(arguments:)`でパラメータ化
+
+REFUTED 3件（echo leading-hyphenのbash仕様誤解、raw model_id不整合の実害なし、ADR記述の正確性クレーム誤り）は根拠を確認のうえ不採用と判断。
+
+### Issue Net 計測
+
+| 開始時 | 終了時 | Net |
+|--------|--------|-----|
+| 7 件 (#192/#178/#111/#105/#92/#90/#65) | 7 件 (同上、起票・close なし) | **0** |
+
+### セッション内教訓 (handoff 次世代向け)
+
+1. **「今すぐ審査を受けられる」と「変更が既に本番にある」は別軸**: ADR-011/012実装済み≠本番反映済み。Build番号とproject.yml内容が実際のTestFlight/App Store配信物と一致しているかを都度確認する習慣が必要（今回はユーザーの指摘で気づいた）
+2. **並行セッションのmemory更新は「並行検証の材料」として扱い、鵜呑みにしない**: 内容が具体的で一次ソース引用があっても、自分のセッションの文脈（このプロジェクトが実際に使うAPI/製品）と照合してから採用する
+3. **リリース系の外部要因ブロッカー（契約未署名等）は即座に切り分けて報告**: アーカイブ成功・Export失敗のように、どこまで進んでどこで止まったかを明確にすることで、再開時にアーカイブからのやり直しを避けられる
+
+### CI の現状
+
+- PR #220: iOS Tests ✅ success（23m44s、2026-07-22T15:50:17Z）
+- main `c8273a2`（PR #220 merge後）: clean
+
+### 次セッション推奨アクション
+
+**即着手なし、条件待ち 2 件:**
+
+1. **TestFlight Export再試行** — trigger: decision-makerがApp Store Connect（https://appstoreconnect.apple.com/agreements）で未署名/期限切れ契約に同意完了。充足時のタスク: `build/CareNote.xcarchive`（既存、再アーカイブ不要）に対し`xcodebuild -exportArchive`以降のみ再実行 → 成功後`project.yml`のBuild 39変更をコミット。確認方法: 契約ページで未署名項目の有無を確認
+2. **Issue #178 Stage 2（prod GHA+WIF展開）** — trigger: TestFlight/App Store提出・審査通過後（またはdecision-maker明示指示があれば前倒し可）。充足時のタスク: ADR-013 Phase 3（prod専用WIFプール・SA・IAM構築）を計画
+
+**却下候補:**
+
+1. **PR #125/#123/#122（2026-04-20付、3ヶ月以上前のOPEN PR）** — 検討経緯: 本セッションのIssue #178/Open PR確認中に発見。PR #125/#123が参照するIssue #104/#108は共にCLOSED済み（別経路で解消済みの可能性が高い）、PR #122が参照するIssue #111はOPENだが後続セッションでprod設定完了済みと判明しておりPR内容が陳腐化している可能性。着手しない理由: 内容未精査でスコープ未確定、decision-maker明示指示待ち（精査またはclose判断を仰ぐ）
+2. Issue #192/#111/#105/#92/#90/#65 — すべてenhancement、起点はdecision-maker領分
+
+### 関連リンク
+
+- [PR #220](https://github.com/system-279/carenote-ios/pull/220) — Vertex AIモデルID検証をProhibited denylistへ改訂 (ADR-014、merged c8273a2)
+- [ADR-014](../adr/ADR-014-vertex-ai-model-denylist.md) — modelId denylist改訂の設計判断・gemini-3.6-flash評価記録
+- [Google公式blog: Gemini 3.6 Flash発表](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-6-flash-3-5-flash-lite-3-5-flash-cyber/)
+
+---
+
 # Handoff — 2026-07-21 セッション: Gemini 3.5 移行 → GHA+WIF基盤(dev) → Vertex AI設定Firestore化 → code-review修正 → dev検証
 
 ## ✅ Gemini 2.5→3.5 Flash移行を起点に、GHA+WIF運用基盤(dev)とVertex AI設定Firestore化(ADR-012)を実装、/code-review高優先度5件を修正しdev環境でend-to-end検証完了 (PR #215/#216/#217/#218 merged)
