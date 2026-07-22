@@ -38,11 +38,9 @@ on:
         required: false
         type: string
       model_id:
-        description: '[set-vertex-ai-config] Vertex AI model ID — options must mirror CareNote/Models/VertexAIConfig.swift allowedModelIds, see ADR-012'
+        description: '[set-vertex-ai-config] Vertex AI model ID (free text) — rejected only if it matches the CareNote/Models/VertexAIConfig.swift denylist (bare gemini-3-flash / preview / exp), see ADR-014'
         required: false
-        type: choice
-        options:
-          - gemini-3.5-flash
+        type: string
       thinking_level:
         description: '[set-vertex-ai-config] thinkingLevel — options must mirror CareNote/Models/VertexAIConfig.swift allowedThinkingLevels (CLAUDE.md Prohibited: must be "minimal")'
         required: false
@@ -84,6 +82,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: ${{ inputs.environment }}
+    env:
+      # Untrusted workflow_dispatch free-text input: route through env: rather than
+      # embedding ${{ inputs.model_id }} directly in run: blocks. GitHub Actions expands
+      # ${{ }} expressions into the script text BEFORE bash parses it, so direct embedding
+      # of free-text input is a script-injection vector (see GitHub's "understanding the
+      # risk of script injections" hardening guide). This became exploitable when model_id
+      # moved from `type: choice` (one fixed literal) to `type: string` for ADR-014.
+      MODEL_ID: ${{ inputs.model_id }}
 
     steps:
       - name: Validate inputs
@@ -111,13 +117,32 @@ jobs:
             echo "::error::whitelist_entry_id contains invalid characters"; exit 1
           fi
           if [ "${{ inputs.operation }}" = "set-vertex-ai-config" ]; then
-            # Defense-in-depth: model_id/thinking_level are already constrained to `type: choice`
-            # options above, but re-check here in case this job is ever dispatched via a path that
-            # bypasses that UI constraint. Keep this allowlist mirrored with
-            # CareNote/Models/VertexAIConfig.swift's allowedModelIds/allowedThinkingLevels.
-            if [ "${{ inputs.model_id }}" != "gemini-3.5-flash" ]; then
-              echo "::error::model_id '${{ inputs.model_id }}' is not in the allowlist (CareNote/Models/VertexAIConfig.swift)"; exit 1
+            # model_id is free text (ADR-014): re-check it here against the same denylist as
+            # CareNote/Models/VertexAIConfig.swift's isModelAllowed(), in case this job is ever
+            # dispatched via a path that bypasses the UI. thinking_level stays a closed allowlist
+            # mirrored with VertexAIConfig.swift's allowedThinkingLevels. $MODEL_ID (not
+            # ${{ inputs.model_id }}) is used throughout — see the job-level env: comment above.
+            MODEL_ID_RE='^[a-z0-9]([a-z0-9.-]{0,63})?$'
+            MODEL_ID_LOWER=$(printf '%s' "$MODEL_ID" | tr '[:upper:]' '[:lower:]')
+            if ! [[ "$MODEL_ID_LOWER" =~ $MODEL_ID_RE ]]; then
+              echo "::error::model_id '$MODEL_ID' is not a well-formed model ID"; exit 1
             fi
+            if [ "$MODEL_ID_LOWER" = "gemini-3-flash" ] || [ "$MODEL_ID_LOWER" = "gemini-3.0-flash" ] \
+              || [[ "$MODEL_ID_LOWER" == gemini-3-flash-* ]] || [[ "$MODEL_ID_LOWER" == gemini-3.0-flash-* ]]; then
+              echo "::error::model_id '$MODEL_ID' is the prohibited bare Gemini 3 Flash base model (CLAUDE.md Prohibited)"; exit 1
+            fi
+            IFS='-' read -ra MODEL_SEGMENTS <<< "$MODEL_ID_LOWER"
+            for seg in "${MODEL_SEGMENTS[@]}"; do
+              if [[ "$seg" == *preview* ]] || [ "$seg" = "experimental" ] || [ "$seg" = "exp" ]; then
+                echo "::error::model_id '$MODEL_ID' contains a prohibited preview/experimental segment (CLAUDE.md Prohibited)"; exit 1
+              fi
+              if [[ "$seg" == exp* ]]; then
+                REST="${seg#exp}"
+                if [ -z "$REST" ] || ! [[ "${REST:0:1}" =~ [a-z] ]]; then
+                  echo "::error::model_id '$MODEL_ID' contains a prohibited preview/experimental segment (CLAUDE.md Prohibited)"; exit 1
+                fi
+              fi
+            done
             if [ "${{ inputs.thinking_level }}" != "minimal" ]; then
               echo "::error::thinking_level '${{ inputs.thinking_level }}' is not in the allowlist (CareNote/Models/VertexAIConfig.swift)"; exit 1
             fi
@@ -138,7 +163,7 @@ jobs:
           set -euo pipefail
           TOKEN="${{ steps.auth.outputs.access_token }}"
           PROJECT="${{ vars.GCP_PROJECT }}"
-          BODY=$(jq -n --arg model "${{ inputs.model_id }}" --arg level "${{ inputs.thinking_level }}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+          BODY=$(jq -n --arg model "$MODEL_ID" --arg level "${{ inputs.thinking_level }}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
             fields: {
               modelId: {stringValue: $model},
               thinkingLevel: {stringValue: $level},
@@ -153,7 +178,7 @@ jobs:
           curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
             "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/platformConfig/vertexAi" \
             | tee /tmp/verify.json
-          jq -e --arg model "${{ inputs.model_id }}" '.fields.modelId.stringValue == $model' /tmp/verify.json > /dev/null \
+          jq -e --arg model "$MODEL_ID" '.fields.modelId.stringValue == $model' /tmp/verify.json > /dev/null \
             || { echo "::error::verify failed: modelId does not match expected value"; exit 1; }
 
       - name: set-allowed-domains
