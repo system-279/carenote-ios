@@ -43,10 +43,21 @@ struct VertexAIConfigServiceTests {
         #expect(resolved.thinkingLevel == "minimal")
     }
 
-    @Test
-    func denylist対象のmodelIdはデフォルトへフォールバックする() async throws {
+    @Test(
+        "denylist対象のmodelIdはデフォルトへフォールバックする",
+        arguments: [
+            "gemini-3-preview",
+            "gemini-3-flash",
+            "gemini-3.0-flash",
+            "gemini-3-pro-preview",
+            "gemini-2.0-flash-exp",
+            "gemini-3-flashpreview",
+            "gemini-3-pro-preview001",
+        ]
+    )
+    func denylist対象のmodelIdはデフォルトへフォールバックする(modelId: String) async throws {
         let fetcher = StubVertexAIConfigFetcher()
-        await fetcher.setConfig(VertexAIConfig(modelId: "gemini-3-preview", thinkingLevel: "minimal"))
+        await fetcher.setConfig(VertexAIConfig(modelId: modelId, thinkingLevel: "minimal"))
         let service = VertexAIConfigService(configFetcher: fetcher)
 
         let resolved = await service.resolveConfig()
@@ -54,48 +65,23 @@ struct VertexAIConfigServiceTests {
         #expect(resolved == VertexAIConfig.default)
     }
 
-    @Test
-    func 未登録の将来モデル名はそのまま採用される() async throws {
+    @Test(
+        "未登録の将来モデル名はそのまま採用される",
+        arguments: [
+            "gemini-3.6-flash",
+            "gemini-4.0-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-expansion",
+        ]
+    )
+    func 未登録の将来モデル名はそのまま採用される(modelId: String) async throws {
         let fetcher = StubVertexAIConfigFetcher()
-        await fetcher.setConfig(VertexAIConfig(modelId: "gemini-3.6-flash", thinkingLevel: "minimal"))
+        await fetcher.setConfig(VertexAIConfig(modelId: modelId, thinkingLevel: "minimal"))
         let service = VertexAIConfigService(configFetcher: fetcher)
 
         let resolved = await service.resolveConfig()
 
-        #expect(resolved.modelId == "gemini-3.6-flash")
-    }
-
-    @Test
-    func 無印gemini3flashはデフォルトへフォールバックする() async throws {
-        let fetcher = StubVertexAIConfigFetcher()
-        await fetcher.setConfig(VertexAIConfig(modelId: "gemini-3-flash", thinkingLevel: "minimal"))
-        let service = VertexAIConfigService(configFetcher: fetcher)
-
-        let resolved = await service.resolveConfig()
-
-        #expect(resolved == VertexAIConfig.default)
-    }
-
-    @Test
-    func previewモデルはデフォルトへフォールバックする() async throws {
-        let fetcher = StubVertexAIConfigFetcher()
-        await fetcher.setConfig(VertexAIConfig(modelId: "gemini-3-pro-preview", thinkingLevel: "minimal"))
-        let service = VertexAIConfigService(configFetcher: fetcher)
-
-        let resolved = await service.resolveConfig()
-
-        #expect(resolved == VertexAIConfig.default)
-    }
-
-    @Test
-    func expモデルはデフォルトへフォールバックする() async throws {
-        let fetcher = StubVertexAIConfigFetcher()
-        await fetcher.setConfig(VertexAIConfig(modelId: "gemini-2.0-flash-exp", thinkingLevel: "minimal"))
-        let service = VertexAIConfigService(configFetcher: fetcher)
-
-        let resolved = await service.resolveConfig()
-
-        #expect(resolved == VertexAIConfig.default)
+        #expect(resolved.modelId == modelId)
     }
 
     @Test

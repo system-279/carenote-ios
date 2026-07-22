@@ -82,6 +82,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: ${{ inputs.environment }}
+    env:
+      # Untrusted workflow_dispatch free-text input: route through env: rather than
+      # embedding ${{ inputs.model_id }} directly in run: blocks. GitHub Actions expands
+      # ${{ }} expressions into the script text BEFORE bash parses it, so direct embedding
+      # of free-text input is a script-injection vector (see GitHub's "understanding the
+      # risk of script injections" hardening guide). This became exploitable when model_id
+      # moved from `type: choice` (one fixed literal) to `type: string` for ADR-014.
+      MODEL_ID: ${{ inputs.model_id }}
 
     steps:
       - name: Validate inputs
@@ -112,19 +120,27 @@ jobs:
             # model_id is free text (ADR-014): re-check it here against the same denylist as
             # CareNote/Models/VertexAIConfig.swift's isModelAllowed(), in case this job is ever
             # dispatched via a path that bypasses the UI. thinking_level stays a closed allowlist
-            # mirrored with VertexAIConfig.swift's allowedThinkingLevels.
+            # mirrored with VertexAIConfig.swift's allowedThinkingLevels. $MODEL_ID (not
+            # ${{ inputs.model_id }}) is used throughout — see the job-level env: comment above.
             MODEL_ID_RE='^[a-z0-9]([a-z0-9.-]{0,63})?$'
-            MODEL_ID_LOWER=$(echo "${{ inputs.model_id }}" | tr '[:upper:]' '[:lower:]')
+            MODEL_ID_LOWER=$(printf '%s' "$MODEL_ID" | tr '[:upper:]' '[:lower:]')
             if ! [[ "$MODEL_ID_LOWER" =~ $MODEL_ID_RE ]]; then
-              echo "::error::model_id '${{ inputs.model_id }}' is not a well-formed model ID"; exit 1
+              echo "::error::model_id '$MODEL_ID' is not a well-formed model ID"; exit 1
             fi
-            if [ "$MODEL_ID_LOWER" = "gemini-3-flash" ] || [[ "$MODEL_ID_LOWER" == gemini-3-flash-* ]]; then
-              echo "::error::model_id '${{ inputs.model_id }}' is the prohibited bare Gemini 3 Flash base model (CLAUDE.md Prohibited)"; exit 1
+            if [ "$MODEL_ID_LOWER" = "gemini-3-flash" ] || [ "$MODEL_ID_LOWER" = "gemini-3.0-flash" ] \
+              || [[ "$MODEL_ID_LOWER" == gemini-3-flash-* ]] || [[ "$MODEL_ID_LOWER" == gemini-3.0-flash-* ]]; then
+              echo "::error::model_id '$MODEL_ID' is the prohibited bare Gemini 3 Flash base model (CLAUDE.md Prohibited)"; exit 1
             fi
             IFS='-' read -ra MODEL_SEGMENTS <<< "$MODEL_ID_LOWER"
             for seg in "${MODEL_SEGMENTS[@]}"; do
-              if [ "$seg" = "preview" ] || [ "$seg" = "exp" ] || [ "$seg" = "experimental" ]; then
-                echo "::error::model_id '${{ inputs.model_id }}' contains a prohibited preview/experimental segment (CLAUDE.md Prohibited)"; exit 1
+              if [[ "$seg" == *preview* ]] || [ "$seg" = "experimental" ] || [ "$seg" = "exp" ]; then
+                echo "::error::model_id '$MODEL_ID' contains a prohibited preview/experimental segment (CLAUDE.md Prohibited)"; exit 1
+              fi
+              if [[ "$seg" == exp* ]]; then
+                REST="${seg#exp}"
+                if [ -z "$REST" ] || ! [[ "${REST:0:1}" =~ [a-z] ]]; then
+                  echo "::error::model_id '$MODEL_ID' contains a prohibited preview/experimental segment (CLAUDE.md Prohibited)"; exit 1
+                fi
               fi
             done
             if [ "${{ inputs.thinking_level }}" != "minimal" ]; then
@@ -147,7 +163,7 @@ jobs:
           set -euo pipefail
           TOKEN="${{ steps.auth.outputs.access_token }}"
           PROJECT="${{ vars.GCP_PROJECT }}"
-          BODY=$(jq -n --arg model "${{ inputs.model_id }}" --arg level "${{ inputs.thinking_level }}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+          BODY=$(jq -n --arg model "$MODEL_ID" --arg level "${{ inputs.thinking_level }}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
             fields: {
               modelId: {stringValue: $model},
               thinkingLevel: {stringValue: $level},
@@ -162,7 +178,7 @@ jobs:
           curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" \
             "https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/platformConfig/vertexAi" \
             | tee /tmp/verify.json
-          jq -e --arg model "${{ inputs.model_id }}" '.fields.modelId.stringValue == $model' /tmp/verify.json > /dev/null \
+          jq -e --arg model "$MODEL_ID" '.fields.modelId.stringValue == $model' /tmp/verify.json > /dev/null \
             || { echo "::error::verify failed: modelId does not match expected value"; exit 1; }
 
       - name: set-allowed-domains
